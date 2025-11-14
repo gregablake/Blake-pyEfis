@@ -14,8 +14,77 @@ enabled:
   VSI_BALL: false
   VSI_TAPE: true
 
-#gauges:
+gauges:
 #  ARC1:
 #    disabled: True
 #  BAR37:
 #    disabled: True
+
+  # EGT bars (2 sensors)
+  BAR11:
+    name: "EGT 1"
+    dbkey: EGT11
+    decimal_places: 0
+    temperature: true
+  BAR12:
+    name: "EGT 2"
+    dbkey: EGT12
+    decimal_places: 0
+    temperature: true
+
+  # CHT bars (6 cylinders)
+  BAR15:
+    name: "CHT 1"
+    dbkey: CHT11
+    decimal_places: 0
+    temperature: true
+  BAR16:
+    name: "CHT 2"
+    dbkey: CHT12
+    decimal_places: 0
+    temperature: true
+  BAR17:
+    name: "CHT 3"
+    dbkey: CHT13
+    decimal_places: 0
+    temperature: true
+  BAR18:
+    name: "CHT 4"
+    dbkey: CHT14
+    decimal_places: 0
+    temperature: true
+  BAR19:
+    name: "CHT 5"
+    dbkey: CHT15
+    decimal_places: 0
+    temperature: true
+  BAR20:
+    name: "CHT 6"
+    dbkey: CHT16
+    decimal_places: 0
+    temperature: true
+
+  # Max CHT/Avg EGT keys (used by some screens)
+  ARC_PFD_CHTMAX:
+    dbkey: CHTMAX1
+  ARC_PFD_EGTAVG:
+    dbkey: EGTAVG1
+
+  # Barometric pressure and heading (ensure these are published by your bridge)
+  BARO:
+    name: "Baro Pressure"
+    dbkey: BARO
+    decimal_places: 2
+  HEADING:
+    name: "Heading"
+    dbkey: HEAD
+    decimal_places: 1
+
+  # Stratux status gauge (radar/traffic alert)
+  STRATUX_STATUS:
+    name: "Stratux Alert"
+    dbkey: STRATUX_STATUS
+    decimal_places: 0
+    show_units: false
+    # You can use a custom color or icon logic in the gauge code for status values:
+    # 0 = no alert, 1 = traffic, 2 = weather, 3 = both

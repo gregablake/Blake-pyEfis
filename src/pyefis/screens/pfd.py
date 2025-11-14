@@ -137,6 +137,10 @@ class Screen(QWidget):
         self.egt.decimal_places = 0
         self.egt.dbkey = "EGTAVG1"
 
+        # Stratux traffic gauge (small, lower right)
+        from pyefis.instruments.gauges import StratuxTrafficGauge
+        self.stratux_traffic = StratuxTrafficGauge(self)
+
 
     def resizeEvent(self, event):
         instWidth = self.width() - 200
@@ -215,6 +219,10 @@ class Screen(QWidget):
         # fuel quantity gauge position and size
         self.fuel.resize(100, 70)
         self.fuel.move(self.width() - 125, 350)
+
+        # Stratux traffic gauge position and size (small, lower right)
+        self.stratux_traffic.resize(80, 80)
+        self.stratux_traffic.move(self.width() - 90, instHeight + 10)
 
 
     def change_asd_mode(self, event):
