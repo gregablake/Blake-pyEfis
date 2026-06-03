@@ -72,13 +72,30 @@ class BlakePfdDemo(QWidget):
         height = self.height()
 
         self.draw_background(painter, width, height)
-        self.draw_attitude(painter, self.pfd, width, height)
-        self.draw_airspeed_tape(painter, self.pfd, width, height)
-        self.draw_altitude_tape(painter, self.pfd, width, height)
-        self.draw_vsi(painter, self.pfd, width, height)
-        self.draw_heading_strip(painter, self.pfd, width, height)
-        self.draw_turn_and_slip(painter, self.pfd, width, height)
-        self.draw_nav_cdi_vdi(painter, self.pfd, width, height)
+
+        features = self.config.features
+
+        if features.show_attitude:
+            self.draw_attitude(painter, self.pfd, width, height)
+
+        if features.show_airspeed:
+            self.draw_airspeed_tape(painter, self.pfd, width, height)
+
+        if features.show_altitude:
+            self.draw_altitude_tape(painter, self.pfd, width, height)
+
+        if features.show_vsi:
+            self.draw_vsi(painter, self.pfd, width, height)
+
+        if features.show_heading or features.show_hsi:
+            self.draw_heading_strip(painter, self.pfd, width, height)
+
+        if features.show_turn_rate or features.show_slip_skid:
+            self.draw_turn_and_slip(painter, self.pfd, width, height)
+
+        if features.show_cdi or features.show_vdi:
+            self.draw_nav_cdi_vdi(painter, self.pfd, width, height)
+
         self.draw_top_data_bar(painter, self.pfd, width)
         self.draw_bottom_data_bar(painter, self.pfd, width, height)
 
@@ -384,10 +401,13 @@ class BlakePfdDemo(QWidget):
         painter.setPen(QPen(QColor(255, 255, 255), 2))
         painter.drawEllipse(ball_x - 10, ball_track_y - 10, 20, 20)
 
-    def draw_nav_cdi_vdi(self, painter: QPainter, pfd: PfdData, width: int, height: int) -> None:
-        center_x = width // 2
-        center_y = height // 2
+def draw_nav_cdi_vdi(self, painter: QPainter, pfd: PfdData, width: int, height: int) -> None:
+    features = self.config.features
 
+    center_x = width // 2
+    center_y = height // 2
+
+    if features.show_cdi:
         # CDI horizontal scale under attitude
         cdi_y = center_y + 185
         painter.setPen(QPen(QColor(255, 255, 255), 2))
@@ -407,6 +427,7 @@ class BlakePfdDemo(QWidget):
         painter.setPen(QColor(255, 255, 255))
         painter.drawText(center_x - 160, cdi_y + 28, "CDI")
 
+    if features.show_vdi:
         # VDI vertical scale right of attitude
         vdi_x = center_x + 290
         vdi_y_top = center_y - 120
@@ -437,12 +458,31 @@ class BlakePfdDemo(QWidget):
         painter.setPen(QColor(255, 255, 255))
         painter.setFont(QFont("Arial", 14, QFont.Weight.Bold))
 
-        text = (
-            f"TAS {pfd.true_airspeed_kt:.0f} KT    "
-            f"GS {pfd.ground_speed_kt:.0f} KT    "
-            f"OAT {pfd.outside_air_temp_c:.0f} C    "
-            f"WIND {pfd.wind_direction_deg:.0f}°/{pfd.wind_speed_kt:.0f} KT"
-        )
+        # Build top-bar text from configurable feature flags if available.
+        features = getattr(self.config, "features", None)
+        if features is not None:
+            parts = []
+
+            if getattr(features, "show_tas", True):
+                parts.append(f"TAS {pfd.true_airspeed_kt:.0f} KT")
+
+            if getattr(features, "show_ground_speed", True):
+                parts.append(f"GS {pfd.ground_speed_kt:.0f} KT")
+
+            if getattr(features, "show_oat", True):
+                parts.append(f"OAT {pfd.outside_air_temp_c:.0f} C")
+
+            if getattr(features, "show_wind", True):
+                parts.append(f"WIND {pfd.wind_direction_deg:.0f}°/{pfd.wind_speed_kt:.0f} KT")
+
+            text = "    ".join(parts)
+        else:
+            text = (
+                f"TAS {pfd.true_airspeed_kt:.0f} KT    "
+                f"GS {pfd.ground_speed_kt:.0f} KT    "
+                f"OAT {pfd.outside_air_temp_c:.0f} C    "
+                f"WIND {pfd.wind_direction_deg:.0f}°/{pfd.wind_speed_kt:.0f} KT"
+            )
 
         painter.drawText(QRectF(0, 0, width, 55), Qt.AlignmentFlag.AlignCenter, text)
 
@@ -451,16 +491,39 @@ class BlakePfdDemo(QWidget):
         painter.setPen(QColor(255, 255, 255))
         painter.setFont(QFont("Arial", 12, QFont.Weight.Bold))
 
-        text = (
-            f"TRK {pfd.gps_track_deg:.0f}°    "
-            f"BRG {pfd.waypoint_bearing_deg:.0f}°    "
-            f"DTK {pfd.desired_track_deg:.0f}°    "
-            f"CDI {pfd.cdi_deflection_nm:+.2f} NM    "
-            f"VDI {pfd.vdi_deflection_deg:+.2f}°"
+        features = getattr(self.config, "features", None)
+        parts = []
+
+        if features is None:
+            # Default bottom bar when no features config available
+            text = (
+                f"TRK {pfd.gps_track_deg:.0f}°    "
+                f"BRG {pfd.waypoint_bearing_deg:.0f}°    "
+                f"DTK {pfd.desired_track_deg:.0f}°    "
+                f"CDI {pfd.cdi_deflection_nm:+.2f} NM    "
+                f"VDI {pfd.vdi_deflection_deg:+.2f}°"
+            )
+        else:
+            if getattr(features, "show_heading", True):
+                parts.append(f"TRK {pfd.gps_track_deg:.0f}°")
+
+            if getattr(features, "show_hsi", False):
+                parts.append(f"BRG {pfd.waypoint_bearing_deg:.0f}°")
+                parts.append(f"DTK {pfd.desired_track_deg:.0f}°")
+
+            if getattr(features, "show_cdi", True):
+                parts.append(f"CDI {pfd.cdi_deflection_nm:+.2f} NM")
+
+            if getattr(features, "show_vdi", True):
+                parts.append(f"VDI {pfd.vdi_deflection_deg:+.2f}°")
+
+            text = "    ".join(parts)
+
+        painter.drawText(
+            QRectF(0, height - 35, width, 35),
+            Qt.AlignmentFlag.AlignCenter,
+            text,
         )
-
-        painter.drawText(QRectF(0, height - 35, width, 35), Qt.AlignmentFlag.AlignCenter, text)
-
 
 def point(x: float, y: float):
     from PyQt6.QtCore import QPointF
