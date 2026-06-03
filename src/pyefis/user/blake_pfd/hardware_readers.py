@@ -19,6 +19,7 @@ This first version is intentionally safe:
 from __future__ import annotations
 
 from dataclasses import dataclass
+from math import atan2, asin, degrees
 from time import monotonic
 
 from pyefis.user.blake_pfd.airdata import RawSensorInputs
@@ -40,31 +41,117 @@ class Bno085Reader:
     """
     Reads attitude, heading, yaw rate, and acceleration from BNO085.
 
-    Later this will use an Adafruit BNO08x library on the Raspberry Pi.
+    This class is written so it can run in Codespaces without hardware.
+    On the Raspberry Pi, install the Adafruit BNO08x library and wire the sensor.
     """
 
     def __init__(self) -> None:
         self.ok = False
         self.last_heading_deg = 0.0
+        self.last_yaw_deg = 0.0
         self.last_update_s = monotonic()
+        self.sensor = None
+
+        try:
+            import board
+            import busio
+            from adafruit_bno08x import (
+                BNO_REPORT_ACCELEROMETER,
+                BNO_REPORT_GYROSCOPE,
+                BNO_REPORT_ROTATION_VECTOR,
+            )
+            from adafruit_bno08x.i2c import BNO08X_I2C
+
+            i2c = busio.I2C(board.SCL, board.SDA)
+            self.sensor = BNO08X_I2C(i2c)
+
+            self.sensor.enable_feature(BNO_REPORT_ACCELEROMETER)
+            self.sensor.enable_feature(BNO_REPORT_GYROSCOPE)
+            self.sensor.enable_feature(BNO_REPORT_ROTATION_VECTOR)
+
+            self.ok = True
+
+        except Exception as exc:
+            print(f"BNO085 not active, using fallback values: {exc}")
+            self.ok = False
 
     def read(self) -> dict[str, float]:
         """
-        Return BNO085-style data.
+        Return AHRS-style data.
 
-        Placeholder values for now.
+        Output:
+        - pitch_deg
+        - roll_deg
+        - heading_deg
+        - yaw_rate_deg_s
+        - accel_x_g
+        - accel_y_g
+        - accel_z_g
         """
 
-        return {
-            "pitch_deg": 0.0,
-            "roll_deg": 0.0,
-            "heading_deg": self.last_heading_deg,
-            "yaw_rate_deg_s": 0.0,
-            "accel_x_g": 0.0,
-            "accel_y_g": 0.0,
-            "accel_z_g": 1.0,
-        }
+        if not self.ok or self.sensor is None:
+            return {
+                "pitch_deg": 0.0,
+                "roll_deg": 0.0,
+                "heading_deg": self.last_heading_deg,
+                "yaw_rate_deg_s": 0.0,
+                "accel_x_g": 0.0,
+                "accel_y_g": 0.0,
+                "accel_z_g": 1.0,
+            }
 
+        try:
+            quat_i, quat_j, quat_k, quat_real = self.sensor.quaternion
+            accel_x, accel_y, accel_z = self.sensor.acceleration
+            gyro_x, gyro_y, gyro_z = self.sensor.gyro
+
+            roll_deg, pitch_deg, yaw_deg = quaternion_to_euler_deg(
+                quat_i,
+                quat_j,
+                quat_k,
+                quat_real,
+            )
+
+            now_s = monotonic()
+            dt_s = now_s - self.last_update_s
+
+            if dt_s > 0.02:
+                yaw_rate_deg_s = angle_delta_deg(yaw_deg, self.last_yaw_deg) / dt_s
+            else:
+                yaw_rate_deg_s = 0.0
+
+            self.last_yaw_deg = yaw_deg
+            self.last_heading_deg = yaw_deg
+            self.last_update_s = now_s
+
+            # Convert m/s^2 to g.
+            accel_x_g = accel_x / 9.80665
+            accel_y_g = accel_y / 9.80665
+            accel_z_g = accel_z / 9.80665
+
+            return {
+                "pitch_deg": pitch_deg,
+                "roll_deg": roll_deg,
+                "heading_deg": yaw_deg,
+                "yaw_rate_deg_s": yaw_rate_deg_s,
+                "accel_x_g": accel_x_g,
+                "accel_y_g": accel_y_g,
+                "accel_z_g": accel_z_g,
+            }
+
+        except Exception as exc:
+            print(f"BNO085 read failed: {exc}")
+            self.ok = False
+
+            return {
+                "pitch_deg": 0.0,
+                "roll_deg": 0.0,
+                "heading_deg": self.last_heading_deg,
+                "yaw_rate_deg_s": 0.0,
+                "accel_x_g": 0.0,
+                "accel_y_g": 0.0,
+                "accel_z_g": 1.0,
+            }
 
 class BaroReader:
     """
@@ -205,7 +292,49 @@ def demo() -> None:
     print()
     print("Hardware status:")
     print(source.status)
+def quaternion_to_euler_deg(
+    x: float,
+    y: float,
+    z: float,
+    w: float,
+) -> tuple[float, float, float]:
+    """
+    Convert quaternion to roll, pitch, yaw in degrees.
 
+    Returns:
+        roll_deg, pitch_deg, yaw_deg
+    """
+
+    # Roll, x-axis rotation
+    sinr_cosp = 2.0 * ((w * x) + (y * z))
+    cosr_cosp = 1.0 - (2.0 * ((x * x) + (y * y)))
+    roll = atan2(sinr_cosp, cosr_cosp)
+
+    # Pitch, y-axis rotation
+    sinp = 2.0 * ((w * y) - (z * x))
+    if abs(sinp) >= 1.0:
+        pitch = 1.57079632679 if sinp > 0 else -1.57079632679
+    else:
+        pitch = asin(sinp)
+
+    # Yaw, z-axis rotation
+    siny_cosp = 2.0 * ((w * z) + (x * y))
+    cosy_cosp = 1.0 - (2.0 * ((y * y) + (z * z)))
+    yaw = atan2(siny_cosp, cosy_cosp)
+
+    roll_deg = degrees(roll)
+    pitch_deg = degrees(pitch)
+    yaw_deg = degrees(yaw) % 360.0
+
+    return roll_deg, pitch_deg, yaw_deg
+
+
+def angle_delta_deg(new_angle: float, old_angle: float) -> float:
+    """
+    Smallest signed angle difference between two headings.
+    """
+
+    return (new_angle - old_angle + 180.0) % 360.0 - 180.0
 
 if __name__ == "__main__":
     demo()
