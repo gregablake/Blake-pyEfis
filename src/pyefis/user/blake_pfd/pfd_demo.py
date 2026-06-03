@@ -14,6 +14,7 @@ because Codespaces may not support the full Qt display environment.
 
 from __future__ import annotations
 
+import argparse
 import sys
 from math import cos, radians, sin
 
@@ -24,20 +25,30 @@ from PyQt6.QtWidgets import QApplication, QWidget
 from pyefis.user.blake_pfd.airdata import PfdData
 from pyefis.user.blake_pfd.sensors_sim import SimulatedSensorSource
 from pyefis.user.blake_pfd.airdata import AirDataComputer
-
+from pyefis.user.blake_pfd.hardware_readers import BlakeHardwareSensorSource
+from pyefis.user.blake_pfd.config_loader import load_config
 
 class BlakePfdDemo(QWidget):
     """
     Simple Garmin/Aspen-style PFD demo window.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, use_hardware: bool = False) -> None:
         super().__init__()
 
-        self.setWindowTitle("Blake PFD Demo")
-        self.resize(1024, 600)
+        mode_name = "Hardware" if use_hardware else "Simulator"
+        self.config = load_config()
+        self.setWindowTitle(f"Blake PFD Demo - {mode_name}")
+        self.resize(self.config.display.width, self.config.display.height)
 
-        self.sensors = SimulatedSensorSource()
+        if self.config.display.fullscreen:
+            self.showFullScreen()
+
+        if use_hardware:
+            self.sensors = BlakeHardwareSensorSource()
+        else:
+            self.sensors = SimulatedSensorSource()
+
         self.airdata = AirDataComputer()
         self.pfd: PfdData | None = None
 
@@ -471,9 +482,31 @@ def heading_label(heading: int) -> str:
     return f"{heading // 10:02d}"
 
 
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Blake PFD visual demo")
+
+    mode_group = parser.add_mutually_exclusive_group()
+    mode_group.add_argument(
+        "--sim",
+        action="store_true",
+        help="Run using simulated sensor data",
+    )
+    mode_group.add_argument(
+        "--hardware",
+        action="store_true",
+        help="Run using real hardware sensor readers",
+    )
+
+    return parser.parse_args()
+
+
 def main() -> None:
+    args = parse_args()
+
+    use_hardware = args.hardware
+
     app = QApplication(sys.argv)
-    window = BlakePfdDemo()
+    window = BlakePfdDemo(use_hardware=use_hardware)
     window.show()
     sys.exit(app.exec())
 

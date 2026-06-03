@@ -1,0 +1,62 @@
+display:
+  width: 1024
+  height: 600
+  fullscreen: true
+  ui_scale: 1.0
+
+sensors:
+  mode: sim
+  # options:
+  # sim
+  # hardware
+
+features:
+  show_airspeed: true
+  show_altitude: true
+  show_attitude: true
+  show_heading: true
+  show_vsi: true
+  show_turn_rate: true
+  show_slip_skid: true
+  show_oat: true
+  show_tas: true
+  show_ground_speed: true
+  show_wind: true
+  show_cdi: true
+  show_vdi: true
+  show_hsi: true
+  show_synthetic_vision: false
+  show_terrain: false
+  show_highway_in_sky: false
+  show_safe_taxi: false
+  show_traffic: false
+  show_weather: false
+
+navigation:
+  selected_waypoint_id: KHAO
+  selected_waypoint_name: Butler County Regional
+  selected_waypoint_lat: 39.3638
+  selected_waypoint_lon: -84.5220
+  desired_track_deg: 0.0
+
+airspeed:
+  vso_kt: 45
+  vs_kt: 50
+  vx_kt: 75
+  vy_kt: 85
+  va_kt: 120
+  vno_kt: 150
+  vne_kt: 180
+
+altitude:
+  baro_setting_inhg: 29.92
+
+synthetic_vision:
+  terrain_database_path: ""
+  obstacle_database_path: ""
+  airport_database_path: ""
+
+stratux:
+  enabled: false
+  host: 192.168.10.1
+  gdl90_port: 4000
