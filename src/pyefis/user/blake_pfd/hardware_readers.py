@@ -157,25 +157,66 @@ class BaroReader:
     """
     Reads static pressure and outside air temperature.
 
-    Static pressure should come from the aircraft static system.
-    OAT may later come from a separate probe.
+    Primary planned sensor:
+    - BMP388 barometric pressure sensor
+
+    Static pressure should ideally come from the aircraft static system,
+    not loose cabin air, if you want EFIS altitude/VSI to agree with pitot/static.
     """
 
     def __init__(self) -> None:
         self.ok = False
+        self.sensor = None
+
+        try:
+            import board
+            import busio
+            import adafruit_bmp3xx
+
+            i2c = busio.I2C(board.SCL, board.SDA)
+            self.sensor = adafruit_bmp3xx.BMP3XX_I2C(i2c)
+
+            # Sea-level pressure is used internally by the library if using
+            # sensor.altitude, but our airdata computer uses raw pressure.
+            self.sensor.sea_level_pressure = 1013.25
+
+            self.ok = True
+
+        except Exception as exc:
+            print(f"BMP388 not active, using fallback values: {exc}")
+            self.ok = False
 
     def read(self) -> dict[str, float]:
         """
-        Return barometric/static data.
-
-        Placeholder values for now.
+        Return static pressure in Pascals and OAT in Celsius.
         """
 
-        return {
-            "static_pressure_pa": 101325.0,
-            "outside_air_temp_c": 15.0,
-        }
+        if not self.ok or self.sensor is None:
+            return {
+                "static_pressure_pa": 101325.0,
+                "outside_air_temp_c": 15.0,
+            }
 
+        try:
+            # Adafruit BMP3XX pressure is in hPa.
+            pressure_hpa = float(self.sensor.pressure)
+            temperature_c = float(self.sensor.temperature)
+
+            static_pressure_pa = pressure_hpa * 100.0
+
+            return {
+                "static_pressure_pa": static_pressure_pa,
+                "outside_air_temp_c": temperature_c,
+            }
+
+        except Exception as exc:
+            print(f"BMP388 read failed: {exc}")
+            self.ok = False
+
+            return {
+                "static_pressure_pa": 101325.0,
+                "outside_air_temp_c": 15.0,
+            }
 
 class AirspeedReader:
     """
