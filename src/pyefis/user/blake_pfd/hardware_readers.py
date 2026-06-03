@@ -222,23 +222,92 @@ class AirspeedReader:
     """
     Reads MPXV7002DP differential pressure through ADS1115.
 
-    The MPXV7002DP sensor output is analog.
-    ADS1115 converts that voltage to digital for Raspberry Pi.
+    Hardware path:
+        MPXV7002DP analog output -> ADS1115 A0 -> Raspberry Pi I2C
+
+    MPXV7002DP basics:
+    - 5V sensor supply recommended
+    - Zero differential pressure output is about Vcc / 2
+    - Sensitivity is roughly 1.0 V per kPa
+    - Range is approximately -2 kPa to +2 kPa
+
+    We only use positive pressure for airspeed:
+        pitot pressure - static pressure
     """
 
     def __init__(self) -> None:
         self.ok = False
+        self.ads = None
+        self.channel = None
+
+        # Calibration values.
+        # These can be adjusted later after real sensor testing.
+        self.sensor_supply_v = 5.0
+        self.zero_pressure_v = 2.5
+        self.volts_per_kpa = 1.0
+
+        try:
+            import board
+            import busio
+            import adafruit_ads1x15.ads1115 as ADS
+            from adafruit_ads1x15.analog_in import AnalogIn
+
+            i2c = busio.I2C(board.SCL, board.SDA)
+            self.ads = ADS.ADS1115(i2c)
+
+            # ADS1115 input A0.
+            self.channel = AnalogIn(self.ads, ADS.P0)
+
+            self.ok = True
+
+        except Exception as exc:
+            print(f"ADS1115/MPXV7002DP not active, using fallback values: {exc}")
+            self.ok = False
 
     def read(self) -> dict[str, float]:
         """
         Return differential pressure in Pascals.
-
-        Placeholder value for now.
         """
 
-        return {
-            "differential_pressure_pa": 0.0,
-        }
+        if not self.ok or self.channel is None:
+            return {
+                "differential_pressure_pa": 0.0,
+            }
+
+        try:
+            voltage = float(self.channel.voltage)
+
+            differential_pressure_pa = self.voltage_to_pressure_pa(voltage)
+
+            return {
+                "differential_pressure_pa": differential_pressure_pa,
+            }
+
+        except Exception as exc:
+            print(f"ADS1115/MPXV7002DP read failed: {exc}")
+            self.ok = False
+
+            return {
+                "differential_pressure_pa": 0.0,
+            }
+
+    def voltage_to_pressure_pa(self, voltage: float) -> float:
+        """
+        Convert MPXV7002DP voltage to differential pressure.
+
+        Approximation:
+            pressure_kpa = (voltage - zero_voltage) / volts_per_kpa
+
+        Then:
+            pressure_pa = pressure_kpa * 1000
+
+        Negative pressure is clamped to zero for IAS.
+        """
+
+        pressure_kpa = (voltage - self.zero_pressure_v) / self.volts_per_kpa
+        pressure_pa = pressure_kpa * 1000.0
+
+        return max(pressure_pa, 0.0)
 
 
 class GpsReader:
