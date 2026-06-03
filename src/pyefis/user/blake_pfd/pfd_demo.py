@@ -1,0 +1,482 @@
+"""
+Blake PFD visual demo.
+
+Standalone PyQt6 display that uses simulated sensor data.
+
+Run later on Raspberry Pi with:
+    python src/pyefis/user/blake_pfd/pfd_demo.py
+
+In Codespaces, use:
+    python -m compileall src
+
+because Codespaces may not support the full Qt display environment.
+"""
+
+from __future__ import annotations
+
+import sys
+from math import cos, radians, sin
+
+from PyQt6.QtCore import Qt, QTimer, QRectF
+from PyQt6.QtGui import QColor, QFont, QPainter, QPen, QBrush, QPolygonF
+from PyQt6.QtWidgets import QApplication, QWidget
+
+from pyefis.user.blake_pfd.airdata import PfdData
+from pyefis.user.blake_pfd.sensors_sim import SimulatedSensorSource
+from pyefis.user.blake_pfd.airdata import AirDataComputer
+
+
+class BlakePfdDemo(QWidget):
+    """
+    Simple Garmin/Aspen-style PFD demo window.
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+
+        self.setWindowTitle("Blake PFD Demo")
+        self.resize(1024, 600)
+
+        self.sensors = SimulatedSensorSource()
+        self.airdata = AirDataComputer()
+        self.pfd: PfdData | None = None
+
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self.update_data)
+        self.timer.start(50)  # 20 Hz update
+
+    def update_data(self) -> None:
+        raw = self.sensors.read()
+        self.pfd = self.airdata.update(raw)
+        self.update()
+
+    def paintEvent(self, event) -> None:  # noqa: N802
+        if self.pfd is None:
+            return
+
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        width = self.width()
+        height = self.height()
+
+        self.draw_background(painter, width, height)
+        self.draw_attitude(painter, self.pfd, width, height)
+        self.draw_airspeed_tape(painter, self.pfd, width, height)
+        self.draw_altitude_tape(painter, self.pfd, width, height)
+        self.draw_vsi(painter, self.pfd, width, height)
+        self.draw_heading_strip(painter, self.pfd, width, height)
+        self.draw_turn_and_slip(painter, self.pfd, width, height)
+        self.draw_nav_cdi_vdi(painter, self.pfd, width, height)
+        self.draw_top_data_bar(painter, self.pfd, width)
+        self.draw_bottom_data_bar(painter, self.pfd, width, height)
+
+        painter.end()
+
+    def draw_background(self, painter: QPainter, width: int, height: int) -> None:
+        painter.fillRect(0, 0, width, height, QColor(5, 5, 8))
+
+    def draw_attitude(self, painter: QPainter, pfd: PfdData, width: int, height: int) -> None:
+        center_x = width // 2
+        center_y = height // 2
+        horizon_width = int(width * 0.58)
+        horizon_height = int(height * 0.70)
+
+        painter.save()
+
+        painter.setClipRect(
+            center_x - horizon_width // 2,
+            center_y - horizon_height // 2,
+            horizon_width,
+            horizon_height,
+        )
+
+        painter.translate(center_x, center_y)
+        painter.rotate(-pfd.roll_deg)
+
+        pitch_pixels = pfd.pitch_deg * 7.0
+        painter.translate(0, pitch_pixels)
+
+        sky = QColor(25, 95, 180)
+        ground = QColor(125, 70, 25)
+
+        painter.fillRect(
+            -horizon_width,
+            -horizon_height * 2,
+            horizon_width * 2,
+            horizon_height * 2,
+            sky,
+        )
+
+        painter.fillRect(
+            -horizon_width,
+            0,
+            horizon_width * 2,
+            horizon_height * 2,
+            ground,
+        )
+
+        painter.setPen(QPen(QColor(255, 255, 255), 3))
+        painter.drawLine(-horizon_width, 0, horizon_width, 0)
+
+        self.draw_pitch_ladder(painter, horizon_width)
+
+        painter.restore()
+
+        # Border around attitude area
+        painter.setPen(QPen(QColor(180, 180, 180), 2))
+        painter.drawRect(
+            center_x - horizon_width // 2,
+            center_y - horizon_height // 2,
+            horizon_width,
+            horizon_height,
+        )
+
+        # Fixed aircraft symbol
+        painter.setPen(QPen(QColor(255, 220, 0), 4))
+        painter.drawLine(center_x - 90, center_y, center_x - 25, center_y)
+        painter.drawLine(center_x + 25, center_y, center_x + 90, center_y)
+        painter.drawLine(center_x, center_y - 8, center_x, center_y + 8)
+
+        # Roll pointer
+        painter.setBrush(QBrush(QColor(255, 220, 0)))
+        painter.setPen(QPen(QColor(255, 220, 0), 2))
+        pointer = QPolygonF([
+            point(center_x, center_y - int(horizon_height * 0.40)),
+            point(center_x - 10, center_y - int(horizon_height * 0.40) + 20),
+            point(center_x + 10, center_y - int(horizon_height * 0.40) + 20),
+        ])
+        painter.drawPolygon(pointer)
+
+        self.draw_roll_scale(painter, center_x, center_y, horizon_height)
+
+    def draw_pitch_ladder(self, painter: QPainter, horizon_width: int) -> None:
+        painter.setPen(QPen(QColor(255, 255, 255), 2))
+        painter.setFont(QFont("Arial", 12, QFont.Weight.Bold))
+
+        for pitch in range(-30, 35, 5):
+            if pitch == 0:
+                continue
+
+            y = -pitch * 7.0
+            line_half = 55 if pitch % 10 == 0 else 35
+
+            painter.drawLine(int(-line_half), int(y), int(line_half), int(y))
+
+            if pitch % 10 == 0:
+                label = str(abs(pitch))
+                painter.drawText(int(-line_half - 38), int(y + 5), label)
+                painter.drawText(int(line_half + 12), int(y + 5), label)
+
+    def draw_roll_scale(
+        self,
+        painter: QPainter,
+        center_x: int,
+        center_y: int,
+        horizon_height: int,
+    ) -> None:
+        radius = int(horizon_height * 0.40)
+
+        painter.setPen(QPen(QColor(255, 255, 255), 2))
+
+        for deg in [-60, -45, -30, -20, -10, 0, 10, 20, 30, 45, 60]:
+            angle = radians(deg - 90)
+            outer_x = center_x + int(radius * cos(angle))
+            outer_y = center_y + int(radius * sin(angle))
+            inner = radius - (18 if deg in [-60, -30, 0, 30, 60] else 10)
+            inner_x = center_x + int(inner * cos(angle))
+            inner_y = center_y + int(inner * sin(angle))
+            painter.drawLine(inner_x, inner_y, outer_x, outer_y)
+
+    def draw_airspeed_tape(self, painter: QPainter, pfd: PfdData, width: int, height: int) -> None:
+        tape_x = 30
+        tape_y = 95
+        tape_w = 105
+        tape_h = height - 190
+        center_y = tape_y + tape_h // 2
+
+        painter.fillRect(tape_x, tape_y, tape_w, tape_h, QColor(20, 20, 25))
+        painter.setPen(QPen(QColor(210, 210, 210), 2))
+        painter.drawRect(tape_x, tape_y, tape_w, tape_h)
+
+        ias = pfd.indicated_airspeed_kt
+        pixels_per_knot = 4.0
+
+        painter.setFont(QFont("Arial", 12, QFont.Weight.Bold))
+        painter.setPen(QColor(255, 255, 255))
+
+        start_speed = int(ias - 50)
+        end_speed = int(ias + 55)
+
+        for speed in range(start_speed, end_speed, 10):
+            y = center_y - int((speed - ias) * pixels_per_knot)
+            if tape_y < y < tape_y + tape_h:
+                painter.drawLine(tape_x + tape_w - 35, y, tape_x + tape_w - 5, y)
+                painter.drawText(tape_x + 10, y + 5, str(speed))
+
+        # Current IAS box
+        painter.fillRect(tape_x + 5, center_y - 25, tape_w - 10, 50, QColor(0, 0, 0))
+        painter.setPen(QPen(QColor(255, 255, 255), 2))
+        painter.drawRect(tape_x + 5, center_y - 25, tape_w - 10, 50)
+        painter.setFont(QFont("Arial", 22, QFont.Weight.Bold))
+        painter.drawText(
+            QRectF(tape_x + 5, center_y - 25, tape_w - 10, 50),
+            Qt.AlignmentFlag.AlignCenter,
+            f"{ias:.0f}",
+        )
+
+        painter.setFont(QFont("Arial", 12, QFont.Weight.Bold))
+        painter.drawText(tape_x + 20, tape_y - 12, "IAS")
+
+    def draw_altitude_tape(self, painter: QPainter, pfd: PfdData, width: int, height: int) -> None:
+        tape_w = 120
+        tape_x = width - tape_w - 30
+        tape_y = 95
+        tape_h = height - 190
+        center_y = tape_y + tape_h // 2
+
+        painter.fillRect(tape_x, tape_y, tape_w, tape_h, QColor(20, 20, 25))
+        painter.setPen(QPen(QColor(210, 210, 210), 2))
+        painter.drawRect(tape_x, tape_y, tape_w, tape_h)
+
+        alt = pfd.altitude_ft
+        pixels_per_100_ft = 22.0
+
+        painter.setFont(QFont("Arial", 11, QFont.Weight.Bold))
+        painter.setPen(QColor(255, 255, 255))
+
+        start_alt = int((alt - 1000) // 100) * 100
+        end_alt = int((alt + 1100) // 100) * 100
+
+        for altitude in range(start_alt, end_alt, 100):
+            y = center_y - int(((altitude - alt) / 100.0) * pixels_per_100_ft)
+            if tape_y < y < tape_y + tape_h:
+                painter.drawLine(tape_x + 5, y, tape_x + 35, y)
+                painter.drawText(tape_x + 42, y + 5, str(altitude))
+
+        # Current altitude box
+        painter.fillRect(tape_x + 5, center_y - 25, tape_w - 10, 50, QColor(0, 0, 0))
+        painter.setPen(QPen(QColor(255, 255, 255), 2))
+        painter.drawRect(tape_x + 5, center_y - 25, tape_w - 10, 50)
+        painter.setFont(QFont("Arial", 20, QFont.Weight.Bold))
+        painter.drawText(
+            QRectF(tape_x + 5, center_y - 25, tape_w - 10, 50),
+            Qt.AlignmentFlag.AlignCenter,
+            f"{alt:.0f}",
+        )
+
+        painter.setFont(QFont("Arial", 12, QFont.Weight.Bold))
+        painter.drawText(tape_x + 35, tape_y - 12, "ALT")
+
+    def draw_vsi(self, painter: QPainter, pfd: PfdData, width: int, height: int) -> None:
+        x = width - 180
+        y = 120
+        h = height - 240
+        center_y = y + h // 2
+
+        painter.setPen(QPen(QColor(200, 200, 200), 2))
+        painter.drawLine(x, y, x, y + h)
+
+        for vsi in [-2000, -1000, 0, 1000, 2000]:
+            tick_y = center_y - int((vsi / 2000.0) * (h / 2))
+            painter.drawLine(x - 10, tick_y, x + 10, tick_y)
+            painter.setFont(QFont("Arial", 9))
+            painter.drawText(x + 15, tick_y + 4, str(vsi))
+
+        clamped_vsi = max(-2000.0, min(2000.0, pfd.vertical_speed_fpm))
+        pointer_y = center_y - int((clamped_vsi / 2000.0) * (h / 2))
+
+        painter.setBrush(QBrush(QColor(0, 255, 255)))
+        painter.setPen(QPen(QColor(0, 255, 255), 2))
+        tri = QPolygonF([
+            point(x - 18, pointer_y),
+            point(x - 38, pointer_y - 10),
+            point(x - 38, pointer_y + 10),
+        ])
+        painter.drawPolygon(tri)
+
+    def draw_heading_strip(self, painter: QPainter, pfd: PfdData, width: int, height: int) -> None:
+        strip_w = 500
+        strip_h = 70
+        strip_x = width // 2 - strip_w // 2
+        strip_y = height - 95
+
+        painter.fillRect(strip_x, strip_y, strip_w, strip_h, QColor(15, 15, 20))
+        painter.setPen(QPen(QColor(220, 220, 220), 2))
+        painter.drawRect(strip_x, strip_y, strip_w, strip_h)
+
+        heading = pfd.heading_deg
+        pixels_per_deg = 6.0
+        center_x = strip_x + strip_w // 2
+
+        painter.setFont(QFont("Arial", 12, QFont.Weight.Bold))
+        painter.setPen(QColor(255, 255, 255))
+
+        for hdg in range(int(heading - 50), int(heading + 55), 10):
+            normalized = hdg % 360
+            x = center_x + int((hdg - heading) * pixels_per_deg)
+            if strip_x < x < strip_x + strip_w:
+                painter.drawLine(x, strip_y + 5, x, strip_y + 25)
+                label = heading_label(normalized)
+                painter.drawText(x - 18, strip_y + 50, label)
+
+        # Heading pointer and current heading box
+        painter.setBrush(QBrush(QColor(255, 220, 0)))
+        pointer = QPolygonF([
+            point(center_x, strip_y + 5),
+            point(center_x - 10, strip_y + 25),
+            point(center_x + 10, strip_y + 25),
+        ])
+        painter.drawPolygon(pointer)
+
+        painter.fillRect(center_x - 45, strip_y - 38, 90, 34, QColor(0, 0, 0))
+        painter.setPen(QPen(QColor(255, 255, 255), 2))
+        painter.drawRect(center_x - 45, strip_y - 38, 90, 34)
+        painter.setFont(QFont("Arial", 18, QFont.Weight.Bold))
+        painter.drawText(
+            QRectF(center_x - 45, strip_y - 38, 90, 34),
+            Qt.AlignmentFlag.AlignCenter,
+            f"{heading:.0f}°",
+        )
+
+    def draw_turn_and_slip(self, painter: QPainter, pfd: PfdData, width: int, height: int) -> None:
+        center_x = width // 2
+        y = 78
+
+        # Turn rate bar
+        painter.setPen(QPen(QColor(200, 200, 200), 2))
+        painter.drawLine(center_x - 120, y, center_x + 120, y)
+        painter.drawLine(center_x - 80, y - 8, center_x - 80, y + 8)
+        painter.drawLine(center_x + 80, y - 8, center_x + 80, y + 8)
+        painter.drawLine(center_x, y - 12, center_x, y + 12)
+
+        ratio = max(-1.5, min(1.5, pfd.standard_rate_ratio))
+        pointer_x = center_x + int(ratio * 80)
+
+        painter.setBrush(QBrush(QColor(255, 220, 0)))
+        painter.setPen(QPen(QColor(255, 220, 0), 2))
+        painter.drawEllipse(pointer_x - 7, y - 7, 14, 14)
+
+        painter.setFont(QFont("Arial", 10, QFont.Weight.Bold))
+        painter.setPen(QColor(255, 255, 255))
+        painter.drawText(center_x - 150, y + 30, "STD RATE")
+
+        # Slip/skid ball
+        ball_track_y = y + 45
+        painter.setPen(QPen(QColor(220, 220, 220), 2))
+        painter.drawLine(center_x - 80, ball_track_y, center_x + 80, ball_track_y)
+        painter.drawLine(center_x - 25, ball_track_y - 10, center_x - 25, ball_track_y + 10)
+        painter.drawLine(center_x + 25, ball_track_y - 10, center_x + 25, ball_track_y + 10)
+
+        ball_x = center_x + int(pfd.slip_skid * 70)
+        painter.setBrush(QBrush(QColor(255, 255, 255)))
+        painter.setPen(QPen(QColor(255, 255, 255), 2))
+        painter.drawEllipse(ball_x - 10, ball_track_y - 10, 20, 20)
+
+    def draw_nav_cdi_vdi(self, painter: QPainter, pfd: PfdData, width: int, height: int) -> None:
+        center_x = width // 2
+        center_y = height // 2
+
+        # CDI horizontal scale under attitude
+        cdi_y = center_y + 185
+        painter.setPen(QPen(QColor(255, 255, 255), 2))
+        painter.drawLine(center_x - 125, cdi_y, center_x + 125, cdi_y)
+
+        for offset in [-100, -50, 0, 50, 100]:
+            painter.drawEllipse(center_x + offset - 4, cdi_y - 4, 8, 8)
+
+        cdi_clamped = max(-1.0, min(1.0, pfd.cdi_deflection_nm))
+        cdi_x = center_x + int(cdi_clamped * 100)
+
+        painter.setBrush(QBrush(QColor(255, 0, 255)))
+        painter.setPen(QPen(QColor(255, 0, 255), 2))
+        painter.drawRect(cdi_x - 6, cdi_y - 28, 12, 56)
+
+        painter.setFont(QFont("Arial", 10, QFont.Weight.Bold))
+        painter.setPen(QColor(255, 255, 255))
+        painter.drawText(center_x - 160, cdi_y + 28, "CDI")
+
+        # VDI vertical scale right of attitude
+        vdi_x = center_x + 290
+        vdi_y_top = center_y - 120
+        vdi_h = 240
+
+        painter.setPen(QPen(QColor(255, 255, 255), 2))
+        painter.drawLine(vdi_x, vdi_y_top, vdi_x, vdi_y_top + vdi_h)
+
+        for offset in [-80, -40, 0, 40, 80]:
+            painter.drawEllipse(vdi_x - 4, center_y + offset - 4, 8, 8)
+
+        vdi_clamped = max(-1.0, min(1.0, pfd.vdi_deflection_deg))
+        vdi_y = center_y - int(vdi_clamped * 90)
+
+        painter.setBrush(QBrush(QColor(0, 255, 0)))
+        tri = QPolygonF([
+            point(vdi_x, vdi_y),
+            point(vdi_x + 22, vdi_y - 12),
+            point(vdi_x + 22, vdi_y + 12),
+        ])
+        painter.drawPolygon(tri)
+
+        painter.setPen(QColor(255, 255, 255))
+        painter.drawText(vdi_x + 18, vdi_y_top - 10, "VDI")
+
+    def draw_top_data_bar(self, painter: QPainter, pfd: PfdData, width: int) -> None:
+        painter.fillRect(0, 0, width, 55, QColor(0, 0, 0))
+        painter.setPen(QColor(255, 255, 255))
+        painter.setFont(QFont("Arial", 14, QFont.Weight.Bold))
+
+        text = (
+            f"TAS {pfd.true_airspeed_kt:.0f} KT    "
+            f"GS {pfd.ground_speed_kt:.0f} KT    "
+            f"OAT {pfd.outside_air_temp_c:.0f} C    "
+            f"WIND {pfd.wind_direction_deg:.0f}°/{pfd.wind_speed_kt:.0f} KT"
+        )
+
+        painter.drawText(QRectF(0, 0, width, 55), Qt.AlignmentFlag.AlignCenter, text)
+
+    def draw_bottom_data_bar(self, painter: QPainter, pfd: PfdData, width: int, height: int) -> None:
+        painter.fillRect(0, height - 35, width, 35, QColor(0, 0, 0))
+        painter.setPen(QColor(255, 255, 255))
+        painter.setFont(QFont("Arial", 12, QFont.Weight.Bold))
+
+        text = (
+            f"TRK {pfd.gps_track_deg:.0f}°    "
+            f"BRG {pfd.waypoint_bearing_deg:.0f}°    "
+            f"DTK {pfd.desired_track_deg:.0f}°    "
+            f"CDI {pfd.cdi_deflection_nm:+.2f} NM    "
+            f"VDI {pfd.vdi_deflection_deg:+.2f}°"
+        )
+
+        painter.drawText(QRectF(0, height - 35, width, 35), Qt.AlignmentFlag.AlignCenter, text)
+
+
+def point(x: float, y: float):
+    from PyQt6.QtCore import QPointF
+    return QPointF(float(x), float(y))
+
+
+def heading_label(heading: int) -> str:
+    heading = heading % 360
+
+    if heading == 0:
+        return "N"
+    if heading == 90:
+        return "E"
+    if heading == 180:
+        return "S"
+    if heading == 270:
+        return "W"
+
+    return f"{heading // 10:02d}"
+
+
+def main() -> None:
+    app = QApplication(sys.argv)
+    window = BlakePfdDemo()
+    window.show()
+    sys.exit(app.exec())
+
+
+if __name__ == "__main__":
+    main()
