@@ -13,7 +13,7 @@ because Codespaces may not support the full Qt display environment.
 """
 
 from __future__ import annotations
-
+from pyefis.user.blake_pfd.synthetic_vision import SyntheticVisionComputer, project_object_to_screen
 import argparse
 import sys
 from math import cos, radians, sin
@@ -50,6 +50,7 @@ class BlakePfdDemo(QWidget):
             self.sensors = SimulatedSensorSource()
 
         self.airdata = AirDataComputer()
+        self.synthetic_vision = SyntheticVisionComputer()
         self.pfd: PfdData | None = None
 
         self.timer = QTimer(self)
@@ -74,6 +75,9 @@ class BlakePfdDemo(QWidget):
         self.draw_background(painter, width, height)
 
         features = self.config.features
+
+        if features.show_synthetic_vision:
+            self.draw_synthetic_vision(painter, self.pfd, width, height)
 
         if features.show_attitude:
             self.draw_attitude(painter, self.pfd, width, height)
@@ -215,6 +219,51 @@ class BlakePfdDemo(QWidget):
             inner_x = center_x + int(inner * cos(angle))
             inner_y = center_y + int(inner * sin(angle))
             painter.drawLine(inner_x, inner_y, outer_x, outer_y)
+
+    def draw_synthetic_vision(
+        self,
+        painter: QPainter,
+        pfd: PfdData,
+        width: int,
+        height: int,
+    ) -> None:
+        scene = self.synthetic_vision.update(pfd)
+
+        center_x = width // 2
+        center_y = height // 2
+
+        painter.save()
+        painter.translate(center_x, center_y)
+        painter.rotate(-pfd.roll_deg)
+
+        sky = QColor(*scene.sky_color)
+        ground = QColor(*scene.ground_color)
+
+        painter.fillRect(-width, -height * 2, width * 2, height * 2, sky)
+        painter.fillRect(-width, 0, width * 2, height * 2, ground)
+
+        painter.setPen(QPen(QColor(255, 255, 255), 3))
+        painter.drawLine(-width, 0, width, 0)
+
+        painter.restore()
+        for obj in scene.objects or []:
+            x, y = project_object_to_screen(
+                obj.rel_bearing_deg,
+                obj.elevation_angle_deg,
+                width,
+                height,
+                obj.distance_nm,
+            )
+
+            if 0 <= x <= width and 0 <= y <= height:
+                box_w = int(70 * obj.size)
+                box_h = int(38 * obj.size)
+
+                painter.setPen(QPen(QColor(0, 255, 0), 3))
+                painter.drawRect(x - box_w // 2, y - box_h // 2, box_w, box_h)
+
+                painter.setFont(QFont("Arial", 12, QFont.Weight.Bold))
+                painter.drawText(x - 20, y - box_h // 2 - 8, obj.label)
 
     def draw_airspeed_tape(self, painter: QPainter, pfd: PfdData, width: int, height: int) -> None:
         tape_x = 30

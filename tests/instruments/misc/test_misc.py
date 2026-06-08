@@ -1,3 +1,5 @@
+import shutil
+import os
 import pytest
 import warnings
 from unittest import mock
@@ -6,7 +8,6 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor
 
 from pyefis.instruments.misc import StaticText, ValueDisplay
-import os
 
 
 @pytest.fixture
@@ -28,11 +29,15 @@ def test_save_screenshot(fix, qtbot, request):
     qtbot.waitExposed(widget1)
     path = qtbot.screenshot(widget1, "instruments-misc-test_misc")
     qtbot.wait(500)
-    os.rename(
-        path,
-        request.config.rootdir
-        + "/extras/extras/test_results/instruments-misc-test_misc-StaticText.png",
+    dest_path = os.path.join(
+        request.config.rootdir,
+        "extras/extras/test_results/instruments-misc-test_misc-StaticText.png",
     )
+    os.makedirs(os.path.dirname(dest_path), exist_ok=True)
+    try:
+        os.replace(path, dest_path)
+    except OSError:
+        shutil.move(path, dest_path)
 
 
 def test_static_text_default(fix, qtbot):
