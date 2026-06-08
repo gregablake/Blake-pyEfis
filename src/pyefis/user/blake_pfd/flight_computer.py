@@ -7,7 +7,11 @@ from pyefis.user.blake_pfd.airdata_calculations import (
     indicated_airspeed_from_dp,
     pressure_altitude,
 )
-
+from pyefis.user.blake_pfd.performance_calculations import (
+    true_airspeed_estimate,
+    density_altitude_estimate,
+    wind_from_heading_track,
+)
 
 KNOTS_PER_MPS = 1.943844
 PA_STANDARD_SEA_LEVEL = 101325.0
@@ -67,13 +71,12 @@ class FlightComputer:
         flight.track_deg = normalize_degrees(raw.gps_track_deg)
         flight.ground_speed_kt = raw.gps_ground_speed_kt
 
-        flight.wind_speed_kt, flight.wind_direction_deg = estimate_wind(
-            true_airspeed_kt=flight.tas_kt,
-            heading_deg=flight.heading_deg,
-            ground_speed_kt=flight.ground_speed_kt,
-            track_deg=flight.track_deg,
-        )
-
+        flight.wind_speed_kt, flight.wind_direction_deg = wind_from_heading_track(
+    tas_kt=flight.tas_kt,
+    heading_deg=flight.heading_deg,
+    ground_speed_kt=flight.ground_speed_kt,
+    track_deg=flight.track_deg,
+)
         flight.turn_rate_deg_sec = raw.yaw_rate_deg_s
         flight.slip_skid = calculate_slip_skid(raw.accel_y_g, raw.accel_z_g)
 
