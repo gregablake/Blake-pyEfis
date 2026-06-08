@@ -3,6 +3,10 @@ from pyefis.user.blake_pfd.nav_math import NavPoint, calculate_nav_solution
 from dataclasses import dataclass
 from math import atan2, cos, degrees, radians, sin, sqrt
 from time import monotonic
+from pyefis.user.blake_pfd.airdata_calculations import (
+    indicated_airspeed_from_dp,
+    pressure_altitude,
+)
 
 
 KNOTS_PER_MPS = 1.943844
@@ -44,8 +48,8 @@ class FlightComputer:
     def update(self, raw) -> FlightData:
         flight = FlightData()
 
-        flight.ias_kt = differential_pressure_to_ias_kt(raw.differential_pressure_pa)
-        flight.pressure_alt_ft = pressure_to_altitude_ft(raw.static_pressure_pa)
+        flight.ias_kt = indicated_airspeed_from_dp(raw.differential_pressure_pa)
+        flight.pressure_alt_ft = pressure_altitude(raw.static_pressure_pa)
         flight.vsi_fpm = self.calculate_vsi(flight.pressure_alt_ft)
 
         flight.tas_kt = estimate_true_airspeed_kt(
