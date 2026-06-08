@@ -18,6 +18,7 @@ from pyefis.user.blake_pfd.safe_taxi import SafeTaxiComputer
 import argparse
 import sys
 from math import cos, radians, sin
+from pyefis.user.blake_pfd.stratux_reader import StratuxReader
 
 from PyQt6.QtCore import Qt, QTimer, QRectF
 from PyQt6.QtGui import QColor, QFont, QPainter, QPen, QBrush, QPolygonF
@@ -30,6 +31,23 @@ from pyefis.user.blake_pfd.hardware_readers import BlakeHardwareSensorSource
 from pyefis.user.blake_pfd.config_loader import load_config
 
 class BlakePfdDemo(QWidget):
+    def draw_traffic_overlay(self, painter: QPainter, stratux_state, width: int, height: int) -> None:
+        painter.setFont(QFont("Arial", 12, QFont.Weight.Bold))
+
+        if not stratux_state.ok:
+            painter.setPen(QColor(255, 180, 0))
+            painter.drawText(width - 230, 80, "STRATUX OFFLINE")
+            return
+
+        painter.setPen(QColor(0, 255, 255))
+        painter.drawText(width - 230, 80, "STRATUX ONLINE")
+
+        for target in stratux_state.traffic or []:
+            painter.drawText(
+                width - 230,
+                105,
+                f"{target.callsign} {target.distance_nm:.1f}NM {target.relative_alt_ft:+.0f}FT",
+            )
     
     def draw_safe_taxi_map(self, painter: QPainter, taxi_state, width: int, height: int) -> None:
         painter.fillRect(0, 0, width, height, QColor(15, 15, 15))
@@ -84,6 +102,10 @@ class BlakePfdDemo(QWidget):
         self.airdata = AirDataComputer()
         self.synthetic_vision = SyntheticVisionComputer()
         self.safe_taxi = SafeTaxiComputer()
+        self.stratux = StratuxReader(
+    host=self.config.stratux.host,
+    port=self.config.stratux.gdl90_port,
+)  
         self.safe_taxi = SafeTaxiComputer(auto_switch_groundspeed_kt=self.config.features.safe_taxi.auto_switch_groundspeed_kt)
         self.pfd: PfdData | None = None
 
@@ -140,9 +162,12 @@ class BlakePfdDemo(QWidget):
         if features.show_cdi or features.show_vdi:
             self.draw_nav_cdi_vdi(painter, self.pfd, width, height)
 
-        self.draw_top_data_bar(painter, self.pfd, width)
-        self.draw_bottom_data_bar(painter, self.pfd, width, height)
-
+            self.draw_top_data_bar(painter, self.pfd, width)
+            self.draw_bottom_data_bar(painter, self.pfd, width, height)
+            
+        if features.show_traffic and self.config.stratux.enabled:
+            stratux_state = self.stratux.read()
+            self.draw_traffic_overlay(painter, stratux_state, width, height)
         painter.end()
 
     def draw_background(self, painter: QPainter, width: int, height: int) -> None:

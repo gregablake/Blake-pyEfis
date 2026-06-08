@@ -29,7 +29,7 @@ features:
   show_terrain: false
   show_highway_in_sky: true
   show_safe_taxi: true
-  show_traffic: false
+  show_traffic: true
   show_weather: false
 
 navigation:
@@ -57,7 +57,7 @@ synthetic_vision:
   airport_database_path: ""
 
 stratux:
-  enabled: false
+  enabled: true
   host: 192.168.10.1
   gdl90_port: 4000
 
