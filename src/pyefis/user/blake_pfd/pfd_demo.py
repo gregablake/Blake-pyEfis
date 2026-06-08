@@ -19,18 +19,28 @@ import argparse
 import sys
 from math import cos, radians, sin
 from pyefis.user.blake_pfd.stratux_reader import StratuxReader
+from pyefis.user.blake_pfd.weather_reader import WeatherReader
 
 from PyQt6.QtCore import Qt, QTimer, QRectF
 from PyQt6.QtGui import QColor, QFont, QPainter, QPen, QBrush, QPolygonF
 from PyQt6.QtWidgets import QApplication, QWidget
 
-from pyefis.user.blake_pfd.airdata import PfdData
+from pyefis.user.blake_pfd.airdata import AirDataComputer, PfdData
 from pyefis.user.blake_pfd.sensors_sim import SimulatedSensorSource
-from pyefis.user.blake_pfd.airdata import AirDataComputer
 from pyefis.user.blake_pfd.hardware_readers import BlakeHardwareSensorSource
 from pyefis.user.blake_pfd.config_loader import load_config
 
 class BlakePfdDemo(QWidget):
+    def draw_weather_overlay(self, painter: QPainter, weather_state, width: int, height: int) -> None:
+        painter.setFont(QFont("Arial", 12, QFont.Weight.Bold))
+
+        if not weather_state.ok:
+            painter.setPen(QColor(255, 180, 0))
+            painter.drawText(width - 230, 105, "WX WAITING")
+            return
+
+        painter.setPen(QColor(0, 255, 0))
+        painter.drawText(width - 230, 105, "WX ONLINE")
     def draw_traffic_overlay(self, painter: QPainter, stratux_state, width: int, height: int) -> None:
         painter.setFont(QFont("Arial", 12, QFont.Weight.Bold))
 
@@ -101,12 +111,12 @@ class BlakePfdDemo(QWidget):
 
         self.airdata = AirDataComputer()
         self.synthetic_vision = SyntheticVisionComputer()
-        self.safe_taxi = SafeTaxiComputer()
-        self.stratux = StratuxReader(
-    host=self.config.stratux.host,
-    port=self.config.stratux.gdl90_port,
-)  
         self.safe_taxi = SafeTaxiComputer(auto_switch_groundspeed_kt=self.config.features.safe_taxi.auto_switch_groundspeed_kt)
+        self.stratux = StratuxReader(
+            host=self.config.stratux.host,
+            port=self.config.stratux.gdl90_port,
+        )
+        self.weather = WeatherReader()
         self.pfd: PfdData | None = None
 
         self.timer = QTimer(self)
@@ -168,6 +178,9 @@ class BlakePfdDemo(QWidget):
         if features.show_traffic and self.config.stratux.enabled:
             stratux_state = self.stratux.read()
             self.draw_traffic_overlay(painter, stratux_state, width, height)
+        if features.show_weather:
+            weather_state = self.weather.read()
+            self.draw_weather_overlay(painter, weather_state, width, height)    
         painter.end()
 
     def draw_background(self, painter: QPainter, width: int, height: int) -> None:
