@@ -10,16 +10,16 @@ Planned hardware:
 - GPS source for ground speed / track / navigation
 - Stratux later for traffic/weather
 
-This first version is intentionally safe:
+This version is intentionally safe:
 - It can run without sensors connected.
 - It returns fallback values instead of crashing.
-- Later we replace each placeholder reader with real hardware code.
+- Later we replace/refine each reader with calibrated hardware code.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from math import atan2, asin, degrees
+from math import asin, atan2, cos, degrees, radians, sin
 from time import monotonic
 
 from pyefis.user.blake_pfd.airdata import RawSensorInputs
@@ -78,15 +78,6 @@ class Bno085Reader:
     def read(self) -> dict[str, float]:
         """
         Return AHRS-style data.
-
-        Output:
-        - pitch_deg
-        - roll_deg
-        - heading_deg
-        - yaw_rate_deg_s
-        - accel_x_g
-        - accel_y_g
-        - accel_z_g
         """
 
         if not self.ok or self.sensor is None:
@@ -103,7 +94,6 @@ class Bno085Reader:
         try:
             quat_i, quat_j, quat_k, quat_real = self.sensor.quaternion
             accel_x, accel_y, accel_z = self.sensor.acceleration
-            gyro_x, gyro_y, gyro_z = self.sensor.gyro
 
             roll_deg, pitch_deg, yaw_deg = quaternion_to_euler_deg(
                 quat_i,
@@ -152,6 +142,7 @@ class Bno085Reader:
                 "accel_y_g": 0.0,
                 "accel_z_g": 1.0,
             }
+
 
 class BaroReader:
     """
@@ -218,6 +209,7 @@ class BaroReader:
                 "outside_air_temp_c": 15.0,
             }
 
+
 class AirspeedReader:
     """
     Reads MPXV7002DP differential pressure through ADS1115.
@@ -276,7 +268,6 @@ class AirspeedReader:
 
         try:
             voltage = float(self.channel.voltage)
-
             differential_pressure_pa = self.voltage_to_pressure_pa(voltage)
 
             return {
@@ -312,30 +303,93 @@ class AirspeedReader:
 
 class GpsReader:
     """
-    Reads GPS track, ground speed, bearing, and nav guidance.
+    Reads GPS track, ground speed, and basic navigation data.
 
-    Later this can read from:
-    - USB GPS through gpsd
-    - Stratux
-    - serial NMEA
-    - custom waypoint database
+    Planned sources:
+    - gpsd from USB GPS
+    - Stratux later
+    - Custom waypoint database later
+
+    This first version supports gpsd if available,
+    but safely falls back when running in Codespaces.
     """
 
     def __init__(self) -> None:
         self.ok = False
+        self.gps_session = None
+        self.last_track_deg = 0.0
+        self.last_ground_speed_kt = 0.0
+
+        # Temporary selected waypoint placeholder.
+        # Later this will come from airport/navpoint entry.
+        self.selected_waypoint_lat = 39.1031
+        self.selected_waypoint_lon = -84.5120
+        self.desired_track_deg = 0.0
+
+        try:
+            import gps
+
+            self.gps_session = gps.gps(mode=gps.WATCH_ENABLE | gps.WATCH_NEWSTYLE)
+            self.ok = True
+
+        except Exception as exc:
+            print(f"GPS/gpsd not active, using fallback values: {exc}")
+            self.ok = False
 
     def read(self) -> dict[str, float]:
         """
         Return GPS/nav data.
-
-        Placeholder values for now.
         """
 
+        if not self.ok or self.gps_session is None:
+            return self._fallback()
+
+        try:
+            report = self.gps_session.next()
+
+            if report.get("class") != "TPV":
+                return self._fallback()
+
+            track_deg = float(getattr(report, "track", self.last_track_deg))
+            speed_mps = float(getattr(report, "speed", 0.0))
+            ground_speed_kt = speed_mps * 1.943844
+
+            lat = getattr(report, "lat", None)
+            lon = getattr(report, "lon", None)
+
+            if lat is not None and lon is not None:
+                waypoint_bearing_deg = bearing_between_points_deg(
+                    float(lat),
+                    float(lon),
+                    self.selected_waypoint_lat,
+                    self.selected_waypoint_lon,
+                )
+            else:
+                waypoint_bearing_deg = 0.0
+
+            self.last_track_deg = track_deg
+            self.last_ground_speed_kt = ground_speed_kt
+
+            return {
+                "gps_track_deg": track_deg % 360.0,
+                "gps_ground_speed_kt": ground_speed_kt,
+                "waypoint_bearing_deg": waypoint_bearing_deg,
+                "desired_track_deg": self.desired_track_deg,
+                "cdi_deflection_nm": 0.0,
+                "vdi_deflection_deg": 0.0,
+            }
+
+        except Exception as exc:
+            print(f"GPS/gpsd read failed: {exc}")
+            self.ok = False
+            return self._fallback()
+
+    def _fallback(self) -> dict[str, float]:
         return {
-            "gps_track_deg": 0.0,
-            "gps_ground_speed_kt": 0.0,
+            "gps_track_deg": self.last_track_deg,
+            "gps_ground_speed_kt": self.last_ground_speed_kt,
             "waypoint_bearing_deg": 0.0,
-            "desired_track_deg": 0.0,
+            "desired_track_deg": self.desired_track_deg,
             "cdi_deflection_nm": 0.0,
             "vdi_deflection_deg": 0.0,
         }
@@ -351,7 +405,6 @@ class BlakeHardwareSensorSource:
         self.baro = BaroReader()
         self.airspeed = AirspeedReader()
         self.gps = GpsReader()
-
         self.status = HardwareStatus()
 
     def read(self) -> RawSensorInputs:
@@ -389,19 +442,6 @@ class BlakeHardwareSensorSource:
         )
 
 
-def demo() -> None:
-    """
-    Quick hardware reader smoke test.
-    """
-
-    source = BlakeHardwareSensorSource()
-    raw = source.read()
-
-    print("===== Blake Hardware Reader Demo =====")
-    print(raw)
-    print()
-    print("Hardware status:")
-    print(source.status)
 def quaternion_to_euler_deg(
     x: float,
     y: float,
@@ -415,19 +455,19 @@ def quaternion_to_euler_deg(
         roll_deg, pitch_deg, yaw_deg
     """
 
-    # Roll, x-axis rotation
+    # Roll, x-axis rotation.
     sinr_cosp = 2.0 * ((w * x) + (y * z))
     cosr_cosp = 1.0 - (2.0 * ((x * x) + (y * y)))
     roll = atan2(sinr_cosp, cosr_cosp)
 
-    # Pitch, y-axis rotation
+    # Pitch, y-axis rotation.
     sinp = 2.0 * ((w * y) - (z * x))
     if abs(sinp) >= 1.0:
         pitch = 1.57079632679 if sinp > 0 else -1.57079632679
     else:
         pitch = asin(sinp)
 
-    # Yaw, z-axis rotation
+    # Yaw, z-axis rotation.
     siny_cosp = 2.0 * ((w * z) + (x * y))
     cosy_cosp = 1.0 - (2.0 * ((y * y) + (z * z)))
     yaw = atan2(siny_cosp, cosy_cosp)
@@ -445,6 +485,44 @@ def angle_delta_deg(new_angle: float, old_angle: float) -> float:
     """
 
     return (new_angle - old_angle + 180.0) % 360.0 - 180.0
+
+
+def bearing_between_points_deg(
+    lat1_deg: float,
+    lon1_deg: float,
+    lat2_deg: float,
+    lon2_deg: float,
+) -> float:
+    """
+    Calculate initial bearing from point 1 to point 2.
+    """
+
+    lat1 = radians(lat1_deg)
+    lat2 = radians(lat2_deg)
+    dlon = radians(lon2_deg - lon1_deg)
+
+    x = sin(dlon) * cos(lat2)
+    y = (cos(lat1) * sin(lat2)) - (sin(lat1) * cos(lat2) * cos(dlon))
+
+    bearing = degrees(atan2(x, y))
+
+    return bearing % 360.0
+
+
+def demo() -> None:
+    """
+    Quick hardware reader smoke test.
+    """
+
+    source = BlakeHardwareSensorSource()
+    raw = source.read()
+
+    print("===== Blake Hardware Reader Demo =====")
+    print(raw)
+    print()
+    print("Hardware status:")
+    print(source.status)
+
 
 if __name__ == "__main__":
     demo()

@@ -16,6 +16,8 @@
 
   # Screen Geometry
   # Defaults to screen size if screenWidth or screenHeight is not defined
+  screenWidth: 1024
+  screenHeight: 600
   #screenWidth: 1280
   #screenHeight: 720
   #screenWidth: 1024

@@ -401,130 +401,99 @@ class BlakePfdDemo(QWidget):
         painter.setPen(QPen(QColor(255, 255, 255), 2))
         painter.drawEllipse(ball_x - 10, ball_track_y - 10, 20, 20)
 
-def draw_nav_cdi_vdi(self, painter: QPainter, pfd: PfdData, width: int, height: int) -> None:
-    features = self.config.features
+    def draw_nav_cdi_vdi(self, painter: QPainter, pfd: PfdData, width: int, height: int) -> None:
+        features = self.config.features
+        center_x = width // 2
+        center_y = height // 2
 
-    center_x = width // 2
-    center_y = height // 2
+        if features.show_cdi:
+            cdi_y = center_y + 185
+            painter.setPen(QPen(QColor(255, 255, 255), 2))
+            painter.drawLine(center_x - 125, cdi_y, center_x + 125, cdi_y)
 
-    if features.show_cdi:
-        # CDI horizontal scale under attitude
-        cdi_y = center_y + 185
-        painter.setPen(QPen(QColor(255, 255, 255), 2))
-        painter.drawLine(center_x - 125, cdi_y, center_x + 125, cdi_y)
+            for offset in [-100, -50, 0, 50, 100]:
+                painter.drawEllipse(center_x + offset - 4, cdi_y - 4, 8, 8)
 
-        for offset in [-100, -50, 0, 50, 100]:
-            painter.drawEllipse(center_x + offset - 4, cdi_y - 4, 8, 8)
+            cdi_x = center_x + int(max(-1.0, min(1.0, pfd.cdi_deflection_nm)) * 100)
 
-        cdi_clamped = max(-1.0, min(1.0, pfd.cdi_deflection_nm))
-        cdi_x = center_x + int(cdi_clamped * 100)
+            painter.setBrush(QBrush(QColor(255, 0, 255)))
+            painter.setPen(QPen(QColor(255, 0, 255), 2))
+            painter.drawRect(cdi_x - 6, cdi_y - 28, 12, 56)
 
-        painter.setBrush(QBrush(QColor(255, 0, 255)))
-        painter.setPen(QPen(QColor(255, 0, 255), 2))
-        painter.drawRect(cdi_x - 6, cdi_y - 28, 12, 56)
+            painter.setFont(QFont("Arial", 10, QFont.Weight.Bold))
+            painter.setPen(QColor(255, 255, 255))
+            painter.drawText(center_x - 160, cdi_y + 28, "CDI")
 
-        painter.setFont(QFont("Arial", 10, QFont.Weight.Bold))
-        painter.setPen(QColor(255, 255, 255))
-        painter.drawText(center_x - 160, cdi_y + 28, "CDI")
+        if features.show_vdi:
+            vdi_x = center_x + 290
+            vdi_y_top = center_y - 120
+            vdi_h = 240
 
-    if features.show_vdi:
-        # VDI vertical scale right of attitude
-        vdi_x = center_x + 290
-        vdi_y_top = center_y - 120
-        vdi_h = 240
+            painter.setPen(QPen(QColor(255, 255, 255), 2))
+            painter.drawLine(vdi_x, vdi_y_top, vdi_x, vdi_y_top + vdi_h)
 
-        painter.setPen(QPen(QColor(255, 255, 255), 2))
-        painter.drawLine(vdi_x, vdi_y_top, vdi_x, vdi_y_top + vdi_h)
+            for offset in [-80, -40, 0, 40, 80]:
+                painter.drawEllipse(vdi_x - 4, center_y + offset - 4, 8, 8)
 
-        for offset in [-80, -40, 0, 40, 80]:
-            painter.drawEllipse(vdi_x - 4, center_y + offset - 4, 8, 8)
+            vdi_y = center_y - int(max(-1.0, min(1.0, pfd.vdi_deflection_deg)) * 90)
 
-        vdi_clamped = max(-1.0, min(1.0, pfd.vdi_deflection_deg))
-        vdi_y = center_y - int(vdi_clamped * 90)
+            painter.setBrush(QBrush(QColor(0, 255, 0)))
+            tri = QPolygonF([
+                point(vdi_x, vdi_y),
+                point(vdi_x + 22, vdi_y - 12),
+                point(vdi_x + 22, vdi_y + 12),
+            ])
+            painter.drawPolygon(tri)
 
-        painter.setBrush(QBrush(QColor(0, 255, 0)))
-        tri = QPolygonF([
-            point(vdi_x, vdi_y),
-            point(vdi_x + 22, vdi_y - 12),
-            point(vdi_x + 22, vdi_y + 12),
-        ])
-        painter.drawPolygon(tri)
-
-        painter.setPen(QColor(255, 255, 255))
-        painter.drawText(vdi_x + 18, vdi_y_top - 10, "VDI")
+            painter.setPen(QColor(255, 255, 255))
+            painter.drawText(vdi_x + 18, vdi_y_top - 10, "VDI")
 
     def draw_top_data_bar(self, painter: QPainter, pfd: PfdData, width: int) -> None:
         painter.fillRect(0, 0, width, 55, QColor(0, 0, 0))
         painter.setPen(QColor(255, 255, 255))
         painter.setFont(QFont("Arial", 14, QFont.Weight.Bold))
 
-        # Build top-bar text from configurable feature flags if available.
-        features = getattr(self.config, "features", None)
-        if features is not None:
-            parts = []
+        features = self.config.features
+        parts = []
 
-            if getattr(features, "show_tas", True):
-                parts.append(f"TAS {pfd.true_airspeed_kt:.0f} KT")
+        if features.show_tas:
+            parts.append(f"TAS {pfd.true_airspeed_kt:.0f} KT")
+        if features.show_ground_speed:
+            parts.append(f"GS {pfd.ground_speed_kt:.0f} KT")
+        if features.show_oat:
+            parts.append(f"OAT {pfd.outside_air_temp_c:.0f} C")
+        if features.show_wind:
+            parts.append(f"WIND {pfd.wind_direction_deg:.0f}°/{pfd.wind_speed_kt:.0f} KT")
 
-            if getattr(features, "show_ground_speed", True):
-                parts.append(f"GS {pfd.ground_speed_kt:.0f} KT")
-
-            if getattr(features, "show_oat", True):
-                parts.append(f"OAT {pfd.outside_air_temp_c:.0f} C")
-
-            if getattr(features, "show_wind", True):
-                parts.append(f"WIND {pfd.wind_direction_deg:.0f}°/{pfd.wind_speed_kt:.0f} KT")
-
-            text = "    ".join(parts)
-        else:
-            text = (
-                f"TAS {pfd.true_airspeed_kt:.0f} KT    "
-                f"GS {pfd.ground_speed_kt:.0f} KT    "
-                f"OAT {pfd.outside_air_temp_c:.0f} C    "
-                f"WIND {pfd.wind_direction_deg:.0f}°/{pfd.wind_speed_kt:.0f} KT"
-            )
-
-        painter.drawText(QRectF(0, 0, width, 55), Qt.AlignmentFlag.AlignCenter, text)
+        painter.drawText(
+            QRectF(0, 0, width, 55),
+            Qt.AlignmentFlag.AlignCenter,
+            "    ".join(parts),
+        )
 
     def draw_bottom_data_bar(self, painter: QPainter, pfd: PfdData, width: int, height: int) -> None:
         painter.fillRect(0, height - 35, width, 35, QColor(0, 0, 0))
         painter.setPen(QColor(255, 255, 255))
         painter.setFont(QFont("Arial", 12, QFont.Weight.Bold))
 
-        features = getattr(self.config, "features", None)
+        features = self.config.features
         parts = []
 
-        if features is None:
-            # Default bottom bar when no features config available
-            text = (
-                f"TRK {pfd.gps_track_deg:.0f}°    "
-                f"BRG {pfd.waypoint_bearing_deg:.0f}°    "
-                f"DTK {pfd.desired_track_deg:.0f}°    "
-                f"CDI {pfd.cdi_deflection_nm:+.2f} NM    "
-                f"VDI {pfd.vdi_deflection_deg:+.2f}°"
-            )
-        else:
-            if getattr(features, "show_heading", True):
-                parts.append(f"TRK {pfd.gps_track_deg:.0f}°")
-
-            if getattr(features, "show_hsi", False):
-                parts.append(f"BRG {pfd.waypoint_bearing_deg:.0f}°")
-                parts.append(f"DTK {pfd.desired_track_deg:.0f}°")
-
-            if getattr(features, "show_cdi", True):
-                parts.append(f"CDI {pfd.cdi_deflection_nm:+.2f} NM")
-
-            if getattr(features, "show_vdi", True):
-                parts.append(f"VDI {pfd.vdi_deflection_deg:+.2f}°")
-
-            text = "    ".join(parts)
+        if features.show_heading:
+            parts.append(f"TRK {pfd.gps_track_deg:.0f}°")
+        if features.show_hsi:
+            parts.append(f"BRG {pfd.waypoint_bearing_deg:.0f}°")
+            parts.append(f"DTK {pfd.desired_track_deg:.0f}°")
+        if features.show_cdi:
+            parts.append(f"CDI {pfd.cdi_deflection_nm:+.2f} NM")
+        if features.show_vdi:
+            parts.append(f"VDI {pfd.vdi_deflection_deg:+.2f}°")
 
         painter.drawText(
             QRectF(0, height - 35, width, 35),
             Qt.AlignmentFlag.AlignCenter,
-            text,
+            "    ".join(parts),
         )
-
 def point(x: float, y: float):
     from PyQt6.QtCore import QPointF
     return QPointF(float(x), float(y))
