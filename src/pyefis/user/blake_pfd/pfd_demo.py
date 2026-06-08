@@ -29,6 +29,7 @@ from pyefis.user.blake_pfd.airdata import AirDataComputer, PfdData
 from pyefis.user.blake_pfd.sensors_sim import SimulatedSensorSource
 from pyefis.user.blake_pfd.hardware_readers import BlakeHardwareSensorSource
 from pyefis.user.blake_pfd.config_loader import load_config
+from pyefis.user.blake_pfd.database_importer import AviationDatabase
 
 class BlakePfdDemo(QWidget):
     def draw_weather_overlay(self, painter: QPainter, weather_state, width: int, height: int) -> None:
@@ -98,6 +99,8 @@ class BlakePfdDemo(QWidget):
 
         mode_name = "Hardware" if use_hardware else "Simulator"
         self.config = load_config()
+        self.database = AviationDatabase()
+        self.database.load_all()
         self.setWindowTitle(f"Blake PFD Demo - {mode_name}")
         self.resize(self.config.display.width, self.config.display.height)
 
@@ -122,6 +125,7 @@ class BlakePfdDemo(QWidget):
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.update_data)
         self.timer.start(50)  # 20 Hz update
+        
 
     def update_data(self) -> None:
         raw = self.sensors.read()
@@ -181,6 +185,8 @@ class BlakePfdDemo(QWidget):
         if features.show_weather:
             weather_state = self.weather.read()
             self.draw_weather_overlay(painter, weather_state, width, height)    
+        if features.show_nearest_airports:
+            self.draw_nearest_airports_overlay(painter, self.pfd, width, height)
         painter.end()
 
     def draw_background(self, painter: QPainter, width: int, height: int) -> None:
@@ -574,6 +580,39 @@ class BlakePfdDemo(QWidget):
 
             painter.setPen(QColor(255, 255, 255))
             painter.drawText(vdi_x + 18, vdi_y_top - 10, "VDI")
+            
+    def draw_nearest_airports_overlay(self, painter: QPainter, pfd, width: int, height: int) -> None:
+        aircraft_lat = getattr(pfd, "gps_lat_deg", 39.1031)
+        aircraft_lon = getattr(pfd, "gps_lon_deg", -84.5120)
+
+        nearest = self.database.nearest_airports(
+            aircraft_lat,
+            aircraft_lon,
+            max_results=5,
+        )
+
+        box_x = 20
+        box_y = height - 210
+        box_w = 330
+        box_h = 165
+
+        painter.fillRect(box_x, box_y, box_w, box_h, QColor(0, 0, 0))
+        painter.setPen(QPen(QColor(255, 255, 255), 2))
+        painter.drawRect(box_x, box_y, box_w, box_h)
+
+        painter.setFont(QFont("Arial", 13, QFont.Weight.Bold))
+        painter.drawText(box_x + 10, box_y + 24, "NEAREST AIRPORTS")
+
+        painter.setFont(QFont("Arial", 11, QFont.Weight.Bold))
+
+        y = box_y + 50
+        for distance_nm, airport in nearest:
+            painter.drawText(
+                box_x + 10,
+                y,
+                f"{airport.ident:<5} {distance_nm:>4.1f}NM {airport.name[:24]}",
+            )
+            y += 22
 
     def draw_top_data_bar(self, painter: QPainter, pfd: PfdData, width: int) -> None:
         painter.fillRect(0, 0, width, 55, QColor(0, 0, 0))

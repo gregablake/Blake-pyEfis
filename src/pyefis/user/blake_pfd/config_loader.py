@@ -32,6 +32,7 @@ class SensorConfig:
 
 @dataclass
 class FeatureConfig:
+    show_nearest_airports: bool = True
     show_airspeed: bool = True
     show_altitude: bool = True
     show_attitude: bool = True

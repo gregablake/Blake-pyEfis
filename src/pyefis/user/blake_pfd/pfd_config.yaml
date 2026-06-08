@@ -31,7 +31,8 @@ features:
   show_safe_taxi: true
   show_traffic: true
   show_weather: true
-
+  show_nearest_airports: true
+  
 navigation:
   selected_waypoint_id: KHAO
   selected_waypoint_name: Butler County Regional
