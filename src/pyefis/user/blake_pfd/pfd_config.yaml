@@ -30,7 +30,7 @@ features:
   show_highway_in_sky: true
   show_safe_taxi: true
   show_traffic: true
-  show_weather: false
+  show_weather: true
 
 navigation:
   selected_waypoint_id: KHAO
@@ -61,7 +61,7 @@ stratux:
   host: 192.168.10.1
   gdl90_port: 4000
 
-  safe_taxi:
+safe_taxi:
   enabled: true
   auto_switch_groundspeed_kt: 25
   airport_id: KHAO

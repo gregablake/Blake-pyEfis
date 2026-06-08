@@ -7,6 +7,9 @@ from pyefis.user.blake_pfd.airdata_calculations import (
     indicated_airspeed_from_dp,
     pressure_altitude,
 )
+from pyefis.user.blake_pfd.config_loader import load_config
+from pyefis.user.blake_pfd.database_importer import AviationDatabase
+from pyefis.user.blake_pfd.nav_math import NavPoint, calculate_nav_solution
 from pyefis.user.blake_pfd.performance_calculations import (
     true_airspeed_estimate,
     density_altitude_estimate,
@@ -48,7 +51,9 @@ class FlightComputer:
         self.last_alt_ft: float | None = None
         self.last_time_s: float | None = None
         self.vsi_fpm: float = 0.0
-
+        self.config = load_config()
+        self.database = AviationDatabase()
+        self.database.load_all()
     def update(self, raw) -> FlightData:
         flight = FlightData()
 
@@ -72,21 +77,32 @@ class FlightComputer:
         flight.ground_speed_kt = raw.gps_ground_speed_kt
 
         flight.wind_speed_kt, flight.wind_direction_deg = wind_from_heading_track(
-    tas_kt=flight.tas_kt,
-    heading_deg=flight.heading_deg,
-    ground_speed_kt=flight.ground_speed_kt,
-    track_deg=flight.track_deg,
-)
+            tas_kt=flight.tas_kt,
+            heading_deg=flight.heading_deg,
+            ground_speed_kt=flight.ground_speed_kt,
+            track_deg=flight.track_deg,
+        )
         flight.turn_rate_deg_sec = raw.yaw_rate_deg_s
         flight.slip_skid = calculate_slip_skid(raw.accel_y_g, raw.accel_z_g)
 
-        waypoint = NavPoint(
-            ident="KHAO",
-            name="Butler County Regional",
-            lat_deg=39.3638,
-            lon_deg=-84.5220,
-            elevation_ft=633.0,
-        )
+        airport = self.database.get_airport(self.config.navigation.selected_waypoint_id)
+
+        if airport is not None:
+            waypoint = NavPoint(
+                ident=airport.ident,
+                name=airport.name,
+                lat_deg=airport.lat_deg,
+                lon_deg=airport.lon_deg,
+                elevation_ft=airport.elevation_ft,
+            )
+        else:
+            waypoint = NavPoint(
+                ident=self.config.navigation.selected_waypoint_id,
+                name=self.config.navigation.selected_waypoint_name,
+                lat_deg=self.config.navigation.selected_waypoint_lat,
+                lon_deg=self.config.navigation.selected_waypoint_lon,
+                elevation_ft=0.0,
+            )
 
         nav = calculate_nav_solution(
             aircraft_lat_deg=getattr(raw, "gps_lat_deg", 39.10),
