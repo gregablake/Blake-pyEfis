@@ -354,7 +354,7 @@ class BlakePfdDemo(QWidget):
         painter.setPen(QPen(QColor(210, 210, 210), 2))
         painter.drawRect(tape_x, tape_y, tape_w, tape_h)
 
-        ias = pfd.indicated_airspeed_kt
+        ias = pfd.ias_kt
         pixels_per_knot = 4.0
 
         painter.setFont(QFont("Arial", 12, QFont.Weight.Bold))
@@ -394,7 +394,7 @@ class BlakePfdDemo(QWidget):
         painter.setPen(QPen(QColor(210, 210, 210), 2))
         painter.drawRect(tape_x, tape_y, tape_w, tape_h)
 
-        alt = pfd.altitude_ft
+        alt = pfd.pressure_alt_ft
         pixels_per_100_ft = 22.0
 
         painter.setFont(QFont("Arial", 11, QFont.Weight.Bold))
@@ -438,7 +438,7 @@ class BlakePfdDemo(QWidget):
             painter.setFont(QFont("Arial", 9))
             painter.drawText(x + 15, tick_y + 4, str(vsi))
 
-        clamped_vsi = max(-2000.0, min(2000.0, pfd.vertical_speed_fpm))
+        clamped_vsi = max(-2000.0, min(2000.0, pfd.vsi_fpm))
         pointer_y = center_y - int((clamped_vsi / 2000.0) * (h / 2))
 
         painter.setBrush(QBrush(QColor(0, 255, 255)))
@@ -584,7 +584,7 @@ class BlakePfdDemo(QWidget):
         parts = []
 
         if features.show_tas:
-            parts.append(f"TAS {pfd.true_airspeed_kt:.0f} KT")
+            parts.append(f"TAS {pfd.tas_kt:.0f} KT")
         if features.show_ground_speed:
             parts.append(f"GS {pfd.ground_speed_kt:.0f} KT")
         if features.show_oat:
