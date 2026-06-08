@@ -14,6 +14,7 @@ because Codespaces may not support the full Qt display environment.
 
 from __future__ import annotations
 from pyefis.user.blake_pfd.synthetic_vision import SyntheticVisionComputer, project_object_to_screen
+from pyefis.user.blake_pfd.safe_taxi import SafeTaxiComputer
 import argparse
 import sys
 from math import cos, radians, sin
@@ -29,9 +30,40 @@ from pyefis.user.blake_pfd.hardware_readers import BlakeHardwareSensorSource
 from pyefis.user.blake_pfd.config_loader import load_config
 
 class BlakePfdDemo(QWidget):
-    """
-    Simple Garmin/Aspen-style PFD demo window.
-    """
+    
+    def draw_safe_taxi_map(self, painter: QPainter, taxi_state, width: int, height: int) -> None:
+        painter.fillRect(0, 0, width, height, QColor(15, 15, 15))
+
+        painter.setPen(QPen(QColor(255, 255, 255), 2))
+        painter.setFont(QFont("Arial", 22, QFont.Weight.Bold))
+        painter.drawText(30, 45, f"SAFE TAXI - {taxi_state.airport_id}")
+
+        center_x = width // 2
+        center_y = height // 2
+
+        # Simple airport diagram placeholder.
+        painter.setPen(QPen(QColor(180, 180, 180), 8))
+        painter.drawLine(center_x - 300, center_y, center_x + 300, center_y)
+
+        painter.setPen(QPen(QColor(120, 120, 120), 5))
+        painter.drawLine(center_x, center_y - 180, center_x, center_y + 180)
+        painter.drawLine(center_x - 220, center_y + 120, center_x + 220, center_y + 120)
+
+        # Ownship triangle.
+        painter.setBrush(QBrush(QColor(255, 220, 0)))
+        painter.setPen(QPen(QColor(255, 220, 0), 2))
+
+        ownship = QPolygonF([
+            point(center_x, center_y - 22),
+            point(center_x - 14, center_y + 18),
+            point(center_x + 14, center_y + 18),
+        ])
+        painter.drawPolygon(ownship)
+
+        painter.setFont(QFont("Arial", 14, QFont.Weight.Bold))
+        painter.setPen(QColor(255, 255, 255))
+        painter.drawText(30, height - 40, "Taxi map placeholder - real airport database comes later")
+    
 
     def __init__(self, use_hardware: bool = False) -> None:
         super().__init__()
@@ -51,6 +83,8 @@ class BlakePfdDemo(QWidget):
 
         self.airdata = AirDataComputer()
         self.synthetic_vision = SyntheticVisionComputer()
+        self.safe_taxi = SafeTaxiComputer()
+        self.safe_taxi = SafeTaxiComputer(auto_switch_groundspeed_kt=self.config.features.safe_taxi.auto_switch_groundspeed_kt)
         self.pfd: PfdData | None = None
 
         self.timer = QTimer(self)
@@ -75,6 +109,12 @@ class BlakePfdDemo(QWidget):
         self.draw_background(painter, width, height)
 
         features = self.config.features
+        taxi_state = self.safe_taxi.update(self.pfd)
+
+        if features.show_safe_taxi and taxi_state.active:
+            self.draw_safe_taxi_map(painter, taxi_state, width, height)
+            painter.end()
+            return
 
         if features.show_synthetic_vision:
             self.draw_synthetic_vision(painter, self.pfd, width, height)

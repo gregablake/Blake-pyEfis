@@ -28,7 +28,7 @@ features:
   show_synthetic_vision: true
   show_terrain: false
   show_highway_in_sky: true
-  show_safe_taxi: false
+  show_safe_taxi: true
   show_traffic: false
   show_weather: false
 
@@ -60,3 +60,11 @@ stratux:
   enabled: false
   host: 192.168.10.1
   gdl90_port: 4000
+
+  safe_taxi:
+  enabled: true
+  auto_switch_groundspeed_kt: 25
+  airport_id: KHAO
+  airport_name: Butler County Regional
+  airport_lat: 39.3638
+  airport_lon: -84.5220
