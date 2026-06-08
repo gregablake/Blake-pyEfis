@@ -1,0 +1,18 @@
+navpoints:
+  - ident: KHAO
+    name: Butler County Regional
+    lat_deg: 39.3638
+    lon_deg: -84.5220
+    elevation_ft: 633
+
+  - ident: KLUK
+    name: Cincinnati Municipal Lunken
+    lat_deg: 39.1033
+    lon_deg: -84.4186
+    elevation_ft: 483
+
+  - ident: KCVG
+    name: Cincinnati Northern Kentucky
+    lat_deg: 39.0488
+    lon_deg: -84.6678
+    elevation_ft: 896
