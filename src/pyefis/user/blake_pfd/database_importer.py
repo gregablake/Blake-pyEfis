@@ -3,7 +3,7 @@ from __future__ import annotations
 import csv
 from dataclasses import dataclass
 from pathlib import Path
-
+from math import atan2, cos, radians, sin, sqrt
 
 DATA_DIR = Path(__file__).parent / "data"
 
@@ -127,6 +127,54 @@ class AviationDatabase:
     def get_navaid(self, ident: str) -> NavaidRecord | None:
         return self.navaids.get(ident.upper())
 
+    def nearest_airports(
+        self,
+        lat_deg: float,
+        lon_deg: float,
+        max_results: int = 10,
+        include_closed: bool = False,
+    ) -> list[tuple[float, AirportRecord]]:
+        results: list[tuple[float, AirportRecord]] = []
+
+        for airport in self.airports.values():
+            if not include_closed and airport.type == "closed":
+                continue
+
+            distance_nm = distance_nm_between(
+                lat_deg,
+                lon_deg,
+                airport.lat_deg,
+                airport.lon_deg,
+            )
+
+            results.append((distance_nm, airport))
+
+        results.sort(key=lambda item: item[0])
+
+        return results[:max_results]
+
+
+def distance_nm_between(
+    lat1_deg: float,
+    lon1_deg: float,
+    lat2_deg: float,
+    lon2_deg: float,
+) -> float:
+    earth_radius_nm = 3440.065
+
+    lat1 = radians(lat1_deg)
+    lat2 = radians(lat2_deg)
+    dlat = radians(lat2_deg - lat1_deg)
+    dlon = radians(lon2_deg - lon1_deg)
+
+    a = (
+        sin(dlat / 2.0) ** 2
+        + cos(lat1) * cos(lat2) * sin(dlon / 2.0) ** 2
+    )
+
+    c = 2.0 * atan2(sqrt(a), sqrt(1.0 - a))
+
+    return earth_radius_nm * c
 
 def demo() -> None:
     db = AviationDatabase()
@@ -144,6 +192,11 @@ def demo() -> None:
         print(airport)
         print(f"Runways: {runways[:3]}")
 
+        print()
+    print("Nearest airports to Cincinnati:")
+    nearest = db.nearest_airports(39.1031, -84.5120, max_results=5)
 
+    for distance_nm, airport in nearest:
+        print(f"{airport.ident}: {airport.name} - {distance_nm:.1f} NM")
 if __name__ == "__main__":
     demo()
