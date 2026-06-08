@@ -28,6 +28,13 @@ class RunwayRecord:
     le_heading_deg: float
     he_ident: str
     he_heading_deg: float
+    
+@dataclass
+class FrequencyRecord:
+    airport_ident: str
+    type: str
+    description: str
+    frequency_mhz: float    
 
 
 @dataclass
@@ -41,15 +48,37 @@ class NavaidRecord:
 
 
 class AviationDatabase:
+    def load_frequencies(self) -> None:
+        path = DATA_DIR / "airport-frequencies.csv"
+
+        with path.open(newline="", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+
+            for row in reader:
+                airport_ident = row["airport_ident"].strip().upper()
+
+                if not airport_ident:
+                    continue
+
+                freq = FrequencyRecord(
+                    airport_ident=airport_ident,
+                    type=row["type"] or "",
+                    description=row["description"] or "",
+                    frequency_mhz=float(row["frequency_mhz"] or 0.0),
+                )
+
+                self.frequencies_by_airport.setdefault(airport_ident, []).append(freq)
     def __init__(self) -> None:
         self.airports: dict[str, AirportRecord] = {}
         self.runways_by_airport: dict[str, list[RunwayRecord]] = {}
         self.navaids: dict[str, NavaidRecord] = {}
-
+        self.frequencies_by_airport: dict[str, list[FrequencyRecord]] = {}
+        
     def load_all(self) -> None:
         self.load_airports()
         self.load_runways()
         self.load_navaids()
+        self.load_frequencies()
 
     def load_airports(self) -> None:
         path = DATA_DIR / "airports.csv"
@@ -120,9 +149,18 @@ class AviationDatabase:
 
     def get_airport(self, ident: str) -> AirportRecord | None:
         return self.airports.get(ident.upper())
+    def get_frequencies(self, airport_ident: str) -> list[FrequencyRecord]:
+        return self.frequencies_by_airport.get(airport_ident.upper(), [])
 
     def get_runways(self, airport_ident: str) -> list[RunwayRecord]:
         return self.runways_by_airport.get(airport_ident.upper(), [])
+    def best_runway(self, airport_ident: str) -> RunwayRecord | None:
+        runways = self.get_runways(airport_ident)
+
+        if not runways:
+            return None
+
+        return max(runways, key=lambda runway: runway.length_ft)
 
     def get_navaid(self, ident: str) -> NavaidRecord | None:
         return self.navaids.get(ident.upper())
@@ -187,11 +225,12 @@ def demo() -> None:
     for ident in ["KCVG", "KLUK", "KHAO"]:
         airport = db.get_airport(ident)
         runways = db.get_runways(ident)
-
+        
         print()
         print(airport)
         print(f"Runways: {runways[:3]}")
-
+        best = db.best_runway(ident)
+        print(f"Best runway: {best}")
         print()
     print("Nearest airports to Cincinnati:")
     nearest = db.nearest_airports(39.1031, -84.5120, max_results=5)

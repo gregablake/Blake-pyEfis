@@ -93,6 +93,56 @@ class BlakePfdDemo(QWidget):
         painter.setPen(QColor(255, 255, 255))
         painter.drawText(30, height - 40, "Taxi map placeholder - real airport database comes later")
     
+    def draw_selected_airport_info(self, painter: QPainter, width: int, height: int) -> None:
+        airport_id = self.config.navigation.selected_waypoint_id
+        airport = self.database.get_airport(airport_id)
+        runway = self.database.best_runway(airport_id)
+        freqs = self.database.get_frequencies(airport_id)
+        freq_y = box_y + 210
+        for freq in freqs[:4]:
+            painter.drawText(
+                box_x + 10,
+                freq_y,
+                f"{freq.type}: {freq.frequency_mhz:.3f}",
+            )
+            freq_y += 22
+
+        if airport is None:
+            return
+
+        box_x = width - 360
+        box_y = height - 250
+        box_w = 340
+        box_h = 300
+
+        painter.fillRect(box_x, box_y, box_w, box_h, QColor(0, 0, 0))
+        painter.setPen(QPen(QColor(255, 255, 255), 2))
+        painter.drawRect(box_x, box_y, box_w, box_h)
+
+        painter.setFont(QFont("Arial", 13, QFont.Weight.Bold))
+        painter.drawText(box_x + 10, box_y + 25, f"{airport.ident} - {airport.name[:26]}")
+
+        painter.setFont(QFont("Arial", 11, QFont.Weight.Bold))
+        painter.drawText(box_x + 10, box_y + 55, f"Elev: {airport.elevation_ft:.0f} ft")
+        painter.drawText(box_x + 10, box_y + 80, f"Lat: {airport.lat_deg:.4f}")
+        painter.drawText(box_x + 10, box_y + 105, f"Lon: {airport.lon_deg:.4f}")
+
+        if runway is not None:
+            painter.drawText(
+                box_x + 10,
+                box_y + 135,
+                f"RWY {runway.le_ident}/{runway.he_ident}",
+            )
+            painter.drawText(
+                box_x + 10,
+                box_y + 160,
+                f"{runway.length_ft:.0f} x {runway.width_ft:.0f} ft {runway.surface[:10]}",
+            )
+            painter.drawText(
+                box_x + 10,
+                box_y + 185,
+                f"Hdg {runway.le_heading_deg:.0f}/{runway.he_heading_deg:.0f}",
+            )
 
     def __init__(self, use_hardware: bool = False) -> None:
         super().__init__()
@@ -187,6 +237,7 @@ class BlakePfdDemo(QWidget):
             self.draw_weather_overlay(painter, weather_state, width, height)    
         if features.show_nearest_airports:
             self.draw_nearest_airports_overlay(painter, self.pfd, width, height)
+        self.draw_selected_airport_info(painter, width, height)
         painter.end()
 
     def draw_background(self, painter: QPainter, width: int, height: int) -> None:
