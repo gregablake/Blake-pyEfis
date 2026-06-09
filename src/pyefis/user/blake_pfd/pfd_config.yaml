@@ -28,11 +28,11 @@ features:
   show_weather: true
   show_nearest_airports: true
 navigation:
-  selected_waypoint_id: KLUK
-  selected_waypoint_name: Cincinnati Municipal Airport Lunken Field
-  selected_waypoint_lat: 39.102357
-  selected_waypoint_lon: -84.418945
-  desired_track_deg: 0.0
+  selected_waypoint_id: KHAO
+  selected_waypoint_name: Butler Co Regional Airport - Hogan Field
+  selected_waypoint_lat: 39.363800048799995
+  selected_waypoint_lon: -84.5220031738
+  desired_track_deg: 358.3007871086837
 airspeed:
   vso_kt: 45
   vs_kt: 50
