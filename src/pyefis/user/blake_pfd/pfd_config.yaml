@@ -58,3 +58,6 @@ safe_taxi:
   airport_name: Butler County Regional
   airport_lat: 39.3638
   airport_lon: -84.522
+route:
+  auto_sequence: true
+  sequence_distance_nm: 1.0

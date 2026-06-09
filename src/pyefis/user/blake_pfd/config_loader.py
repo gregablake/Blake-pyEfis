@@ -104,13 +104,18 @@ class BlakePfdConfig:
     altitude: AltitudeConfig
     synthetic_vision: SyntheticVisionConfig
     stratux: StratuxConfig
+    route: RouteConfig
+@dataclass
+class RouteConfig:
+    auto_sequence: bool = True
+    sequence_distance_nm: float = 1.0
 
 
 def load_config(path: Path = CONFIG_PATH) -> BlakePfdConfig:
     """
     Load Blake PFD YAML config.
     """
-
+    
     if not path.exists():
         print(f"Config not found at {path}, using defaults.")
         raw: dict[str, Any] = {}
@@ -126,9 +131,8 @@ def load_config(path: Path = CONFIG_PATH) -> BlakePfdConfig:
         altitude=AltitudeConfig(**raw.get("altitude", {})),
         synthetic_vision=SyntheticVisionConfig(**raw.get("synthetic_vision", {})),
         stratux=StratuxConfig(**raw.get("stratux", {})),
+        route=RouteConfig(**raw.get("route", {})),
     )
-
-
 def demo() -> None:
     config = load_config()
 

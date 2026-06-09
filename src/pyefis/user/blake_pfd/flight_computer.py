@@ -118,16 +118,22 @@ class FlightComputer:
             waypoint=waypoint,
             desired_track_deg=desired_track,
         )
+        
 
         flight.bearing_deg = nav.bearing_to_wp_deg
         flight.desired_track_deg = nav.desired_track_deg
         flight.distance_to_waypoint_nm = nav.distance_to_wp_nm
+        if self.config.route.auto_sequence:
+            self.route_manager.maybe_advance_leg(
+                distance_to_waypoint_nm=nav.distance_to_wp_nm,
+                sequence_distance_nm=self.config.route.sequence_distance_nm,
+    )
         flight.course_error_deg = nav.course_error_deg
         flight.cdi = nav.cdi_deflection_nm
         flight.vdi = nav.vdi_deflection_deg
 
         return flight
-
+    
     def calculate_vsi(self, current_alt_ft: float) -> float:
         now_s = monotonic()
 

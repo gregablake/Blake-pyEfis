@@ -101,6 +101,11 @@ class RouteManager:
         ROUTE_PATH.write_text(yaml.safe_dump(route, sort_keys=False))
 
         return True
+    def maybe_advance_leg(self, distance_to_waypoint_nm: float, sequence_distance_nm: float) -> bool:
+        if distance_to_waypoint_nm > sequence_distance_nm:
+            return False
+
+        return self.advance_leg()
 
 def demo() -> None:
     manager = RouteManager()
