@@ -1,0 +1,6 @@
+route_id: TEST_ROUTE
+waypoints:
+- KLUK
+- KHAO
+- KCVG
+active_leg_index: 0
