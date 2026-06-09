@@ -85,7 +85,22 @@ class RouteManager:
             waypoints[active_leg_index],
             waypoints[active_leg_index + 1],
         )
+        
+    def advance_leg(self) -> bool:
+        route = self.load_route()
+        waypoints = route.get("waypoints", [])
+        active_leg_index = int(route.get("active_leg_index", 0))
 
+        if len(waypoints) < 2:
+            return False
+
+        if active_leg_index >= len(waypoints) - 2:
+            return False
+
+        route["active_leg_index"] = active_leg_index + 1
+        ROUTE_PATH.write_text(yaml.safe_dump(route, sort_keys=False))
+
+        return True
 
 def demo() -> None:
     manager = RouteManager()
