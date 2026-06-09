@@ -1,8 +1,8 @@
 from __future__ import annotations
-from pyefis.user.blake_pfd.nav_math import NavPoint, calculate_nav_solution
 from dataclasses import dataclass
 from math import atan2, cos, degrees, radians, sin, sqrt
 from time import monotonic
+
 from pyefis.user.blake_pfd.airdata_calculations import (
     indicated_airspeed_from_dp,
     pressure_altitude,
@@ -11,10 +11,9 @@ from pyefis.user.blake_pfd.config_loader import load_config
 from pyefis.user.blake_pfd.database_importer import AviationDatabase
 from pyefis.user.blake_pfd.nav_math import NavPoint, calculate_nav_solution
 from pyefis.user.blake_pfd.performance_calculations import (
-    true_airspeed_estimate,
-    density_altitude_estimate,
     wind_from_heading_track,
 )
+from pyefis.user.blake_pfd.route_manager import RouteManager
 
 KNOTS_PER_MPS = 1.943844
 PA_STANDARD_SEA_LEVEL = 101325.0
@@ -54,6 +53,8 @@ class FlightComputer:
         self.config = load_config()
         self.database = AviationDatabase()
         self.database.load_all()
+        self.route_manager = RouteManager()
+        
     def update(self, raw) -> FlightData:
         flight = FlightData()
 
@@ -104,12 +105,18 @@ class FlightComputer:
                 elevation_ft=0.0,
             )
 
+        active_leg = self.route_manager.get_active_leg()
+        desired_track = raw.desired_track_deg or flight.track_deg
+
+        if active_leg is not None:
+            desired_track = active_leg.desired_track_deg
+
         nav = calculate_nav_solution(
             aircraft_lat_deg=getattr(raw, "gps_lat_deg", 39.10),
             aircraft_lon_deg=getattr(raw, "gps_lon_deg", -84.50),
             aircraft_alt_ft=flight.pressure_alt_ft,
             waypoint=waypoint,
-            desired_track_deg=raw.desired_track_deg or flight.track_deg,
+            desired_track_deg=desired_track,
         )
 
         flight.bearing_deg = nav.bearing_to_wp_deg
