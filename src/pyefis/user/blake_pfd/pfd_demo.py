@@ -163,7 +163,8 @@ class BlakePfdDemo(QWidget):
                aircraft_lon=-84.5120,
                range_nm=self.config.moving_map.range_nm,
 )
-            self.draw_moving_map_overlay(painter, map_state, width, height)    
+            self.draw_moving_map_overlay(painter, map_state, width, height)  
+            self.draw_waypoint_info_box(painter, self.pfd, width, height)  
 
         painter.end()
 
@@ -633,6 +634,27 @@ class BlakePfdDemo(QWidget):
         painter.drawText(box_x + 10, box_y + 50, f"TGT ALT {pfd.glidepath_target_alt_ft:.0f}")
         painter.drawText(box_x + 10, box_y + 75, f"ALT ERR {pfd.glidepath_alt_error_ft:+.0f}")
         painter.drawText(box_x + 10, box_y + 100, f"GP {self.config.vnav.glidepath_angle_deg:.1f}°")
+        
+    def draw_waypoint_info_box(self, painter: QPainter, pfd: FlightData, width: int, height: int) -> None:
+        box_x = width // 2 - 120
+        box_y = 60
+        box_w = 240
+        box_h = 85
+
+        waypoint_id = self.config.navigation.selected_waypoint_id
+
+        painter.fillRect(box_x, box_y, box_w, box_h, QColor(0, 0, 0))
+        painter.setPen(QPen(QColor(255, 255, 255), 2))
+        painter.drawRect(box_x, box_y, box_w, box_h)
+
+        painter.setFont(QFont("Arial", 13, QFont.Weight.Bold))
+        painter.setPen(QColor(255, 255, 255))
+        painter.drawText(box_x + 10, box_y + 25, f"WPT {waypoint_id}")
+
+        painter.setFont(QFont("Arial", 11, QFont.Weight.Bold))
+        painter.drawText(box_x + 10, box_y + 52, f"BRG {pfd.bearing_deg:.0f}°")
+        painter.drawText(box_x + 120, box_y + 52, f"DIS {pfd.distance_to_waypoint_nm:.1f}NM")
+        painter.drawText(box_x + 10, box_y + 75, f"CRS ERR {pfd.course_error_deg:+.0f}°")    
 
     def draw_nearest_airports_overlay(self, painter: QPainter, pfd: FlightData, width: int, height: int) -> None:
         nearest = self.database.nearest_airports(39.1031, -84.5120, max_results=5)
