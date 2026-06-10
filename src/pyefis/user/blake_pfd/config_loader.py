@@ -106,6 +106,7 @@ class BlakePfdConfig:
     stratux: StratuxConfig
     route: RouteConfig
     navigation_scaling: NavigationScalingConfig
+    vnav: VnavConfig
 
 @dataclass
 class RouteConfig:
@@ -117,6 +118,10 @@ class NavigationScalingConfig:
     enroute_full_scale_nm: float = 5.0
     terminal_full_scale_nm: float = 1.0
     approach_full_scale_nm: float = 0.3
+@dataclass
+class VnavConfig:
+    enabled: bool = True
+    glidepath_angle_deg: float = 3.0
 
 
 def load_config(path: Path = CONFIG_PATH) -> BlakePfdConfig:
@@ -140,7 +145,8 @@ def load_config(path: Path = CONFIG_PATH) -> BlakePfdConfig:
         synthetic_vision=SyntheticVisionConfig(**raw.get("synthetic_vision", {})),
         stratux=StratuxConfig(**raw.get("stratux", {})),
         route=RouteConfig(**raw.get("route", {})),
-        navigation_scaling=NavigationScalingConfig(**raw.get("navigation_scaling", {}))
+        navigation_scaling=NavigationScalingConfig(**raw.get("navigation_scaling", {})),
+        vnav=VnavConfig(**raw.get("vnav", {})),
     )
 
 def demo() -> None:

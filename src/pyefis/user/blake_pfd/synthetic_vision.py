@@ -10,6 +10,7 @@ class SyntheticVisionObject:
     elevation_angle_deg: float
     distance_nm: float
     size: float = 1.0
+    kind: str = "box"
 
 
 @dataclass
@@ -23,18 +24,17 @@ class SyntheticVisionComputer:
     def update(self, flight) -> SyntheticVisionScene:
         objects = []
 
-        # Runway / waypoint target box
         objects.append(
             SyntheticVisionObject(
                 label="RWY",
                 rel_bearing_deg=self.angle_delta(flight.bearing_deg, flight.heading_deg),
                 elevation_angle_deg=-2.5,
                 distance_nm=getattr(flight, "distance_to_waypoint_nm", 5.0),
-                size=1.4,
+                size=1.5,
+                kind="runway",
             )
         )
 
-        # Highway-in-the-sky boxes along desired track
         for index, distance_nm in enumerate([1, 2, 3, 4, 5], start=1):
             objects.append(
                 SyntheticVisionObject(
@@ -46,6 +46,7 @@ class SyntheticVisionComputer:
                     elevation_angle_deg=-2.0,
                     distance_nm=float(distance_nm),
                     size=max(0.4, 1.2 - (distance_nm * 0.12)),
+                    kind="hits",
                 )
             )
 
@@ -74,7 +75,6 @@ def project_object_to_screen(
     x = center_x + int(rel_bearing_deg * pixels_per_degree_x * distance_scale)
     y = center_y - int(elevation_angle_deg * pixels_per_degree_y * distance_scale)
 
-    # Push far boxes slightly toward horizon
     y -= int((1.0 - distance_scale) * 90)
 
     return x, y
