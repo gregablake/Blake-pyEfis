@@ -109,6 +109,9 @@ class BlakePfdDemo(QWidget):
 
         if features.show_heading or features.show_hsi:
             self.draw_heading_strip(painter, self.pfd, width, height)
+            
+        if features.show_hsi:
+            self.draw_hsi_compass_rose(painter, self.pfd, width, height)
 
         if features.show_turn_rate or features.show_slip_skid:
             self.draw_turn_and_slip(painter, self.pfd, width, height)
@@ -392,6 +395,69 @@ class BlakePfdDemo(QWidget):
         self.draw_heading_pointer(painter, center_x, strip_y)
         self.draw_bearing_pointer(painter, bearing, heading, center_x, strip_x, strip_y, strip_w, strip_h, pixels_per_deg)
         self.draw_desired_track_pointer(painter, desired_track, heading, center_x, strip_x, strip_y, strip_w, pixels_per_deg)
+        
+    def draw_hsi_compass_rose(self, painter: QPainter, pfd: FlightData, width: int, height: int) -> None:
+        center_x = width // 2
+        center_y = height - 170
+        radius = 95
+
+        heading = pfd.heading_deg
+        desired_track = pfd.desired_track_deg
+        bearing = pfd.bearing_deg
+
+        painter.setPen(QPen(QColor(255, 255, 255), 2))
+        painter.drawEllipse(center_x - radius, center_y - radius, radius * 2, radius * 2)
+
+        painter.setFont(QFont("Arial", 9, QFont.Weight.Bold))
+
+        for deg in range(0, 360, 30):
+            relative = (deg - heading + 360) % 360
+            angle = radians(relative - 90)
+
+            outer_x = center_x + int(cos(angle) * radius)
+            outer_y = center_y + int(sin(angle) * radius)
+            inner_x = center_x + int(cos(angle) * (radius - 10))
+            inner_y = center_y + int(sin(angle) * (radius - 10))
+
+            painter.drawLine(inner_x, inner_y, outer_x, outer_y)
+
+            label_x = center_x + int(cos(angle) * (radius - 25))
+            label_y = center_y + int(sin(angle) * (radius - 25))
+
+            painter.drawText(label_x - 10, label_y + 5, heading_label(deg))
+
+        # Course needle / DTK
+        dtk_relative = (desired_track - heading + 360) % 360
+        dtk_angle = radians(dtk_relative - 90)
+
+        painter.setPen(QPen(QColor(0, 255, 0), 3))
+        painter.drawLine(
+            center_x,
+            center_y,
+            center_x + int(cos(dtk_angle) * radius),
+            center_y + int(sin(dtk_angle) * radius),
+        )
+
+        # Bearing pointer
+        brg_relative = (bearing - heading + 360) % 360
+        brg_angle = radians(brg_relative - 90)
+
+        painter.setPen(QPen(QColor(255, 0, 255), 3))
+        painter.drawLine(
+            center_x,
+            center_y,
+            center_x + int(cos(brg_angle) * (radius - 15)),
+            center_y + int(sin(brg_angle) * (radius - 15)),
+        )
+
+        # Ownship
+        painter.setBrush(QBrush(QColor(255, 220, 0)))
+        painter.setPen(QPen(QColor(255, 220, 0), 2))
+        painter.drawPolygon(QPolygonF([
+            point(center_x, center_y - 12),
+            point(center_x - 8, center_y + 10),
+            point(center_x + 8, center_y + 10),
+        ]))
 
     def draw_heading_pointer(self, painter: QPainter, center_x: int, strip_y: int) -> None:
         painter.setBrush(QBrush(QColor(255, 220, 0)))
