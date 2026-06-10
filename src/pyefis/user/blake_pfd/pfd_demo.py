@@ -53,6 +53,7 @@ class BlakePfdDemo(QWidget):
         )
 
         self.sensors = BlakeHardwareSensorSource() if use_hardware else SimulatedSensorSource()
+        self.use_hardware = use_hardware
         self.pfd: FlightData | None = None
 
         mode_name = "Hardware" if use_hardware else "Simulator"
@@ -173,6 +174,9 @@ class BlakePfdDemo(QWidget):
             
         if declutter_level <= 0:
             self.draw_startup_status_box(painter, width, height)
+            
+        if declutter_level <= 0:
+            self.draw_sensor_status_panel(painter, width, height)
 
         painter.end()
 
@@ -997,6 +1001,53 @@ class BlakePfdDemo(QWidget):
             box_x + 10,
             box_y + 50,
             f"APT {status.airports_loaded}  NAV {status.navaids_loaded}",
+        )
+    
+    def draw_sensor_status_panel(self, painter: QPainter, width: int, height: int) -> None:
+        box_x = 310
+        box_y = 20
+        box_w = 300
+        box_h = 90
+
+        painter.fillRect(box_x, box_y, box_w, box_h, QColor(0, 0, 0))
+        painter.setPen(QPen(QColor(255, 255, 255), 2))
+        painter.drawRect(box_x, box_y, box_w, box_h)
+
+        painter.setFont(QFont("Arial", 11, QFont.Weight.Bold))
+
+        mode_text = "HARDWARE" if self.use_hardware else "SIM"
+        painter.setPen(QColor(0, 255, 0) if self.use_hardware else QColor(0, 180, 255))
+        painter.drawText(box_x + 10, box_y + 24, f"SENSOR MODE: {mode_text}")
+
+        if not self.use_hardware:
+            painter.setPen(QColor(0, 180, 255))
+            painter.drawText(box_x + 10, box_y + 52, "SIM DATA ACTIVE")
+            return
+
+        status = getattr(self.sensors, "status", None)
+
+        if status is None:
+            painter.setPen(QColor(255, 0, 0))
+            painter.drawText(box_x + 10, box_y + 52, "NO SENSOR STATUS")
+            return
+
+        def ok_text(label: str, ok: bool) -> str:
+            return f"{label}:{'OK' if ok else 'OFF'}"
+
+        painter.setPen(QColor(255, 255, 255))
+        painter.drawText(
+            box_x + 10,
+            box_y + 52,
+            "  ".join([
+                ok_text("AHRS", status.bno085_ok),
+                ok_text("BARO", status.baro_ok),
+                ok_text("IAS", status.airspeed_ok),
+            ]),
+        )
+        painter.drawText(
+            box_x + 10,
+            box_y + 76,
+            ok_text("GPS", status.gps_ok),
         )
 
 
