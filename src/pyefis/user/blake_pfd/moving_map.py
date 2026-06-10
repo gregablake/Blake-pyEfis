@@ -20,7 +20,7 @@ class MovingMapState:
 
 
 class MovingMapComputer:
-    def update(self, database, aircraft_lat: float, aircraft_lon: float) -> MovingMapState:
+    def update(self, database, aircraft_lat: float, aircraft_lon: float, range_nm: float = 25.0) -> MovingMapState:
         nearest = database.nearest_airports(
             aircraft_lat,
             aircraft_lon,
@@ -37,4 +37,4 @@ class MovingMapComputer:
             for distance_nm, airport in nearest
         ]
 
-        return MovingMapState(airports=airports)
+        return MovingMapState(airports=airports, range_nm=range_nm)

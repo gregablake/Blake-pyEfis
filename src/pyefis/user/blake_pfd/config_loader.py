@@ -108,6 +108,7 @@ class BlakePfdConfig:
     route: RouteConfig
     navigation_scaling: NavigationScalingConfig
     vnav: VnavConfig
+    moving_map: MovingMapConfig
 
 @dataclass
 class RouteConfig:
@@ -123,6 +124,9 @@ class NavigationScalingConfig:
 class VnavConfig:
     enabled: bool = True
     glidepath_angle_deg: float = 3.0
+@dataclass
+class MovingMapConfig:
+    range_nm: float = 25.0
 
 
 def load_config(path: Path = CONFIG_PATH) -> BlakePfdConfig:
@@ -148,6 +152,7 @@ def load_config(path: Path = CONFIG_PATH) -> BlakePfdConfig:
         route=RouteConfig(**raw.get("route", {})),
         navigation_scaling=NavigationScalingConfig(**raw.get("navigation_scaling", {})),
         vnav=VnavConfig(**raw.get("vnav", {})),
+        moving_map=MovingMapConfig(**raw.get("moving_map", {})),
     )
 
 def demo() -> None:

@@ -71,3 +71,5 @@ navigation_scaling:
 vnav:
   enabled: true
   glidepath_angle_deg: 3.0
+moving_map:
+  range_nm: 25.0

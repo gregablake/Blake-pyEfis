@@ -155,10 +155,11 @@ class BlakePfdDemo(QWidget):
             
         if features.show_moving_map:
             map_state = self.moving_map.update(
-              database=self.database,
-              aircraft_lat=39.1031,
-              aircraft_lon=-84.5120,
-    )
+               database=self.database,
+               aircraft_lat=39.1031,
+               aircraft_lon=-84.5120,
+               range_nm=self.config.moving_map.range_nm,
+)
             self.draw_moving_map_overlay(painter, map_state, width, height)    
 
         painter.end()
