@@ -101,6 +101,8 @@ class FlightComputer:
 
         if active_leg is not None:
             desired_track = active_leg.desired_track_deg
+        if self.config.obs.enabled:
+            desired_track = self.config.obs.selected_course_deg
 
         nav = calculate_nav_solution(
             aircraft_lat_deg=getattr(raw, "gps_lat_deg", 39.10),

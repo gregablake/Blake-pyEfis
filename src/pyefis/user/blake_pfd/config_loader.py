@@ -109,6 +109,7 @@ class BlakePfdConfig:
     navigation_scaling: NavigationScalingConfig
     vnav: VnavConfig
     moving_map: MovingMapConfig
+    obs: ObsConfig
 
 @dataclass
 class RouteConfig:
@@ -127,6 +128,10 @@ class VnavConfig:
 @dataclass
 class MovingMapConfig:
     range_nm: float = 25.0
+@dataclass
+class ObsConfig:
+    enabled: bool = False
+    selected_course_deg: float = 0.0
 
 
 def load_config(path: Path = CONFIG_PATH) -> BlakePfdConfig:
@@ -153,6 +158,7 @@ def load_config(path: Path = CONFIG_PATH) -> BlakePfdConfig:
         navigation_scaling=NavigationScalingConfig(**raw.get("navigation_scaling", {})),
         vnav=VnavConfig(**raw.get("vnav", {})),
         moving_map=MovingMapConfig(**raw.get("moving_map", {})),
+        obs=ObsConfig(**raw.get("obs", {})),
     )
 
 def demo() -> None:
