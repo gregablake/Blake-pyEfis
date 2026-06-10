@@ -480,6 +480,15 @@ class BlakePfdDemo(QWidget):
             point(center_x - 8, center_y + 10),
             point(center_x + 8, center_y + 10),
         ]))
+        
+        if self.config.obs.enabled:
+            painter.setFont(QFont("Arial", 10, QFont.Weight.Bold))
+            painter.setPen(QColor(255, 255, 0))
+            painter.drawText(
+                center_x - 38,
+                center_y + radius + 22,
+                f"OBS {self.config.obs.selected_course_deg:.0f}°",
+            )
 
     def draw_heading_pointer(self, painter: QPainter, center_x: int, strip_y: int) -> None:
         painter.setBrush(QBrush(QColor(255, 220, 0)))
@@ -597,9 +606,12 @@ class BlakePfdDemo(QWidget):
             f"TRK {pfd.track_deg:.0f}°",
             f"BRG {pfd.bearing_deg:.0f}°",
             f"DTK {pfd.desired_track_deg:.0f}°",
+            f"OBS {self.config.obs.selected_course_deg:.0f}°" if self.config.obs.enabled else "",
             f"CDI {pfd.cdi:+.2f} NM",
         ]
-
+        
+        parts = [part for part in parts if part]
+        
         if self.config.features.show_vdi and self.config.vnav.enabled:
             parts.append(f"VDI {pfd.vdi:+.2f}°")
 
