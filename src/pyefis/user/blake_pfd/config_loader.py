@@ -53,7 +53,7 @@ class FeatureConfig:
     show_safe_taxi: bool = False
     show_traffic: bool = False
     show_weather: bool = False
-
+    show_obstacles: bool = True
 
 @dataclass
 class NavigationConfig:

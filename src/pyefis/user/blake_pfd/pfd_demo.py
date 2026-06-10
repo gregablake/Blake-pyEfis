@@ -22,6 +22,7 @@ from pyefis.user.blake_pfd.synthetic_vision import (
 )
 from pyefis.user.blake_pfd.weather_reader import WeatherReader
 from pyefis.user.blake_pfd.terrain import TerrainComputer
+from pyefis.user.blake_pfd.obstacles import ObstacleComputer
 
 
 class BlakePfdDemo(QWidget):
@@ -58,6 +59,7 @@ class BlakePfdDemo(QWidget):
         self.timer.timeout.connect(self.update_data)
         self.timer.start(50)
         self.terrain = TerrainComputer()
+        self.obstacles = ObstacleComputer()
 
     def update_data(self) -> None:
         raw = self.sensors.read()
@@ -140,6 +142,14 @@ class BlakePfdDemo(QWidget):
     )
             self.draw_terrain_status_box(painter, terrain_state, width, height)
             self.draw_terrain_alert(painter, terrain_state, width, height)
+        
+        if features.show_obstacles:
+            obstacle_state = self.obstacles.update(
+               aircraft_lat=39.1031,
+               aircraft_lon=-84.5120,
+               aircraft_alt_ft=self.pfd.pressure_alt_ft,
+    )
+            self.draw_obstacle_overlay(painter, obstacle_state, width, height)    
 
         painter.end()
 
@@ -641,6 +651,35 @@ class BlakePfdDemo(QWidget):
             box_x + 10,
             box_y + 76,
             f"CLR {terrain_state.clearance_ft:.0f} FT",
+        )
+        
+    def draw_obstacle_overlay(self, painter: QPainter, obstacle_state, width: int, height: int) -> None:
+        if not obstacle_state.nearby:
+            return
+
+        box_x = 20
+        box_y = 195
+        box_w = 260
+        box_h = 90
+
+        color = QColor(255, 0, 0) if obstacle_state.warning else QColor(255, 220, 0)
+
+        painter.fillRect(box_x, box_y, box_w, box_h, QColor(0, 0, 0))
+        painter.setPen(QPen(color, 2))
+        painter.drawRect(box_x, box_y, box_w, box_h)
+
+        painter.setFont(QFont("Arial", 12, QFont.Weight.Bold))
+        painter.setPen(color)
+        painter.drawText(box_x + 10, box_y + 25, "OBSTACLE")
+
+        obstacle = obstacle_state.nearby[0]
+
+        painter.setPen(QColor(255, 255, 255))
+        painter.drawText(box_x + 10, box_y + 52, f"{obstacle.ident}")
+        painter.drawText(
+            box_x + 10,
+            box_y + 76,
+            f"{obstacle.distance_nm:.1f}NM BRG {obstacle.bearing_deg:.0f}°",
         )
 
 

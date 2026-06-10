@@ -14,6 +14,7 @@ features:
   show_turn_rate: true
   show_slip_skid: true
   show_oat: true
+  show_obstacles: true
   show_tas: true
   show_ground_speed: true
   show_wind: true
