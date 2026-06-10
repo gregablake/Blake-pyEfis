@@ -12,6 +12,8 @@ from pyefis.user.blake_pfd.config_loader import load_config
 from pyefis.user.blake_pfd.database_importer import AviationDatabase
 from pyefis.user.blake_pfd.flight_computer import FlightComputer, FlightData
 from pyefis.user.blake_pfd.hardware_readers import BlakeHardwareSensorSource
+from pyefis.user.blake_pfd.moving_map import MovingMapComputer
+from pyefis.user.blake_pfd.obstacles import ObstacleComputer
 from pyefis.user.blake_pfd.route_manager import RouteManager
 from pyefis.user.blake_pfd.safe_taxi import SafeTaxiComputer
 from pyefis.user.blake_pfd.sensors_sim import SimulatedSensorSource
@@ -20,18 +22,16 @@ from pyefis.user.blake_pfd.synthetic_vision import (
     SyntheticVisionComputer,
     project_object_to_screen,
 )
-from pyefis.user.blake_pfd.weather_reader import WeatherReader
 from pyefis.user.blake_pfd.terrain import TerrainComputer
-from pyefis.user.blake_pfd.obstacles import ObstacleComputer
-from pyefis.user.blake_pfd.moving_map import MovingMapComputer
+from pyefis.user.blake_pfd.weather_reader import WeatherReader
 
 
 class BlakePfdDemo(QWidget):
-    
     def __init__(self, use_hardware: bool = False) -> None:
         super().__init__()
 
         self.config = load_config()
+
         self.database = AviationDatabase()
         self.database.load_all()
 
@@ -39,6 +39,9 @@ class BlakePfdDemo(QWidget):
         self.flight_computer = FlightComputer()
         self.synthetic_vision = SyntheticVisionComputer()
         self.safe_taxi = SafeTaxiComputer()
+        self.moving_map = MovingMapComputer()
+        self.terrain = TerrainComputer()
+        self.obstacles = ObstacleComputer()
         self.weather = WeatherReader()
 
         self.stratux = StratuxReader(
@@ -59,18 +62,10 @@ class BlakePfdDemo(QWidget):
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.update_data)
         self.timer.start(50)
-        self.terrain = TerrainComputer()
-        self.obstacles = ObstacleComputer()
-        self.moving_map = MovingMapComputer()
 
     def update_data(self) -> None:
         raw = self.sensors.read()
         self.pfd = self.flight_computer.update(raw)
-        self.terrain_state = self.terrain.update(
-            aircraft_alt_ft=self.pfd.altitude_ft,
-            aircraft_lat=self.pfd.latitude,
-            aircraft_lon=self.pfd.longitude
-        )
         self.update()
 
     def paintEvent(self, event) -> None:  # noqa: N802
@@ -83,6 +78,7 @@ class BlakePfdDemo(QWidget):
         width = self.width()
         height = self.height()
         features = self.config.features
+        declutter_level = self.config.declutter.level
 
         self.draw_background(painter, width, height)
 
@@ -109,7 +105,7 @@ class BlakePfdDemo(QWidget):
 
         if features.show_heading or features.show_hsi:
             self.draw_heading_strip(painter, self.pfd, width, height)
-            
+
         if features.show_hsi:
             self.draw_hsi_compass_rose(painter, self.pfd, width, height)
 
@@ -122,50 +118,53 @@ class BlakePfdDemo(QWidget):
         self.draw_top_data_bar(painter, self.pfd, width)
         self.draw_bottom_data_bar(painter, self.pfd, width, height)
 
-        if features.show_nearest_airports:
+        if declutter_level <= 0 and features.show_nearest_airports:
             self.draw_nearest_airports_overlay(painter, self.pfd, width, height)
 
-        if features.show_route:
+        if declutter_level <= 0 and features.show_moving_map:
+            map_state = self.moving_map.update(
+                database=self.database,
+                aircraft_lat=39.1031,
+                aircraft_lon=-84.5120,
+                range_nm=self.config.moving_map.range_nm,
+            )
+            self.draw_moving_map_overlay(painter, map_state, width, height)
+
+        if declutter_level <= 0 and features.show_route:
             self.draw_route_overlay(painter, width, height)
 
-        self.draw_selected_airport_info(painter, width, height)
+        if declutter_level <= 0:
+            self.draw_selected_airport_info(painter, width, height)
+            self.draw_waypoint_info_box(painter, self.pfd, width, height)
 
-        if self.config.vnav.enabled:
+        if declutter_level <= 1:
+            self.draw_navigation_status_box(painter, self.pfd, width, height)
+
+        if declutter_level <= 1 and self.config.vnav.enabled:
             self.draw_vnav_info_box(painter, self.pfd, width, height)
+
+        if features.show_terrain:
+            terrain_state = self.terrain.update(
+                aircraft_alt_ft=self.pfd.pressure_alt_ft,
+                aircraft_lat=39.1031,
+                aircraft_lon=-84.5120,
+            )
+            self.draw_terrain_status_box(painter, terrain_state, width, height)
+            self.draw_terrain_alert(painter, terrain_state, width, height)
+
+        if features.show_obstacles:
+            obstacle_state = self.obstacles.update(
+                aircraft_lat=39.1031,
+                aircraft_lon=-84.5120,
+                aircraft_alt_ft=self.pfd.pressure_alt_ft,
+            )
+            self.draw_obstacle_overlay(painter, obstacle_state, width, height)
 
         if features.show_traffic and self.config.stratux.enabled:
             self.draw_traffic_overlay(painter, self.stratux.read(), width, height)
 
         if features.show_weather:
             self.draw_weather_overlay(painter, self.weather.read(), width, height)
-            
-        if features.show_terrain:
-            terrain_state = self.terrain.update(
-                aircraft_alt_ft=self.pfd.pressure_alt_ft,
-                aircraft_lat=39.1031,
-                aircraft_lon=-84.5120,
-    )
-            self.draw_terrain_status_box(painter, terrain_state, width, height)
-            self.draw_terrain_alert(painter, terrain_state, width, height)
-        
-        if features.show_obstacles:
-            obstacle_state = self.obstacles.update(
-               aircraft_lat=39.1031,
-               aircraft_lon=-84.5120,
-               aircraft_alt_ft=self.pfd.pressure_alt_ft,
-    )
-            self.draw_obstacle_overlay(painter, obstacle_state, width, height)
-            
-        if features.show_moving_map:
-            map_state = self.moving_map.update(
-               database=self.database,
-               aircraft_lat=39.1031,
-               aircraft_lon=-84.5120,
-               range_nm=self.config.moving_map.range_nm,
-)
-            self.draw_moving_map_overlay(painter, map_state, width, height)  
-            self.draw_waypoint_info_box(painter, self.pfd, width, height)  
-            self.draw_navigation_status_box(painter, self.pfd, width, height)
 
         painter.end()
 
@@ -174,13 +173,12 @@ class BlakePfdDemo(QWidget):
 
     def draw_synthetic_vision(self, painter: QPainter, pfd: FlightData, width: int, height: int) -> None:
         scene = self.synthetic_vision.update(pfd)
-
         center_x = width // 2
         center_y = height // 2
 
         painter.save()
         painter.translate(center_x, center_y)
-        painter.rotate(-pfd.roll_deg if hasattr(pfd, "roll_deg") else 0.0)
+        painter.rotate(-getattr(pfd, "roll_deg", 0.0))
 
         painter.fillRect(-width, -height * 2, width * 2, height * 2, QColor(*scene.sky_color))
         painter.fillRect(-width, 0, width * 2, height * 2, QColor(*scene.ground_color))
@@ -247,8 +245,20 @@ class BlakePfdDemo(QWidget):
         painter.rotate(-roll_deg)
         painter.translate(0, pitch_deg * 7.0)
 
-        painter.fillRect(-horizon_width, -horizon_height * 2, horizon_width * 2, horizon_height * 2, QColor(25, 95, 180))
-        painter.fillRect(-horizon_width, 0, horizon_width * 2, horizon_height * 2, QColor(125, 70, 25))
+        painter.fillRect(
+            -horizon_width,
+            -horizon_height * 2,
+            horizon_width * 2,
+            horizon_height * 2,
+            QColor(25, 95, 180),
+        )
+        painter.fillRect(
+            -horizon_width,
+            0,
+            horizon_width * 2,
+            horizon_height * 2,
+            QColor(125, 70, 25),
+        )
 
         painter.setPen(QPen(QColor(255, 255, 255), 3))
         painter.drawLine(-horizon_width, 0, horizon_width, 0)
@@ -257,7 +267,12 @@ class BlakePfdDemo(QWidget):
         painter.restore()
 
         painter.setPen(QPen(QColor(180, 180, 180), 2))
-        painter.drawRect(center_x - horizon_width // 2, center_y - horizon_height // 2, horizon_width, horizon_height)
+        painter.drawRect(
+            center_x - horizon_width // 2,
+            center_y - horizon_height // 2,
+            horizon_width,
+            horizon_height,
+        )
 
         painter.setPen(QPen(QColor(255, 220, 0), 4))
         painter.drawLine(center_x - 90, center_y, center_x - 25, center_y)
@@ -319,7 +334,11 @@ class BlakePfdDemo(QWidget):
         painter.setPen(QPen(QColor(255, 255, 255), 2))
         painter.drawRect(tape_x + 5, center_y - 25, tape_w - 10, 50)
         painter.setFont(QFont("Arial", 22, QFont.Weight.Bold))
-        painter.drawText(QRectF(tape_x + 5, center_y - 25, tape_w - 10, 50), Qt.AlignmentFlag.AlignCenter, f"{ias:.0f}")
+        painter.drawText(
+            QRectF(tape_x + 5, center_y - 25, tape_w - 10, 50),
+            Qt.AlignmentFlag.AlignCenter,
+            f"{ias:.0f}",
+        )
 
     def draw_altitude_tape(self, painter: QPainter, pfd: FlightData, width: int, height: int) -> None:
         tape_w = 120
@@ -336,7 +355,10 @@ class BlakePfdDemo(QWidget):
         painter.setFont(QFont("Arial", 11, QFont.Weight.Bold))
         painter.setPen(QColor(255, 255, 255))
 
-        for altitude in range(int((alt - 1000) // 100) * 100, int((alt + 1100) // 100) * 100, 100):
+        start_alt = int((alt - 1000) // 100) * 100
+        end_alt = int((alt + 1100) // 100) * 100
+
+        for altitude in range(start_alt, end_alt, 100):
             y = center_y - int(((altitude - alt) / 100.0) * 22.0)
             if tape_y < y < tape_y + tape_h:
                 painter.drawLine(tape_x + 5, y, tape_x + 35, y)
@@ -346,7 +368,11 @@ class BlakePfdDemo(QWidget):
         painter.setPen(QPen(QColor(255, 255, 255), 2))
         painter.drawRect(tape_x + 5, center_y - 25, tape_w - 10, 50)
         painter.setFont(QFont("Arial", 20, QFont.Weight.Bold))
-        painter.drawText(QRectF(tape_x + 5, center_y - 25, tape_w - 10, 50), Qt.AlignmentFlag.AlignCenter, f"{alt:.0f}")
+        painter.drawText(
+            QRectF(tape_x + 5, center_y - 25, tape_w - 10, 50),
+            Qt.AlignmentFlag.AlignCenter,
+            f"{alt:.0f}",
+        )
 
     def draw_vsi(self, painter: QPainter, pfd: FlightData, width: int, height: int) -> None:
         x = width - 180
@@ -362,11 +388,13 @@ class BlakePfdDemo(QWidget):
 
         painter.setBrush(QBrush(QColor(0, 255, 255)))
         painter.setPen(QPen(QColor(0, 255, 255), 2))
-        painter.drawPolygon(QPolygonF([
-            point(x - 18, pointer_y),
-            point(x - 38, pointer_y - 10),
-            point(x - 38, pointer_y + 10),
-        ]))
+        painter.drawPolygon(
+            QPolygonF([
+                point(x - 18, pointer_y),
+                point(x - 38, pointer_y - 10),
+                point(x - 38, pointer_y + 10),
+            ])
+        )
 
     def draw_heading_strip(self, painter: QPainter, pfd: FlightData, width: int, height: int) -> None:
         strip_w = 500
@@ -376,8 +404,8 @@ class BlakePfdDemo(QWidget):
         center_x = strip_x + strip_w // 2
 
         heading = pfd.heading_deg
-        bearing = getattr(pfd, "bearing_deg", heading)
-        desired_track = getattr(pfd, "desired_track_deg", heading)
+        bearing = pfd.bearing_deg
+        desired_track = pfd.desired_track_deg
         pixels_per_deg = 6.0
 
         painter.fillRect(strip_x, strip_y, strip_w, strip_h, QColor(15, 15, 20))
@@ -395,9 +423,94 @@ class BlakePfdDemo(QWidget):
                 painter.drawText(x - 18, strip_y + 50, heading_label(normalized))
 
         self.draw_heading_pointer(painter, center_x, strip_y)
-        self.draw_bearing_pointer(painter, bearing, heading, center_x, strip_x, strip_y, strip_w, strip_h, pixels_per_deg)
-        self.draw_desired_track_pointer(painter, desired_track, heading, center_x, strip_x, strip_y, strip_w, pixels_per_deg)
-        
+        self.draw_bearing_pointer(
+            painter,
+            bearing,
+            heading,
+            center_x,
+            strip_x,
+            strip_y,
+            strip_w,
+            strip_h,
+            pixels_per_deg,
+        )
+        self.draw_desired_track_pointer(
+            painter,
+            desired_track,
+            heading,
+            center_x,
+            strip_x,
+            strip_y,
+            strip_w,
+            pixels_per_deg,
+        )
+
+    def draw_heading_pointer(self, painter: QPainter, center_x: int, strip_y: int) -> None:
+        painter.setBrush(QBrush(QColor(255, 220, 0)))
+        painter.setPen(QPen(QColor(255, 220, 0), 2))
+        painter.drawPolygon(
+            QPolygonF([
+                point(center_x, strip_y + 5),
+                point(center_x - 10, strip_y + 25),
+                point(center_x + 10, strip_y + 25),
+            ])
+        )
+
+    def draw_bearing_pointer(
+        self,
+        painter: QPainter,
+        bearing: float,
+        heading: float,
+        center_x: int,
+        strip_x: int,
+        strip_y: int,
+        strip_w: int,
+        strip_h: int,
+        pixels_per_deg: float,
+    ) -> None:
+        bearing_error = (bearing - heading + 180.0) % 360.0 - 180.0
+        bearing_x = center_x + int(bearing_error * pixels_per_deg)
+
+        if strip_x <= bearing_x <= strip_x + strip_w:
+            painter.setBrush(QBrush(QColor(255, 0, 255)))
+            painter.setPen(QPen(QColor(255, 0, 255), 2))
+            painter.drawPolygon(
+                QPolygonF([
+                    point(bearing_x, strip_y + strip_h - 5),
+                    point(bearing_x - 10, strip_y + strip_h - 25),
+                    point(bearing_x + 10, strip_y + strip_h - 25),
+                ])
+            )
+            painter.setFont(QFont("Arial", 10, QFont.Weight.Bold))
+            painter.drawText(bearing_x - 18, strip_y + strip_h - 30, "BRG")
+
+    def draw_desired_track_pointer(
+        self,
+        painter: QPainter,
+        desired_track: float,
+        heading: float,
+        center_x: int,
+        strip_x: int,
+        strip_y: int,
+        strip_w: int,
+        pixels_per_deg: float,
+    ) -> None:
+        dtk_error = (desired_track - heading + 180.0) % 360.0 - 180.0
+        dtk_x = center_x + int(dtk_error * pixels_per_deg)
+
+        if strip_x <= dtk_x <= strip_x + strip_w:
+            painter.setBrush(QBrush(QColor(0, 255, 0)))
+            painter.setPen(QPen(QColor(0, 255, 0), 2))
+            painter.drawPolygon(
+                QPolygonF([
+                    point(dtk_x, strip_y + 5),
+                    point(dtk_x - 10, strip_y + 25),
+                    point(dtk_x + 10, strip_y + 25),
+                ])
+            )
+            painter.setFont(QFont("Arial", 10, QFont.Weight.Bold))
+            painter.drawText(dtk_x - 16, strip_y + 38, "DTK")
+
     def draw_hsi_compass_rose(self, painter: QPainter, pfd: FlightData, width: int, height: int) -> None:
         center_x = width // 2
         center_y = height - 170
@@ -428,12 +541,10 @@ class BlakePfdDemo(QWidget):
 
             painter.drawText(label_x - 10, label_y + 5, heading_label(deg))
 
-        # Course needle / DTK with CDI offset
         dtk_relative = (desired_track - heading + 360) % 360
         dtk_angle = radians(dtk_relative - 90)
 
         cdi_offset = max(-1.0, min(1.0, pfd.cdi)) * 35
-
         offset_angle = dtk_angle + radians(90)
         offset_x = int(cos(offset_angle) * cdi_offset)
         offset_y = int(sin(offset_angle) * cdi_offset)
@@ -445,24 +556,20 @@ class BlakePfdDemo(QWidget):
             center_x + offset_x + int(cos(dtk_angle) * radius),
             center_y + offset_y + int(sin(dtk_angle) * radius),
         )
-
         painter.drawLine(
             center_x + offset_x,
             center_y + offset_y,
             center_x + offset_x - int(cos(dtk_angle) * radius),
             center_y + offset_y - int(sin(dtk_angle) * radius),
         )
-        
-        # CDI scale dots
+
         painter.setPen(QPen(QColor(255, 255, 255), 2))
         painter.setBrush(QBrush(QColor(255, 255, 255)))
-
         for dot in [-2, -1, 1, 2]:
             dot_x = center_x + int(cos(offset_angle) * dot * 18)
             dot_y = center_y + int(sin(offset_angle) * dot * 18)
             painter.drawEllipse(dot_x - 3, dot_y - 3, 6, 6)
 
-        # Bearing pointer
         brg_relative = (bearing - heading + 360) % 360
         brg_angle = radians(brg_relative - 90)
 
@@ -474,15 +581,16 @@ class BlakePfdDemo(QWidget):
             center_y + int(sin(brg_angle) * (radius - 15)),
         )
 
-        # Ownship
         painter.setBrush(QBrush(QColor(255, 220, 0)))
         painter.setPen(QPen(QColor(255, 220, 0), 2))
-        painter.drawPolygon(QPolygonF([
-            point(center_x, center_y - 12),
-            point(center_x - 8, center_y + 10),
-            point(center_x + 8, center_y + 10),
-        ]))
-        
+        painter.drawPolygon(
+            QPolygonF([
+                point(center_x, center_y - 12),
+                point(center_x - 8, center_y + 10),
+                point(center_x + 8, center_y + 10),
+            ])
+        )
+
         if self.config.obs.enabled:
             painter.setFont(QFont("Arial", 10, QFont.Weight.Bold))
             painter.setPen(QColor(255, 255, 0))
@@ -491,45 +599,6 @@ class BlakePfdDemo(QWidget):
                 center_y + radius + 22,
                 f"OBS {self.config.obs.selected_course_deg:.0f}°",
             )
-
-    def draw_heading_pointer(self, painter: QPainter, center_x: int, strip_y: int) -> None:
-        painter.setBrush(QBrush(QColor(255, 220, 0)))
-        painter.setPen(QPen(QColor(255, 220, 0), 2))
-        painter.drawPolygon(QPolygonF([
-            point(center_x, strip_y + 5),
-            point(center_x - 10, strip_y + 25),
-            point(center_x + 10, strip_y + 25),
-        ]))
-
-    def draw_bearing_pointer(self, painter: QPainter, bearing: float, heading: float, center_x: int, strip_x: int, strip_y: int, strip_w: int, strip_h: int, pixels_per_deg: float) -> None:
-        bearing_error = (bearing - heading + 180.0) % 360.0 - 180.0
-        bearing_x = center_x + int(bearing_error * pixels_per_deg)
-
-        if strip_x <= bearing_x <= strip_x + strip_w:
-            painter.setBrush(QBrush(QColor(255, 0, 255)))
-            painter.setPen(QPen(QColor(255, 0, 255), 2))
-            painter.drawPolygon(QPolygonF([
-                point(bearing_x, strip_y + strip_h - 5),
-                point(bearing_x - 10, strip_y + strip_h - 25),
-                point(bearing_x + 10, strip_y + strip_h - 25),
-            ]))
-            painter.setFont(QFont("Arial", 10, QFont.Weight.Bold))
-            painter.drawText(bearing_x - 18, strip_y + strip_h - 30, "BRG")
-
-    def draw_desired_track_pointer(self, painter: QPainter, desired_track: float, heading: float, center_x: int, strip_x: int, strip_y: int, strip_w: int, pixels_per_deg: float) -> None:
-        dtk_error = (desired_track - heading + 180.0) % 360.0 - 180.0
-        dtk_x = center_x + int(dtk_error * pixels_per_deg)
-
-        if strip_x <= dtk_x <= strip_x + strip_w:
-            painter.setBrush(QBrush(QColor(0, 255, 0)))
-            painter.setPen(QPen(QColor(0, 255, 0), 2))
-            painter.drawPolygon(QPolygonF([
-                point(dtk_x, strip_y + 5),
-                point(dtk_x - 10, strip_y + 25),
-                point(dtk_x + 10, strip_y + 25),
-            ]))
-            painter.setFont(QFont("Arial", 10, QFont.Weight.Bold))
-            painter.drawText(dtk_x - 16, strip_y + 38, "DTK")
 
     def draw_turn_and_slip(self, painter: QPainter, pfd: FlightData, width: int, height: int) -> None:
         center_x = width // 2
@@ -576,28 +645,33 @@ class BlakePfdDemo(QWidget):
 
             painter.setBrush(QBrush(QColor(0, 255, 0)))
             painter.setPen(QPen(QColor(0, 255, 0), 2))
-            painter.drawPolygon(QPolygonF([
-                point(vdi_x, vdi_y),
-                point(vdi_x + 22, vdi_y - 12),
-                point(vdi_x + 22, vdi_y + 12),
-            ]))
+            painter.drawPolygon(
+                QPolygonF([
+                    point(vdi_x, vdi_y),
+                    point(vdi_x + 22, vdi_y - 12),
+                    point(vdi_x + 22, vdi_y + 12),
+                ])
+            )
 
     def draw_top_data_bar(self, painter: QPainter, pfd: FlightData, width: int) -> None:
         painter.fillRect(0, 0, width, 55, QColor(0, 0, 0))
         painter.setPen(QColor(255, 255, 255))
         painter.setFont(QFont("Arial", 14, QFont.Weight.Bold))
 
-        features = self.config.features
         parts = []
 
-        if features.show_tas:
+        if self.config.features.show_tas:
             parts.append(f"TAS {pfd.tas_kt:.0f} KT")
-        if features.show_ground_speed:
+        if self.config.features.show_ground_speed:
             parts.append(f"GS {pfd.ground_speed_kt:.0f} KT")
-        if features.show_wind:
+        if self.config.features.show_wind:
             parts.append(f"WIND {pfd.wind_direction_deg:.0f}°/{pfd.wind_speed_kt:.0f} KT")
 
-        painter.drawText(QRectF(0, 0, width, 55), Qt.AlignmentFlag.AlignCenter, "    ".join(parts))
+        painter.drawText(
+            QRectF(0, 0, width, 55),
+            Qt.AlignmentFlag.AlignCenter,
+            "    ".join(parts),
+        )
 
     def draw_bottom_data_bar(self, painter: QPainter, pfd: FlightData, width: int, height: int) -> None:
         painter.fillRect(0, height - 35, width, 35, QColor(0, 0, 0))
@@ -611,13 +685,17 @@ class BlakePfdDemo(QWidget):
             f"OBS {self.config.obs.selected_course_deg:.0f}°" if self.config.obs.enabled else "",
             f"CDI {pfd.cdi:+.2f} NM",
         ]
-        
+
         parts = [part for part in parts if part]
-        
+
         if self.config.features.show_vdi and self.config.vnav.enabled:
             parts.append(f"VDI {pfd.vdi:+.2f}°")
 
-        painter.drawText(QRectF(0, height - 35, width, 35), Qt.AlignmentFlag.AlignCenter, "    ".join(parts))
+        painter.drawText(
+            QRectF(0, height - 35, width, 35),
+            Qt.AlignmentFlag.AlignCenter,
+            "    ".join(parts),
+        )
 
     def draw_vnav_info_box(self, painter: QPainter, pfd: FlightData, width: int, height: int) -> None:
         box_x = width - 250
@@ -635,7 +713,7 @@ class BlakePfdDemo(QWidget):
         painter.drawText(box_x + 10, box_y + 50, f"TGT ALT {pfd.glidepath_target_alt_ft:.0f}")
         painter.drawText(box_x + 10, box_y + 75, f"ALT ERR {pfd.glidepath_alt_error_ft:+.0f}")
         painter.drawText(box_x + 10, box_y + 100, f"GP {self.config.vnav.glidepath_angle_deg:.1f}°")
-        
+
     def draw_waypoint_info_box(self, painter: QPainter, pfd: FlightData, width: int, height: int) -> None:
         box_x = width // 2 - 120
         box_y = 60
@@ -655,7 +733,33 @@ class BlakePfdDemo(QWidget):
         painter.setFont(QFont("Arial", 11, QFont.Weight.Bold))
         painter.drawText(box_x + 10, box_y + 52, f"BRG {pfd.bearing_deg:.0f}°")
         painter.drawText(box_x + 120, box_y + 52, f"DIS {pfd.distance_to_waypoint_nm:.1f}NM")
-        painter.drawText(box_x + 10, box_y + 75, f"CRS ERR {pfd.course_error_deg:+.0f}°")    
+        painter.drawText(box_x + 10, box_y + 75, f"CRS ERR {pfd.course_error_deg:+.0f}°")
+
+    def draw_navigation_status_box(self, painter: QPainter, pfd: FlightData, width: int, height: int) -> None:
+        active_leg = self.route_manager.get_active_leg()
+        waypoint_id = self.config.navigation.selected_waypoint_id
+
+        box_x = width // 2 - 150
+        box_y = 150
+        box_w = 300
+        box_h = 90
+
+        painter.fillRect(box_x, box_y, box_w, box_h, QColor(0, 0, 0))
+        painter.setPen(QPen(QColor(0, 255, 0), 2))
+        painter.drawRect(box_x, box_y, box_w, box_h)
+
+        painter.setFont(QFont("Arial", 12, QFont.Weight.Bold))
+        painter.setPen(QColor(0, 255, 0))
+
+        if active_leg is not None:
+            painter.drawText(box_x + 10, box_y + 25, f"ACTIVE LEG {active_leg.from_ident} → {active_leg.to_ident}")
+        else:
+            painter.drawText(box_x + 10, box_y + 25, f"DIRECT TO {waypoint_id}")
+
+        painter.setPen(QColor(255, 255, 255))
+        painter.drawText(box_x + 10, box_y + 52, f"DTK {pfd.desired_track_deg:.0f}°")
+        painter.drawText(box_x + 120, box_y + 52, f"BRG {pfd.bearing_deg:.0f}°")
+        painter.drawText(box_x + 10, box_y + 76, f"DIS {pfd.distance_to_waypoint_nm:.1f} NM")
 
     def draw_nearest_airports_overlay(self, painter: QPainter, pfd: FlightData, width: int, height: int) -> None:
         nearest = self.database.nearest_airports(39.1031, -84.5120, max_results=5)
@@ -674,6 +778,59 @@ class BlakePfdDemo(QWidget):
             painter.drawText(box_x + 10, y, f"{airport.ident:<5} {distance_nm:>4.1f}NM {airport.name[:24]}")
             y += 22
 
+    def draw_moving_map_overlay(self, painter: QPainter, map_state, width: int, height: int) -> None:
+        box_x = 20
+        box_y = 300
+        box_w = 300
+        box_h = 220
+
+        painter.fillRect(box_x, box_y, box_w, box_h, QColor(0, 0, 0))
+        painter.setPen(QPen(QColor(0, 180, 255), 2))
+        painter.drawRect(box_x, box_y, box_w, box_h)
+
+        painter.setFont(QFont("Arial", 12, QFont.Weight.Bold))
+        painter.setPen(QColor(0, 180, 255))
+        painter.drawText(box_x + 10, box_y + 24, f"MAP {map_state.range_nm:.0f} NM")
+
+        center_x = box_x + box_w // 2
+        center_y = box_y + box_h // 2
+
+        painter.setBrush(QBrush(QColor(255, 220, 0)))
+        painter.setPen(QPen(QColor(255, 220, 0), 2))
+        painter.drawPolygon(
+            QPolygonF([
+                point(center_x, center_y - 12),
+                point(center_x - 8, center_y + 10),
+                point(center_x + 8, center_y + 10),
+            ])
+        )
+
+        radius = min(box_w, box_h) * 0.42
+
+        painter.setPen(QPen(QColor(60, 60, 60), 1))
+        painter.drawEllipse(
+            center_x - int(radius),
+            center_y - int(radius),
+            int(radius * 2),
+            int(radius * 2),
+        )
+
+        painter.setFont(QFont("Arial", 8, QFont.Weight.Bold))
+
+        for airport in map_state.airports:
+            if airport.distance_nm > map_state.range_nm:
+                continue
+
+            scale = airport.distance_nm / map_state.range_nm
+            angle = radians(airport.bearing_deg - 90)
+
+            airport_x = center_x + int(cos(angle) * radius * scale)
+            airport_y = center_y + int(sin(angle) * radius * scale)
+
+            painter.setPen(QPen(QColor(0, 255, 255), 2))
+            painter.drawEllipse(airport_x - 3, airport_y - 3, 6, 6)
+            painter.drawText(airport_x + 5, airport_y, airport.ident)
+
     def draw_route_overlay(self, painter: QPainter, width: int, height: int) -> None:
         route = self.route_manager.load_route()
         active_leg = self.route_manager.get_active_leg()
@@ -690,36 +847,6 @@ class BlakePfdDemo(QWidget):
         if active_leg:
             painter.drawText(box_x + 10, box_y + 85, f"LEG: {active_leg.from_ident} → {active_leg.to_ident}")
             painter.drawText(box_x + 10, box_y + 112, f"DTK: {active_leg.desired_track_deg:.0f}°")
-            
-    def draw_navigation_status_box(self, painter: QPainter, pfd: FlightData, width: int, height: int) -> None:
-        active_leg = self.route_manager.get_active_leg()
-        waypoint_id = self.config.navigation.selected_waypoint_id
-
-        box_x = width // 2 - 150
-        box_y = 150
-        box_w = 300
-        box_h = 90
-
-        painter.fillRect(box_x, box_y, box_w, box_h, QColor(0, 0, 0))
-        painter.setPen(QPen(QColor(0, 255, 0), 2))
-        painter.drawRect(box_x, box_y, box_w, box_h)
-
-        painter.setFont(QFont("Arial", 12, QFont.Weight.Bold))
-        painter.setPen(QColor(0, 255, 0))
-
-        if active_leg is not None:
-            painter.drawText(
-                box_x + 10,
-                box_y + 25,
-                f"ACTIVE LEG {active_leg.from_ident} → {active_leg.to_ident}",
-            )
-        else:
-            painter.drawText(box_x + 10, box_y + 25, f"DIRECT TO {waypoint_id}")
-
-        painter.setPen(QColor(255, 255, 255))
-        painter.drawText(box_x + 10, box_y + 52, f"DTK {pfd.desired_track_deg:.0f}°")
-        painter.drawText(box_x + 120, box_y + 52, f"BRG {pfd.bearing_deg:.0f}°")
-        painter.drawText(box_x + 10, box_y + 76, f"DIS {pfd.distance_to_waypoint_nm:.1f} NM")        
 
     def draw_selected_airport_info(self, painter: QPainter, width: int, height: int) -> None:
         airport_id = self.config.navigation.selected_waypoint_id
@@ -746,43 +873,17 @@ class BlakePfdDemo(QWidget):
 
         if runway:
             painter.drawText(box_x + 10, box_y + 85, f"RWY {runway.le_ident}/{runway.he_ident}")
-            painter.drawText(box_x + 10, box_y + 110, f"{runway.length_ft:.0f} x {runway.width_ft:.0f} ft {runway.surface[:10]}")
+            painter.drawText(
+                box_x + 10,
+                box_y + 110,
+                f"{runway.length_ft:.0f} x {runway.width_ft:.0f} ft {runway.surface[:10]}",
+            )
 
         y = box_y + 145
         for freq in freqs[:5]:
             painter.drawText(box_x + 10, y, f"{freq.type}: {freq.frequency_mhz:.3f}")
             y += 22
 
-    def draw_safe_taxi_map(self, painter: QPainter, taxi_state, width: int, height: int) -> None:
-        painter.fillRect(0, 0, width, height, QColor(15, 15, 15))
-        painter.setPen(QPen(QColor(255, 255, 255), 2))
-        painter.setFont(QFont("Arial", 22, QFont.Weight.Bold))
-        painter.drawText(30, 45, f"SAFE TAXI - {taxi_state.airport_id}")
-
-    def draw_traffic_overlay(self, painter: QPainter, stratux_state, width: int, height: int) -> None:
-        painter.setFont(QFont("Arial", 12, QFont.Weight.Bold))
-        painter.setPen(QColor(0, 255, 255) if stratux_state.ok else QColor(255, 180, 0))
-        painter.drawText(width - 230, 80, "STRATUX ONLINE" if stratux_state.ok else "STRATUX OFFLINE")
-
-    def draw_weather_overlay(self, painter: QPainter, weather_state, width: int, height: int) -> None:
-        painter.setFont(QFont("Arial", 12, QFont.Weight.Bold))
-        painter.setPen(QColor(0, 255, 0) if weather_state.ok else QColor(255, 180, 0))
-        painter.drawText(width - 230, 105, "WX ONLINE" if weather_state.ok else "WX WAITING")
-
-    def draw_terrain_alert(self, painter: QPainter, terrain_state, width: int, height: int) -> None:
-        if terrain_state.warning_level == "none":
-            return
-
-        color = QColor(255, 0, 0) if terrain_state.warning_level == "red" else QColor(255, 220, 0)
-
-        painter.setPen(QPen(color, 3))
-        painter.setFont(QFont("Arial", 18, QFont.Weight.Bold))
-        painter.drawText(
-            QRectF(0, 55, width, 40),
-            Qt.AlignmentFlag.AlignCenter,
-            f"TERRAIN {terrain_state.clearance_ft:.0f} FT",
-        )
-        
     def draw_terrain_status_box(self, painter: QPainter, terrain_state, width: int, height: int) -> None:
         box_x = 20
         box_y = 95
@@ -806,17 +907,23 @@ class BlakePfdDemo(QWidget):
         painter.drawText(box_x + 10, box_y + 25, "TERRAIN")
 
         painter.setPen(QColor(255, 255, 255))
+        painter.drawText(box_x + 10, box_y + 52, f"ELEV {terrain_state.terrain_elevation_ft:.0f} FT")
+        painter.drawText(box_x + 10, box_y + 76, f"CLR {terrain_state.clearance_ft:.0f} FT")
+
+    def draw_terrain_alert(self, painter: QPainter, terrain_state, width: int, height: int) -> None:
+        if terrain_state.warning_level == "none":
+            return
+
+        color = QColor(255, 0, 0) if terrain_state.warning_level == "red" else QColor(255, 220, 0)
+
+        painter.setPen(QPen(color, 3))
+        painter.setFont(QFont("Arial", 18, QFont.Weight.Bold))
         painter.drawText(
-            box_x + 10,
-            box_y + 52,
-            f"ELEV {terrain_state.terrain_elevation_ft:.0f} FT",
+            QRectF(0, 55, width, 40),
+            Qt.AlignmentFlag.AlignCenter,
+            f"TERRAIN {terrain_state.clearance_ft:.0f} FT",
         )
-        painter.drawText(
-            box_x + 10,
-            box_y + 76,
-            f"CLR {terrain_state.clearance_ft:.0f} FT",
-        )
-        
+
     def draw_obstacle_overlay(self, painter: QPainter, obstacle_state, width: int, height: int) -> None:
         if not obstacle_state.nearby:
             return
@@ -840,60 +947,23 @@ class BlakePfdDemo(QWidget):
 
         painter.setPen(QColor(255, 255, 255))
         painter.drawText(box_x + 10, box_y + 52, f"{obstacle.ident}")
-        painter.drawText(
-            box_x + 10,
-            box_y + 76,
-            f"{obstacle.distance_nm:.1f}NM BRG {obstacle.bearing_deg:.0f}°",
-        )
-        
-    def draw_moving_map_overlay(self, painter: QPainter, map_state, width: int, height: int) -> None:
-        box_x = 20
-        box_y = 300
-        box_w = 300
-        box_h = 220
+        painter.drawText(box_x + 10, box_y + 76, f"{obstacle.distance_nm:.1f}NM BRG {obstacle.bearing_deg:.0f}°")
 
-        painter.fillRect(box_x, box_y, box_w, box_h, QColor(0, 0, 0))
-        painter.setPen(QPen(QColor(0, 180, 255), 2))
-        painter.drawRect(box_x, box_y, box_w, box_h)
+    def draw_safe_taxi_map(self, painter: QPainter, taxi_state, width: int, height: int) -> None:
+        painter.fillRect(0, 0, width, height, QColor(15, 15, 15))
+        painter.setPen(QPen(QColor(255, 255, 255), 2))
+        painter.setFont(QFont("Arial", 22, QFont.Weight.Bold))
+        painter.drawText(30, 45, f"SAFE TAXI - {taxi_state.airport_id}")
 
-        center_x = box_x + box_w // 2
-        center_y = box_y + box_h // 2
-        radius = min(box_w, box_h) * 0.42
+    def draw_traffic_overlay(self, painter: QPainter, stratux_state, width: int, height: int) -> None:
+        painter.setFont(QFont("Arial", 12, QFont.Weight.Bold))
+        painter.setPen(QColor(0, 255, 255) if stratux_state.ok else QColor(255, 180, 0))
+        painter.drawText(width - 230, 80, "STRATUX ONLINE" if stratux_state.ok else "STRATUX OFFLINE")
 
-        painter.setPen(QPen(QColor(60, 60, 60), 1))
-        painter.drawEllipse(
-            center_x - int(radius),
-            center_y - int(radius),
-            int(radius * 2),
-            int(radius * 2),
-        )
-
-        painter.setFont(QFont("Arial", 8, QFont.Weight.Bold))
-
-        for airport in map_state.airports:
-            if airport.distance_nm > map_state.range_nm:
-                continue
-
-            scale = airport.distance_nm / map_state.range_nm
-
-            angle = radians(airport.bearing_deg - 90)
-
-            airport_x = center_x + int(cos(angle) * radius * scale)
-            airport_y = center_y + int(sin(angle) * radius * scale)
-
-            painter.setPen(QPen(QColor(0, 255, 255), 2))
-            painter.drawEllipse(
-                airport_x - 3,
-                airport_y - 3,
-                6,
-                6,
-            )
-
-            painter.drawText(
-                airport_x + 5,
-                airport_y,
-                airport.ident,
-            )
+    def draw_weather_overlay(self, painter: QPainter, weather_state, width: int, height: int) -> None:
+        painter.setFont(QFont("Arial", 12, QFont.Weight.Bold))
+        painter.setPen(QColor(0, 255, 0) if weather_state.ok else QColor(255, 180, 0))
+        painter.drawText(width - 230, 105, "WX ONLINE" if weather_state.ok else "WX WAITING")
 
 
 def point(x: float, y: float) -> QPointF:

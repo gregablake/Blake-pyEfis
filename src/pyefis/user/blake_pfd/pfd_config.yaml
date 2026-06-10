@@ -76,3 +76,5 @@ moving_map:
 obs:
   enabled: false
   selected_course_deg: 0.0
+declutter:
+  level: 0

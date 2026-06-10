@@ -110,6 +110,7 @@ class BlakePfdConfig:
     vnav: VnavConfig
     moving_map: MovingMapConfig
     obs: ObsConfig
+    declutter: DeclutterConfig
 
 @dataclass
 class RouteConfig:
@@ -132,6 +133,9 @@ class MovingMapConfig:
 class ObsConfig:
     enabled: bool = False
     selected_course_deg: float = 0.0
+@dataclass
+class DeclutterConfig:
+    level: int = 0
 
 
 def load_config(path: Path = CONFIG_PATH) -> BlakePfdConfig:
@@ -159,6 +163,7 @@ def load_config(path: Path = CONFIG_PATH) -> BlakePfdConfig:
         vnav=VnavConfig(**raw.get("vnav", {})),
         moving_map=MovingMapConfig(**raw.get("moving_map", {})),
         obs=ObsConfig(**raw.get("obs", {})),
+        declutter=DeclutterConfig(**raw.get("declutter", {})),
     )
 
 def demo() -> None:
