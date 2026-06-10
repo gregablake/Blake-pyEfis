@@ -60,6 +60,39 @@ class BlakePfdDemo(QWidget):
                 105,
                 f"{target.callsign} {target.distance_nm:.1f}NM {target.relative_alt_ft:+.0f}FT",
             )
+            
+    def draw_vnav_info_box(self, painter: QPainter, pfd, width: int, height: int) -> None:
+        box_x = width - 250
+        box_y = 265
+        box_w = 220
+        box_h = 105
+
+        painter.fillRect(box_x, box_y, box_w, box_h, QColor(0, 0, 0))
+        painter.setPen(QPen(QColor(0, 255, 0), 2))
+        painter.drawRect(box_x, box_y, box_w, box_h)
+
+        painter.setFont(QFont("Arial", 13, QFont.Weight.Bold))
+        painter.setPen(QColor(0, 255, 0))
+        painter.drawText(box_x + 10, box_y + 24, "VNAV")
+
+        painter.setFont(QFont("Arial", 11, QFont.Weight.Bold))
+        painter.setPen(QColor(255, 255, 255))
+
+        painter.drawText(
+            box_x + 10,
+            box_y + 50,
+            f"TGT ALT {pfd.glidepath_target_alt_ft:.0f}",
+        )
+        painter.drawText(
+            box_x + 10,
+            box_y + 73,
+            f"ALT ERR {pfd.glidepath_alt_error_ft:+.0f}",
+        )
+        painter.drawText(
+            box_x + 10,
+            box_y + 96,
+            f"GP {self.config.vnav.glidepath_angle_deg:.1f}°",
+        )
     
     def draw_safe_taxi_map(self, painter: QPainter, taxi_state, width: int, height: int) -> None:
         painter.fillRect(0, 0, width, height, QColor(15, 15, 15))
@@ -238,6 +271,8 @@ class BlakePfdDemo(QWidget):
         if features.show_nearest_airports:
             self.draw_nearest_airports_overlay(painter, self.pfd, width, height)
         self.draw_selected_airport_info(painter, width, height)
+        if self.config.vnav.enabled:
+            self.draw_vnav_info_box(painter, self.pfd, width, height)
         painter.end()
 
     def draw_background(self, painter: QPainter, width: int, height: int) -> None:
