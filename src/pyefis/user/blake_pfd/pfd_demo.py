@@ -24,6 +24,7 @@ from pyefis.user.blake_pfd.synthetic_vision import (
 )
 from pyefis.user.blake_pfd.terrain import TerrainComputer
 from pyefis.user.blake_pfd.weather_reader import WeatherReader
+from pyefis.user.blake_pfd.startup_check import run_startup_check
 
 
 class BlakePfdDemo(QWidget):
@@ -31,6 +32,8 @@ class BlakePfdDemo(QWidget):
         super().__init__()
 
         self.config = load_config()
+        self.startup_status = run_startup_check()
+        print(self.startup_status)
 
         self.database = AviationDatabase()
         self.database.load_all()
@@ -167,6 +170,9 @@ class BlakePfdDemo(QWidget):
 
         if features.show_weather:
             self.draw_weather_overlay(painter, self.weather.read(), width, height)
+            
+        if declutter_level <= 0:
+            self.draw_startup_status_box(painter, width, height)
 
         painter.end()
 
@@ -966,6 +972,32 @@ class BlakePfdDemo(QWidget):
         painter.setFont(QFont("Arial", 12, QFont.Weight.Bold))
         painter.setPen(QColor(0, 255, 0) if weather_state.ok else QColor(255, 180, 0))
         painter.drawText(width - 230, 105, "WX ONLINE" if weather_state.ok else "WX WAITING")
+        
+    def draw_startup_status_box(self, painter: QPainter, width: int, height: int) -> None:
+        status = self.startup_status
+
+        box_x = 20
+        box_y = 20
+        box_w = 280
+        box_h = 65
+
+        painter.fillRect(box_x, box_y, box_w, box_h, QColor(0, 0, 0))
+
+        color = QColor(0, 255, 0) if status.database_ok and status.config_ok else QColor(255, 0, 0)
+
+        painter.setPen(QPen(color, 2))
+        painter.drawRect(box_x, box_y, box_w, box_h)
+
+        painter.setFont(QFont("Arial", 11, QFont.Weight.Bold))
+        painter.setPen(color)
+        painter.drawText(box_x + 10, box_y + 24, status.status_text)
+
+        painter.setPen(QColor(255, 255, 255))
+        painter.drawText(
+            box_x + 10,
+            box_y + 50,
+            f"APT {status.airports_loaded}  NAV {status.navaids_loaded}",
+        )
 
 
 def point(x: float, y: float) -> QPointF:
