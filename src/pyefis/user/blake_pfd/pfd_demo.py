@@ -518,6 +518,7 @@ class BlakePfdDemo(QWidget):
         painter.drawRect(strip_x, strip_y, strip_w, strip_h)
 
         heading = pfd.heading_deg
+        bearing = getattr(pfd, "bearing_deg", heading)
         pixels_per_deg = 6.0
         center_x = strip_x + strip_w // 2
 
@@ -550,7 +551,24 @@ class BlakePfdDemo(QWidget):
             Qt.AlignmentFlag.AlignCenter,
             f"{heading:.0f}°",
         )
+            # Waypoint bearing pointer
+        bearing_error = (bearing - heading + 180.0) % 360.0 - 180.0
+        bearing_x = center_x + int(bearing_error * pixels_per_deg)
 
+        if strip_x <= bearing_x <= strip_x + strip_w:
+            painter.setBrush(QBrush(QColor(255, 0, 255)))
+            painter.setPen(QPen(QColor(255, 0, 255), 2))
+
+            wp_pointer = QPolygonF([
+                point(bearing_x, strip_y + strip_h - 5),
+                point(bearing_x - 10, strip_y + strip_h - 25),
+                point(bearing_x + 10, strip_y + strip_h - 25),
+            ])
+            painter.drawPolygon(wp_pointer)
+
+            painter.setFont(QFont("Arial", 10, QFont.Weight.Bold))
+            painter.drawText(bearing_x - 18, strip_y + strip_h - 30, "BRG")
+            
     def draw_turn_and_slip(self, painter: QPainter, pfd: PfdData, width: int, height: int) -> None:
         center_x = width // 2
         y = 78
