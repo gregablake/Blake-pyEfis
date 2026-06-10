@@ -13,6 +13,7 @@ because Codespaces may not support the full Qt display environment.
 """
 
 from __future__ import annotations
+from pyefis.screens import pfd
 from pyefis.user.blake_pfd.synthetic_vision import SyntheticVisionComputer, project_object_to_screen
 from pyefis.user.blake_pfd.safe_taxi import SafeTaxiComputer
 import argparse
@@ -223,9 +224,8 @@ class BlakePfdDemo(QWidget):
         if features.show_turn_rate or features.show_slip_skid:
             self.draw_turn_and_slip(painter, self.pfd, width, height)
 
-        if features.show_cdi or features.show_vdi:
+        if features.show_cdi or (features.show_vdi and self.config.vnav.enabled):
             self.draw_nav_cdi_vdi(painter, self.pfd, width, height)
-
             self.draw_top_data_bar(painter, self.pfd, width)
             self.draw_bottom_data_bar(painter, self.pfd, width, height)
             
@@ -644,7 +644,7 @@ class BlakePfdDemo(QWidget):
             painter.setPen(QColor(255, 255, 255))
             painter.drawText(center_x - 160, cdi_y + 28, "CDI")
 
-        if features.show_vdi:
+        if features.show_vdi and self.config.vnav.enabled:
             vdi_x = center_x + 290
             vdi_y_top = center_y - 120
             vdi_h = 240
@@ -739,8 +739,8 @@ class BlakePfdDemo(QWidget):
             parts.append(f"DTK {pfd.desired_track_deg:.0f}°")
         if features.show_cdi:
             parts.append(f"CDI {pfd.cdi_deflection_nm:+.2f} NM")
-        if features.show_vdi:
-            parts.append(f"VDI {pfd.vdi_deflection_deg:+.2f}°")
+        if features.show_vdi and self.config.vnav.enabled:
+            parts.append(f"VDI {pfd.vdi:+.2f}°")
 
         painter.drawText(
             QRectF(0, height - 35, width, 35),
