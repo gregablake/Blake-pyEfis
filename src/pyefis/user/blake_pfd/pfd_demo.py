@@ -25,12 +25,16 @@ from pyefis.user.blake_pfd.synthetic_vision import (
 from pyefis.user.blake_pfd.terrain import TerrainComputer
 from pyefis.user.blake_pfd.weather_reader import WeatherReader
 from pyefis.user.blake_pfd.startup_check import run_startup_check
+from pyefis.user.blake_pfd.flight_logger import FlightLogger
 
 
 class BlakePfdDemo(QWidget):
     def __init__(self, use_hardware: bool = False) -> None:
         super().__init__()
 
+        self.flight_logger = FlightLogger(
+            log_interval_s=self.config.logging.interval_s,
+        )
         self.config = load_config()
         self.startup_status = run_startup_check()
         print(self.startup_status)
@@ -55,8 +59,8 @@ class BlakePfdDemo(QWidget):
         self.sensors = BlakeHardwareSensorSource() if use_hardware else SimulatedSensorSource()
         self.use_hardware = use_hardware
         self.pfd: FlightData | None = None
-
         mode_name = "Hardware" if use_hardware else "Simulator"
+        
         self.setWindowTitle(f"Blake PFD Demo - {mode_name}")
         self.resize(self.config.display.width, self.config.display.height)
 
@@ -70,7 +74,14 @@ class BlakePfdDemo(QWidget):
     def update_data(self) -> None:
         raw = self.sensors.read()
         self.pfd = self.flight_computer.update(raw)
+        
+        if self.config.logging.enabled:
+           self.flight_logger.maybe_log(
+               self.pfd,
+               waypoint_id=self.config.navigation.selected_waypoint_id,
+               route_id=self.config.navigation.active_route_id,)
         self.update()
+    
 
     def paintEvent(self, event) -> None:  # noqa: N802
         if self.pfd is None:

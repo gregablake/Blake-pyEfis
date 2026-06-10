@@ -80,3 +80,6 @@ obs:
   selected_course_deg: 0.0
 declutter:
   level: 0
+logging:
+  enabled: true
+  interval_s: 1.0
