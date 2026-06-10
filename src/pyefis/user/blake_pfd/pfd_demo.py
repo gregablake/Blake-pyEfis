@@ -519,6 +519,7 @@ class BlakePfdDemo(QWidget):
 
         heading = pfd.heading_deg
         bearing = getattr(pfd, "bearing_deg", heading)
+        desired_track = getattr(pfd, "desired_track_deg", heading)
         pixels_per_deg = 6.0
         center_x = strip_x + strip_w // 2
 
@@ -568,6 +569,23 @@ class BlakePfdDemo(QWidget):
 
             painter.setFont(QFont("Arial", 10, QFont.Weight.Bold))
             painter.drawText(bearing_x - 18, strip_y + strip_h - 30, "BRG")
+                # Desired track pointer
+        dtk_error = (desired_track - heading + 180.0) % 360.0 - 180.0
+        dtk_x = center_x + int(dtk_error * pixels_per_deg)
+
+        if strip_x <= dtk_x <= strip_x + strip_w:
+            painter.setBrush(QBrush(QColor(0, 255, 0)))
+            painter.setPen(QPen(QColor(0, 255, 0), 2))
+
+            dtk_pointer = QPolygonF([
+                point(dtk_x, strip_y + 5),
+                point(dtk_x - 10, strip_y + 25),
+                point(dtk_x + 10, strip_y + 25),
+            ])
+            painter.drawPolygon(dtk_pointer)
+
+            painter.setFont(QFont("Arial", 10, QFont.Weight.Bold))
+            painter.drawText(dtk_x - 16, strip_y + 38, "DTK")
             
     def draw_turn_and_slip(self, painter: QPainter, pfd: PfdData, width: int, height: int) -> None:
         center_x = width // 2
