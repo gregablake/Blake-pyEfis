@@ -165,6 +165,7 @@ class BlakePfdDemo(QWidget):
 )
             self.draw_moving_map_overlay(painter, map_state, width, height)  
             self.draw_waypoint_info_box(painter, self.pfd, width, height)  
+            self.draw_navigation_status_box(painter, self.pfd, width, height)
 
         painter.end()
 
@@ -689,6 +690,36 @@ class BlakePfdDemo(QWidget):
         if active_leg:
             painter.drawText(box_x + 10, box_y + 85, f"LEG: {active_leg.from_ident} → {active_leg.to_ident}")
             painter.drawText(box_x + 10, box_y + 112, f"DTK: {active_leg.desired_track_deg:.0f}°")
+            
+    def draw_navigation_status_box(self, painter: QPainter, pfd: FlightData, width: int, height: int) -> None:
+        active_leg = self.route_manager.get_active_leg()
+        waypoint_id = self.config.navigation.selected_waypoint_id
+
+        box_x = width // 2 - 150
+        box_y = 150
+        box_w = 300
+        box_h = 90
+
+        painter.fillRect(box_x, box_y, box_w, box_h, QColor(0, 0, 0))
+        painter.setPen(QPen(QColor(0, 255, 0), 2))
+        painter.drawRect(box_x, box_y, box_w, box_h)
+
+        painter.setFont(QFont("Arial", 12, QFont.Weight.Bold))
+        painter.setPen(QColor(0, 255, 0))
+
+        if active_leg is not None:
+            painter.drawText(
+                box_x + 10,
+                box_y + 25,
+                f"ACTIVE LEG {active_leg.from_ident} → {active_leg.to_ident}",
+            )
+        else:
+            painter.drawText(box_x + 10, box_y + 25, f"DIRECT TO {waypoint_id}")
+
+        painter.setPen(QColor(255, 255, 255))
+        painter.drawText(box_x + 10, box_y + 52, f"DTK {pfd.desired_track_deg:.0f}°")
+        painter.drawText(box_x + 120, box_y + 52, f"BRG {pfd.bearing_deg:.0f}°")
+        painter.drawText(box_x + 10, box_y + 76, f"DIS {pfd.distance_to_waypoint_nm:.1f} NM")        
 
     def draw_selected_airport_info(self, painter: QPainter, width: int, height: int) -> None:
         airport_id = self.config.navigation.selected_waypoint_id
