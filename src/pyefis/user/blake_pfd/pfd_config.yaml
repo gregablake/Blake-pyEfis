@@ -13,6 +13,7 @@ features:
   show_vsi: true
   show_turn_rate: true
   show_slip_skid: true
+  show_moving_map: true
   show_oat: true
   show_obstacles: true
   show_tas: true

@@ -23,6 +23,7 @@ from pyefis.user.blake_pfd.synthetic_vision import (
 from pyefis.user.blake_pfd.weather_reader import WeatherReader
 from pyefis.user.blake_pfd.terrain import TerrainComputer
 from pyefis.user.blake_pfd.obstacles import ObstacleComputer
+from pyefis.user.blake_pfd.moving_map import MovingMapComputer
 
 
 class BlakePfdDemo(QWidget):
@@ -60,6 +61,7 @@ class BlakePfdDemo(QWidget):
         self.timer.start(50)
         self.terrain = TerrainComputer()
         self.obstacles = ObstacleComputer()
+        self.moving_map = MovingMapComputer()
 
     def update_data(self) -> None:
         raw = self.sensors.read()
@@ -149,7 +151,15 @@ class BlakePfdDemo(QWidget):
                aircraft_lon=-84.5120,
                aircraft_alt_ft=self.pfd.pressure_alt_ft,
     )
-            self.draw_obstacle_overlay(painter, obstacle_state, width, height)    
+            self.draw_obstacle_overlay(painter, obstacle_state, width, height)
+            
+        if features.show_moving_map:
+            map_state = self.moving_map.update(
+              database=self.database,
+              aircraft_lat=39.1031,
+              aircraft_lon=-84.5120,
+    )
+            self.draw_moving_map_overlay(painter, map_state, width, height)    
 
         painter.end()
 
@@ -681,6 +691,43 @@ class BlakePfdDemo(QWidget):
             box_y + 76,
             f"{obstacle.distance_nm:.1f}NM BRG {obstacle.bearing_deg:.0f}°",
         )
+        
+    def draw_moving_map_overlay(self, painter: QPainter, map_state, width: int, height: int) -> None:
+        box_x = 20
+        box_y = 300
+        box_w = 300
+        box_h = 220
+
+        painter.fillRect(box_x, box_y, box_w, box_h, QColor(0, 0, 0))
+        painter.setPen(QPen(QColor(0, 180, 255), 2))
+        painter.drawRect(box_x, box_y, box_w, box_h)
+
+        painter.setFont(QFont("Arial", 12, QFont.Weight.Bold))
+        painter.setPen(QColor(0, 180, 255))
+        painter.drawText(box_x + 10, box_y + 24, f"MAP {map_state.range_nm:.0f} NM")
+
+        center_x = box_x + box_w // 2
+        center_y = box_y + box_h // 2
+
+        painter.setBrush(QBrush(QColor(255, 220, 0)))
+        painter.setPen(QPen(QColor(255, 220, 0), 2))
+        painter.drawPolygon(QPolygonF([
+            point(center_x, center_y - 12),
+            point(center_x - 8, center_y + 10),
+            point(center_x + 8, center_y + 10),
+        ]))
+
+        painter.setFont(QFont("Arial", 9, QFont.Weight.Bold))
+        painter.setPen(QColor(255, 255, 255))
+
+        y = box_y + 50
+        for airport in map_state.airports[:6]:
+            painter.drawText(
+                box_x + 10,
+                y,
+                f"{airport.ident:<5} {airport.distance_nm:>4.1f}NM",
+            )
+            y += 24
 
 
 def point(x: float, y: float) -> QPointF:

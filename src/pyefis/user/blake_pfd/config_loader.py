@@ -54,6 +54,7 @@ class FeatureConfig:
     show_traffic: bool = False
     show_weather: bool = False
     show_obstacles: bool = True
+    show_moving_map: bool = True
 
 @dataclass
 class NavigationConfig:
