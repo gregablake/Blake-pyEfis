@@ -133,8 +133,10 @@ class BlakePfdDemo(QWidget):
         if declutter_level <= 0 and features.show_route:
             self.draw_route_overlay(painter, width, height)
 
-        if declutter_level <= 0:
+        if declutter_level <= 0 and features.show_airport_info:
             self.draw_selected_airport_info(painter, width, height)
+
+        if declutter_level <= 0:
             self.draw_waypoint_info_box(painter, self.pfd, width, height)
 
         if declutter_level <= 1:

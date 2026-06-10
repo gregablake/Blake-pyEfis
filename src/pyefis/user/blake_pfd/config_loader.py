@@ -55,7 +55,8 @@ class FeatureConfig:
     show_weather: bool = False
     show_obstacles: bool = True
     show_moving_map: bool = True
-
+    show_airport_info: bool = True
+    
 @dataclass
 class NavigationConfig:
     selected_waypoint_id: str = "KHAO"

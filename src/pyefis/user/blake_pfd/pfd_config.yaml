@@ -29,6 +29,8 @@ features:
   show_traffic: true
   show_weather: true
   show_nearest_airports: true
+  show_airport_info: true
+  show_route: true
 navigation:
   selected_waypoint_id: KHAO
   selected_waypoint_name: Butler Co Regional Airport - Hogan Field
