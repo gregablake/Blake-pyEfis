@@ -21,7 +21,7 @@ features:
   show_vdi: true
   show_hsi: true
   show_synthetic_vision: true
-  show_terrain: false
+  show_terrain: true
   show_highway_in_sky: true
   show_safe_taxi: true
   show_traffic: true

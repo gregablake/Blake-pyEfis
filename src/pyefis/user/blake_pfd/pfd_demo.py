@@ -137,7 +137,8 @@ class BlakePfdDemo(QWidget):
                 aircraft_alt_ft=self.pfd.pressure_alt_ft,
                 aircraft_lat=39.1031,
                 aircraft_lon=-84.5120,
-            )
+    )
+            self.draw_terrain_status_box(painter, terrain_state, width, height)
             self.draw_terrain_alert(painter, terrain_state, width, height)
 
         painter.end()
@@ -606,6 +607,40 @@ class BlakePfdDemo(QWidget):
             QRectF(0, 55, width, 40),
             Qt.AlignmentFlag.AlignCenter,
             f"TERRAIN {terrain_state.clearance_ft:.0f} FT",
+        )
+        
+    def draw_terrain_status_box(self, painter: QPainter, terrain_state, width: int, height: int) -> None:
+        box_x = 20
+        box_y = 95
+        box_w = 230
+        box_h = 90
+
+        painter.fillRect(box_x, box_y, box_w, box_h, QColor(0, 0, 0))
+
+        if terrain_state.warning_level == "red":
+            color = QColor(255, 0, 0)
+        elif terrain_state.warning_level == "yellow":
+            color = QColor(255, 220, 0)
+        else:
+            color = QColor(0, 255, 0)
+
+        painter.setPen(QPen(color, 2))
+        painter.drawRect(box_x, box_y, box_w, box_h)
+
+        painter.setFont(QFont("Arial", 12, QFont.Weight.Bold))
+        painter.setPen(color)
+        painter.drawText(box_x + 10, box_y + 25, "TERRAIN")
+
+        painter.setPen(QColor(255, 255, 255))
+        painter.drawText(
+            box_x + 10,
+            box_y + 52,
+            f"ELEV {terrain_state.terrain_elevation_ft:.0f} FT",
+        )
+        painter.drawText(
+            box_x + 10,
+            box_y + 76,
+            f"CLR {terrain_state.clearance_ft:.0f} FT",
         )
 
 
