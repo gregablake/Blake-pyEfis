@@ -105,10 +105,18 @@ class BlakePfdConfig:
     synthetic_vision: SyntheticVisionConfig
     stratux: StratuxConfig
     route: RouteConfig
+    navigation_scaling: NavigationScalingConfig
+
 @dataclass
 class RouteConfig:
     auto_sequence: bool = True
     sequence_distance_nm: float = 1.0
+@dataclass
+class NavigationScalingConfig:
+    mode: str = "enroute"
+    enroute_full_scale_nm: float = 5.0
+    terminal_full_scale_nm: float = 1.0
+    approach_full_scale_nm: float = 0.3
 
 
 def load_config(path: Path = CONFIG_PATH) -> BlakePfdConfig:
@@ -121,7 +129,7 @@ def load_config(path: Path = CONFIG_PATH) -> BlakePfdConfig:
         raw: dict[str, Any] = {}
     else:
         raw = yaml.safe_load(path.read_text()) or {}
-
+        
     return BlakePfdConfig(
         display=DisplayConfig(**raw.get("display", {})),
         sensors=SensorConfig(**raw.get("sensors", {})),
@@ -132,12 +140,25 @@ def load_config(path: Path = CONFIG_PATH) -> BlakePfdConfig:
         synthetic_vision=SyntheticVisionConfig(**raw.get("synthetic_vision", {})),
         stratux=StratuxConfig(**raw.get("stratux", {})),
         route=RouteConfig(**raw.get("route", {})),
+        navigation_scaling=NavigationScalingConfig(**raw.get("navigation_scaling", {}))
     )
+
 def demo() -> None:
     config = load_config()
 
     print("===== Blake PFD Config Demo =====")
     print(config)
+    
+def get_cdi_full_scale_nm(config) -> float:
+    mode = config.navigation_scaling.mode.lower()
+
+    if mode == "approach":
+        return config.navigation_scaling.approach_full_scale_nm
+
+    if mode == "terminal":
+        return config.navigation_scaling.terminal_full_scale_nm
+
+    return config.navigation_scaling.enroute_full_scale_nm
 
 
 if __name__ == "__main__":

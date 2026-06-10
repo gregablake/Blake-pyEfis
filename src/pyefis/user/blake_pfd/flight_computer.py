@@ -7,7 +7,7 @@ from pyefis.user.blake_pfd.airdata_calculations import (
     indicated_airspeed_from_dp,
     pressure_altitude,
 )
-from pyefis.user.blake_pfd.config_loader import load_config
+from pyefis.user.blake_pfd.config_loader import get_cdi_full_scale_nm, load_config
 from pyefis.user.blake_pfd.database_importer import AviationDatabase
 from pyefis.user.blake_pfd.nav_math import NavPoint, calculate_nav_solution
 from pyefis.user.blake_pfd.performance_calculations import (
@@ -117,7 +117,9 @@ class FlightComputer:
             aircraft_alt_ft=flight.pressure_alt_ft,
             waypoint=waypoint,
             desired_track_deg=desired_track,
+            cdi_full_scale_nm=get_cdi_full_scale_nm(self.config),
         )
+            
         
 
         flight.bearing_deg = nav.bearing_to_wp_deg
