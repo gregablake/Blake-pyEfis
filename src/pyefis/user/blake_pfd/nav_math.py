@@ -25,7 +25,8 @@ class NavSolution:
     cdi_percent: float = 0.0
     vdi_deflection_deg: float = 0.0
     course_error_deg: float = 0.0
-
+    glidepath_target_alt_ft: float = 0.0
+    glidepath_alt_error_ft: float = 0.0
 
 def calculate_nav_solution(
     aircraft_lat_deg: float,
@@ -35,6 +36,7 @@ def calculate_nav_solution(
     desired_track_deg: float,
     glidepath_angle_deg: float = 3.0,
     cdi_full_scale_nm: float = 1.0,
+    vnav_enabled: bool = True,
 ) -> NavSolution:
     bearing = bearing_between_points_deg(
         aircraft_lat_deg,
@@ -60,14 +62,18 @@ def calculate_nav_solution(
 
     cdi_percent = clamp(cross_track_nm / cdi_full_scale_nm, -1.0, 1.0)
 
-    target_alt_ft = calculate_glidepath_altitude_ft(
-        distance_nm,
-        waypoint.elevation_ft,
-        glidepath_angle_deg,
-    )
-
-    altitude_error_ft = aircraft_alt_ft - target_alt_ft
-    vdi_deflection_deg = clamp(altitude_error_ft / 300.0, -1.0, 1.0)
+    if vnav_enabled:
+        target_alt_ft = calculate_glidepath_altitude_ft(
+            distance_nm,
+            waypoint.elevation_ft,
+            glidepath_angle_deg,
+        )
+        altitude_error_ft = aircraft_alt_ft - target_alt_ft
+        vdi_deflection_deg = clamp(altitude_error_ft / 300.0, -1.0, 1.0)
+    else:
+        target_alt_ft = 0.0
+        altitude_error_ft = 0.0
+        vdi_deflection_deg = 0.0
 
     course_error_deg = angle_delta_deg(bearing, desired_track_deg)
 
@@ -79,8 +85,9 @@ def calculate_nav_solution(
         cdi_percent=cdi_percent,
         vdi_deflection_deg=vdi_deflection_deg,
         course_error_deg=course_error_deg,
+        glidepath_target_alt_ft=target_alt_ft,
+        glidepath_alt_error_ft=altitude_error_ft,
     )
-
 
 def bearing_between_points_deg(
     lat1_deg: float,

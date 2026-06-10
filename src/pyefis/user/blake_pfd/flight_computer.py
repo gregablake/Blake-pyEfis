@@ -1,22 +1,21 @@
 from __future__ import annotations
+
 from dataclasses import dataclass
-from math import atan2, cos, degrees, radians, sin, sqrt
 from time import monotonic
 
 from pyefis.user.blake_pfd.airdata_calculations import (
     indicated_airspeed_from_dp,
     pressure_altitude,
 )
-from pyefis.user.blake_pfd.config_loader import get_cdi_full_scale_nm, load_config
+from pyefis.user.blake_pfd.config_loader import load_config
 from pyefis.user.blake_pfd.database_importer import AviationDatabase
 from pyefis.user.blake_pfd.nav_math import NavPoint, calculate_nav_solution
 from pyefis.user.blake_pfd.performance_calculations import (
+    density_altitude_estimate,
+    true_airspeed_estimate,
     wind_from_heading_track,
 )
 from pyefis.user.blake_pfd.route_manager import RouteManager
-
-KNOTS_PER_MPS = 1.943844
-PA_STANDARD_SEA_LEVEL = 101325.0
 
 
 @dataclass
@@ -42,19 +41,27 @@ class FlightData:
     desired_track_deg: float = 0.0
     cdi: float = 0.0
     vdi: float = 0.0
+
     distance_to_waypoint_nm: float = 0.0
     course_error_deg: float = 0.0
+    
+    glidepath_target_alt_ft: float = 0.0
+    glidepath_alt_error_ft: float = 0.0
+
 
 class FlightComputer:
     def __init__(self) -> None:
         self.last_alt_ft: float | None = None
         self.last_time_s: float | None = None
         self.vsi_fpm: float = 0.0
+
         self.config = load_config()
+
         self.database = AviationDatabase()
         self.database.load_all()
+
         self.route_manager = RouteManager()
-        
+
     def update(self, raw) -> FlightData:
         flight = FlightData()
 
@@ -62,13 +69,13 @@ class FlightComputer:
         flight.pressure_alt_ft = pressure_altitude(raw.static_pressure_pa)
         flight.vsi_fpm = self.calculate_vsi(flight.pressure_alt_ft)
 
-        flight.tas_kt = estimate_true_airspeed_kt(
+        flight.tas_kt = true_airspeed_estimate(
             flight.ias_kt,
             flight.pressure_alt_ft,
             raw.outside_air_temp_c,
         )
 
-        flight.density_alt_ft = estimate_density_altitude_ft(
+        flight.density_alt_ft = density_altitude_estimate(
             flight.pressure_alt_ft,
             raw.outside_air_temp_c,
         )
@@ -83,29 +90,13 @@ class FlightComputer:
             ground_speed_kt=flight.ground_speed_kt,
             track_deg=flight.track_deg,
         )
+
         flight.turn_rate_deg_sec = raw.yaw_rate_deg_s
         flight.slip_skid = calculate_slip_skid(raw.accel_y_g, raw.accel_z_g)
 
-        airport = self.database.get_airport(self.config.navigation.selected_waypoint_id)
-
-        if airport is not None:
-            waypoint = NavPoint(
-                ident=airport.ident,
-                name=airport.name,
-                lat_deg=airport.lat_deg,
-                lon_deg=airport.lon_deg,
-                elevation_ft=airport.elevation_ft,
-            )
-        else:
-            waypoint = NavPoint(
-                ident=self.config.navigation.selected_waypoint_id,
-                name=self.config.navigation.selected_waypoint_name,
-                lat_deg=self.config.navigation.selected_waypoint_lat,
-                lon_deg=self.config.navigation.selected_waypoint_lon,
-                elevation_ft=0.0,
-            )
-
+        waypoint = self.get_selected_waypoint()
         active_leg = self.route_manager.get_active_leg()
+
         desired_track = raw.desired_track_deg or flight.track_deg
 
         if active_leg is not None:
@@ -117,25 +108,48 @@ class FlightComputer:
             aircraft_alt_ft=flight.pressure_alt_ft,
             waypoint=waypoint,
             desired_track_deg=desired_track,
+            glidepath_angle_deg=self.config.vnav.glidepath_angle_deg,
             cdi_full_scale_nm=get_cdi_full_scale_nm(self.config),
+            vnav_enabled=self.config.vnav.enabled,
         )
-            
-        
 
         flight.bearing_deg = nav.bearing_to_wp_deg
         flight.desired_track_deg = nav.desired_track_deg
         flight.distance_to_waypoint_nm = nav.distance_to_wp_nm
-        if self.config.route.auto_sequence:
-            self.route_manager.maybe_advance_leg(
-                distance_to_waypoint_nm=nav.distance_to_wp_nm,
-                sequence_distance_nm=self.config.route.sequence_distance_nm,
-    )
         flight.course_error_deg = nav.course_error_deg
         flight.cdi = nav.cdi_deflection_nm
         flight.vdi = nav.vdi_deflection_deg
 
+        if self.config.route.auto_sequence:
+            self.route_manager.maybe_advance_leg(
+                distance_to_waypoint_nm=nav.distance_to_wp_nm,
+                sequence_distance_nm=self.config.route.sequence_distance_nm,
+            )
+
         return flight
-    
+
+    def get_selected_waypoint(self) -> NavPoint:
+        airport = self.database.get_airport(
+            self.config.navigation.selected_waypoint_id
+        )
+
+        if airport is not None:
+            return NavPoint(
+                ident=airport.ident,
+                name=airport.name,
+                lat_deg=airport.lat_deg,
+                lon_deg=airport.lon_deg,
+                elevation_ft=airport.elevation_ft,
+            )
+
+        return NavPoint(
+            ident=self.config.navigation.selected_waypoint_id,
+            name=self.config.navigation.selected_waypoint_name,
+            lat_deg=self.config.navigation.selected_waypoint_lat,
+            lon_deg=self.config.navigation.selected_waypoint_lon,
+            elevation_ft=0.0,
+        )
+
     def calculate_vsi(self, current_alt_ft: float) -> float:
         now_s = monotonic()
 
@@ -160,60 +174,16 @@ class FlightComputer:
         return self.vsi_fpm
 
 
-def differential_pressure_to_ias_kt(dp_pa: float) -> float:
-    dp_pa = max(dp_pa, 0.0)
-    air_density_sea_level = 1.225
-    airspeed_mps = sqrt((2.0 * dp_pa) / air_density_sea_level)
-    return airspeed_mps * KNOTS_PER_MPS
+def get_cdi_full_scale_nm(config) -> float:
+    mode = config.navigation_scaling.mode.lower()
 
+    if mode == "approach":
+        return config.navigation_scaling.approach_full_scale_nm
 
-def pressure_to_altitude_ft(static_pressure_pa: float) -> float:
-    pressure = max(static_pressure_pa, 1.0)
-    return 145366.45 * (1.0 - (pressure / PA_STANDARD_SEA_LEVEL) ** 0.190284)
+    if mode == "terminal":
+        return config.navigation_scaling.terminal_full_scale_nm
 
-
-def estimate_true_airspeed_kt(
-    ias_kt: float,
-    pressure_alt_ft: float,
-    oat_c: float,
-) -> float:
-    altitude_correction = 1.0 + (0.02 * (pressure_alt_ft / 1000.0))
-    temp_correction = 1.0 + ((oat_c - 15.0) * 0.001)
-    return ias_kt * altitude_correction * temp_correction
-
-
-def estimate_density_altitude_ft(
-    pressure_alt_ft: float,
-    oat_c: float,
-) -> float:
-    isa_temp_c = 15.0 - (1.98 * (pressure_alt_ft / 1000.0))
-    return pressure_alt_ft + (120.0 * (oat_c - isa_temp_c))
-
-
-def estimate_wind(
-    true_airspeed_kt: float,
-    heading_deg: float,
-    ground_speed_kt: float,
-    track_deg: float,
-) -> tuple[float, float]:
-    heading_rad = radians(heading_deg)
-    track_rad = radians(track_deg)
-
-    air_north = true_airspeed_kt * cos(heading_rad)
-    air_east = true_airspeed_kt * sin(heading_rad)
-
-    ground_north = ground_speed_kt * cos(track_rad)
-    ground_east = ground_speed_kt * sin(track_rad)
-
-    wind_north = ground_north - air_north
-    wind_east = ground_east - air_east
-
-    wind_speed = sqrt((wind_north ** 2) + (wind_east ** 2))
-
-    wind_to_deg = degrees(atan2(wind_east, wind_north))
-    wind_from_deg = normalize_degrees(wind_to_deg + 180.0)
-
-    return wind_speed, wind_from_deg
+    return config.navigation_scaling.enroute_full_scale_nm
 
 
 def calculate_slip_skid(accel_y_g: float, accel_z_g: float) -> float:
