@@ -426,17 +426,39 @@ class BlakePfdDemo(QWidget):
 
             painter.drawText(label_x - 10, label_y + 5, heading_label(deg))
 
-        # Course needle / DTK
+        # Course needle / DTK with CDI offset
         dtk_relative = (desired_track - heading + 360) % 360
         dtk_angle = radians(dtk_relative - 90)
 
+        cdi_offset = max(-1.0, min(1.0, pfd.cdi)) * 35
+
+        offset_angle = dtk_angle + radians(90)
+        offset_x = int(cos(offset_angle) * cdi_offset)
+        offset_y = int(sin(offset_angle) * cdi_offset)
+
         painter.setPen(QPen(QColor(0, 255, 0), 3))
         painter.drawLine(
-            center_x,
-            center_y,
-            center_x + int(cos(dtk_angle) * radius),
-            center_y + int(sin(dtk_angle) * radius),
+            center_x + offset_x,
+            center_y + offset_y,
+            center_x + offset_x + int(cos(dtk_angle) * radius),
+            center_y + offset_y + int(sin(dtk_angle) * radius),
         )
+
+        painter.drawLine(
+            center_x + offset_x,
+            center_y + offset_y,
+            center_x + offset_x - int(cos(dtk_angle) * radius),
+            center_y + offset_y - int(sin(dtk_angle) * radius),
+        )
+        
+        # CDI scale dots
+        painter.setPen(QPen(QColor(255, 255, 255), 2))
+        painter.setBrush(QBrush(QColor(255, 255, 255)))
+
+        for dot in [-2, -1, 1, 2]:
+            dot_x = center_x + int(cos(offset_angle) * dot * 18)
+            dot_y = center_y + int(sin(offset_angle) * dot * 18)
+            painter.drawEllipse(dot_x - 3, dot_y - 3, 6, 6)
 
         # Bearing pointer
         brg_relative = (bearing - heading + 360) % 360
