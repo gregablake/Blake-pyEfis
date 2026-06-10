@@ -703,32 +703,44 @@ class BlakePfdDemo(QWidget):
         painter.setPen(QPen(QColor(0, 180, 255), 2))
         painter.drawRect(box_x, box_y, box_w, box_h)
 
-        painter.setFont(QFont("Arial", 12, QFont.Weight.Bold))
-        painter.setPen(QColor(0, 180, 255))
-        painter.drawText(box_x + 10, box_y + 24, f"MAP {map_state.range_nm:.0f} NM")
-
         center_x = box_x + box_w // 2
         center_y = box_y + box_h // 2
+        radius = min(box_w, box_h) * 0.42
 
-        painter.setBrush(QBrush(QColor(255, 220, 0)))
-        painter.setPen(QPen(QColor(255, 220, 0), 2))
-        painter.drawPolygon(QPolygonF([
-            point(center_x, center_y - 12),
-            point(center_x - 8, center_y + 10),
-            point(center_x + 8, center_y + 10),
-        ]))
+        painter.setPen(QPen(QColor(60, 60, 60), 1))
+        painter.drawEllipse(
+            center_x - int(radius),
+            center_y - int(radius),
+            int(radius * 2),
+            int(radius * 2),
+        )
 
-        painter.setFont(QFont("Arial", 9, QFont.Weight.Bold))
-        painter.setPen(QColor(255, 255, 255))
+        painter.setFont(QFont("Arial", 8, QFont.Weight.Bold))
 
-        y = box_y + 50
-        for airport in map_state.airports[:6]:
-            painter.drawText(
-                box_x + 10,
-                y,
-                f"{airport.ident:<5} {airport.distance_nm:>4.1f}NM",
+        for airport in map_state.airports:
+            if airport.distance_nm > map_state.range_nm:
+                continue
+
+            scale = airport.distance_nm / map_state.range_nm
+
+            angle = radians(airport.bearing_deg - 90)
+
+            airport_x = center_x + int(cos(angle) * radius * scale)
+            airport_y = center_y + int(sin(angle) * radius * scale)
+
+            painter.setPen(QPen(QColor(0, 255, 255), 2))
+            painter.drawEllipse(
+                airport_x - 3,
+                airport_y - 3,
+                6,
+                6,
             )
-            y += 24
+
+            painter.drawText(
+                airport_x + 5,
+                airport_y,
+                airport.ident,
+            )
 
 
 def point(x: float, y: float) -> QPointF:

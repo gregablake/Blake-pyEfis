@@ -2,6 +2,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from pyefis.user.blake_pfd.nav_math import (
+    bearing_between_points_deg,
+)
+
 
 @dataclass
 class MapAirport:
@@ -9,8 +13,8 @@ class MapAirport:
     name: str
     distance_nm: float
     bearing_deg: float
-    x: int = 0
-    y: int = 0
+    relative_x: float = 0.0
+    relative_y: float = 0.0
 
 
 @dataclass
@@ -27,14 +31,24 @@ class MovingMapComputer:
             max_results=8,
         )
 
-        airports = [
-            MapAirport(
-                ident=airport.ident,
-                name=airport.name,
-                distance_nm=distance_nm,
-                bearing_deg=0.0,
+        airports = []
+
+        for distance_nm, airport in nearest:
+
+            bearing_deg = bearing_between_points_deg(
+                aircraft_lat,
+                aircraft_lon,
+                airport.lat_deg,
+                airport.lon_deg,
             )
-            for distance_nm, airport in nearest
-        ]
+
+            airports.append(
+                MapAirport(
+                    ident=airport.ident,
+                    name=airport.name,
+                    distance_nm=distance_nm,
+                    bearing_deg=bearing_deg,
+                )
+            )
 
         return MovingMapState(airports=airports, range_nm=range_nm)
