@@ -26,10 +26,11 @@ from pyefis.user.blake_pfd.terrain import TerrainComputer
 from pyefis.user.blake_pfd.weather_reader import WeatherReader
 from pyefis.user.blake_pfd.startup_check import run_startup_check
 from pyefis.user.blake_pfd.flight_logger import FlightLogger
+from pyefis.user.blake_pfd.log_replay import LogReplaySource
 
 
 class BlakePfdDemo(QWidget):
-    def __init__(self, use_hardware: bool = False) -> None:
+    def __init__(self, use_hardware: bool = False, replay_log: str | None = None) -> None:
         super().__init__()
 
         self.flight_logger = FlightLogger(
@@ -56,6 +57,7 @@ class BlakePfdDemo(QWidget):
             port=self.config.stratux.gdl90_port,
         )
 
+        self.replay_source = LogReplaySource(replay_log) if replay_log else None
         self.sensors = BlakeHardwareSensorSource() if use_hardware else SimulatedSensorSource()
         self.use_hardware = use_hardware
         self.pfd: FlightData | None = None
@@ -72,8 +74,11 @@ class BlakePfdDemo(QWidget):
         self.timer.start(50)
 
     def update_data(self) -> None:
-        raw = self.sensors.read()
-        self.pfd = self.flight_computer.update(raw)
+        if self.replay_source is not None:
+           self.pfd = self.replay_source.read()
+        else:
+            raw = self.sensors.read()
+            self.pfd = self.flight_computer.update(raw)
         
         if self.config.logging.enabled:
            self.flight_logger.maybe_log(
@@ -1083,6 +1088,7 @@ def heading_label(heading: int) -> str:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Blake PFD visual demo")
+    parser.add_argument("--replay-log", help="Replay a recorded flight log CSV")
 
     mode_group = parser.add_mutually_exclusive_group()
     mode_group.add_argument("--sim", action="store_true", help="Run using simulated sensor data")
@@ -1095,7 +1101,10 @@ def main() -> None:
     args = parse_args()
 
     app = QApplication(sys.argv)
-    window = BlakePfdDemo(use_hardware=args.hardware)
+    window = BlakePfdDemo(
+        use_hardware=args.hardware,
+        replay_log=args.replay_log,
+    )
     window.show()
     sys.exit(app.exec())
 
