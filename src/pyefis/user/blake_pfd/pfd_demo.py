@@ -2,22 +2,30 @@ from __future__ import annotations
 
 import argparse
 import sys
-from collections.abc import Callable
 from math import cos, radians, sin
 
 from PyQt6.QtCore import Qt, QTimer, QRectF, QPointF
 from PyQt6.QtGui import QColor, QFont, QPainter, QPen, QBrush, QPolygonF
 from PyQt6.QtWidgets import QApplication, QWidget
 
+from pyefis.user.blake_pfd.airport_info_page import AirportInfoPage
 from pyefis.user.blake_pfd.config_loader import load_config
 from pyefis.user.blake_pfd.database_importer import AviationDatabase
+from pyefis.user.blake_pfd.ems_page import EmsPage
+from pyefis.user.blake_pfd.engine_sim import SimulatedEngineSource
 from pyefis.user.blake_pfd.flight_computer import FlightComputer, FlightData
+from pyefis.user.blake_pfd.flight_logger import FlightLogger
+from pyefis.user.blake_pfd.fms_page import FmsPage
 from pyefis.user.blake_pfd.hardware_readers import BlakeHardwareSensorSource
+from pyefis.user.blake_pfd.log_replay import LogReplaySource
+from pyefis.user.blake_pfd.master_warning import draw_master_warning_strip
 from pyefis.user.blake_pfd.moving_map import MovingMapComputer
+from pyefis.user.blake_pfd.nearest_page import NearestPage
 from pyefis.user.blake_pfd.obstacles import ObstacleComputer
 from pyefis.user.blake_pfd.route_manager import RouteManager
 from pyefis.user.blake_pfd.safe_taxi import SafeTaxiComputer
 from pyefis.user.blake_pfd.sensors_sim import SimulatedSensorSource
+from pyefis.user.blake_pfd.startup_check import run_startup_check
 from pyefis.user.blake_pfd.stratux_reader import StratuxReader
 from pyefis.user.blake_pfd.synthetic_vision import (
     SyntheticVisionComputer,
@@ -25,40 +33,17 @@ from pyefis.user.blake_pfd.synthetic_vision import (
 )
 from pyefis.user.blake_pfd.terrain import TerrainComputer
 from pyefis.user.blake_pfd.weather_reader import WeatherReader
-from pyefis.user.blake_pfd.startup_check import run_startup_check
-from pyefis.user.blake_pfd.flight_logger import FlightLogger
-from pyefis.user.blake_pfd.log_replay import LogReplaySource
-from pyefis.user.blake_pfd.fms_page import FmsPage
-from pyefis.user.blake_pfd.airport_info_page import AirportInfoPage
-from pyefis.user.blake_pfd.nearest_page import NearestPage
-from pyefis.user.blake_pfd.ems_page import EmsPage
-from pyefis.user.blake_pfd.engine_sim import SimulatedEngineSource
 
 
 class BlakePfdDemo(QWidget):
     def __init__(self, use_hardware: bool = False, replay_log: str | None = None) -> None:
         super().__init__()
 
-        self.flight_logger = FlightLogger(
-            log_interval_s=self.config.logging.interval_s,
-        )
-        self.ems_page = EmsPage()
-        self.engine_source = SimulatedEngineSource()
-        self.engine_data = self.engine_source.read()
         self.config = load_config()
         self.startup_status = run_startup_check()
-        print(self.startup_status)
 
         self.database = AviationDatabase()
         self.database.load_all()
-        
-        
-        self.airport_info_page = AirportInfoPage()
-        self.fms_page = FmsPage()
-        self.current_page = "PFD"
-        
-        self.nearest_page = NearestPage()
-        
 
         self.route_manager = RouteManager()
         self.flight_computer = FlightComputer()
@@ -69,6 +54,18 @@ class BlakePfdDemo(QWidget):
         self.obstacles = ObstacleComputer()
         self.weather = WeatherReader()
 
+        self.fms_page = FmsPage()
+        self.airport_info_page = AirportInfoPage()
+        self.nearest_page = NearestPage()
+        self.ems_page = EmsPage()
+
+        self.engine_source = SimulatedEngineSource()
+        self.engine_data = self.engine_source.read()
+
+        self.flight_logger = FlightLogger(
+            log_interval_s=self.config.logging.interval_s,
+        )
+
         self.stratux = StratuxReader(
             host=self.config.stratux.host,
             port=self.config.stratux.gdl90_port,
@@ -77,9 +74,11 @@ class BlakePfdDemo(QWidget):
         self.replay_source = LogReplaySource(replay_log) if replay_log else None
         self.sensors = BlakeHardwareSensorSource() if use_hardware else SimulatedSensorSource()
         self.use_hardware = use_hardware
+
         self.pfd: FlightData | None = None
-        mode_name = "Hardware" if use_hardware else "Simulator"
-        
+        self.current_page = "PFD"
+
+        mode_name = "Replay" if replay_log else ("Hardware" if use_hardware else "Simulator")
         self.setWindowTitle(f"Blake PFD Demo - {mode_name}")
         self.resize(self.config.display.width, self.config.display.height)
 
@@ -89,36 +88,53 @@ class BlakePfdDemo(QWidget):
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.update_data)
         self.timer.start(50)
-        
-        
-    def keyPressEvent(self, event) -> None:
-        if event.key() == Qt.Key.Key_F:
-            self.current_page = "FMS"
 
-        elif event.key() == Qt.Key.Key_P:
+    def update_data(self) -> None:
+        if self.replay_source is not None:
+            self.pfd = self.replay_source.read()
+        else:
+            raw = self.sensors.read()
+            self.pfd = self.flight_computer.update(raw)
+
+        self.engine_data = self.engine_source.read()
+
+        if self.config.logging.enabled and self.pfd is not None:
+            self.flight_logger.maybe_log(
+                self.pfd,
+                waypoint_id=self.config.navigation.selected_waypoint_id,
+            )
+
+        self.update()
+
+    def keyPressEvent(self, event) -> None:  # noqa: N802
+        if event.key() == Qt.Key.Key_P:
             self.current_page = "PFD"
 
-        elif self.current_page == "FMS":
+        elif event.key() == Qt.Key.Key_F:
+            self.current_page = "FMS"
 
+        elif event.key() == Qt.Key.Key_A:
+            self.current_page = "AIRPORT"
+
+        elif event.key() == Qt.Key.Key_N:
+            self.current_page = "NEAREST"
+
+        elif event.key() == Qt.Key.Key_E:
+            self.current_page = "EMS"
+
+        elif self.current_page == "FMS":
             if event.key() == Qt.Key.Key_Up:
                 self.fms_page.move_selection(-1, self.route_manager)
 
             elif event.key() == Qt.Key.Key_Down:
                 self.fms_page.move_selection(1, self.route_manager)
 
-            elif event.key() in (
-                Qt.Key.Key_Return,
-                Qt.Key.Key_Enter,
-            ):
-                selected = self.fms_page.get_selected_waypoint(
-                    self.route_manager
-                )
-
+            elif event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+                selected = self.fms_page.get_selected_waypoint(self.route_manager)
                 if selected is not None:
                     self.activate_direct_to(selected)
-                    
-        elif self.current_page == "NEAREST":
 
+        elif self.current_page == "NEAREST":
             nearest = self.database.nearest_airports(
                 39.1031,
                 -84.5120,
@@ -131,81 +147,50 @@ class BlakePfdDemo(QWidget):
             elif event.key() == Qt.Key.Key_Down:
                 self.nearest_page.move_selection(1, nearest)
 
-            elif event.key() in (
-                Qt.Key.Key_Return,
-                Qt.Key.Key_Enter,
-            ):
+            elif event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
                 selection = self.nearest_page.selected_airport(nearest)
 
                 if selection is not None:
-                    distance_nm, airport = selection
-
+                    _distance_nm, airport = selection
                     self.activate_direct_to(airport.ident)
-                    
-        elif event.key() == Qt.Key.Key_A:
-            self.current_page = "AIRPORT"
-                
-        elif event.key() == Qt.Key.Key_N:
-            self.current_page = "NEAREST"
-            
-        elif event.key() == Qt.Key.Key_E:
-             self.current_page = "EMS"
 
-        self.update() 
-        
+        self.update()
+
     def activate_direct_to(self, waypoint_id: str) -> None:
+        waypoint_id = waypoint_id.upper()
         print(f"Activating Direct-To {waypoint_id}")
 
         self.config.navigation.selected_waypoint_id = waypoint_id
-
-        try:
-            self.route_manager.activate_direct_to(waypoint_id)
-        except AttributeError:
-            pass
-
-    def update_data(self) -> None:
-        self.engine_data = self.engine_source.read()
-        if self.replay_source is not None:
-           self.pfd = self.replay_source.read()
-        else:
-            raw = self.sensors.read()
-            self.pfd = self.flight_computer.update(raw)
-        
-        if self.config.logging.enabled:
-           self.flight_logger.maybe_log(
-               self.pfd,
-               waypoint_id=self.config.navigation.selected_waypoint_id,
-               route_id=self.config.navigation.active_route_id,)
-        self.update()
-    
+        self.flight_computer.config.navigation.selected_waypoint_id = waypoint_id
 
     def paintEvent(self, event) -> None:  # noqa: N802
-        
         if self.pfd is None:
             return
 
         if self.current_page == "FMS":
-            self._paint_page(
-                lambda painter: self.fms_page.draw(
-                    painter,
-                    self.route_manager,
-                    self.pfd,
-                    self.width(),
-                    self.height(),
-                )
+            painter = QPainter(self)
+            self.fms_page.draw(
+                painter,
+                self.route_manager,
+                self.pfd,
+                self.width(),
+                self.height(),
             )
+            draw_master_warning_strip(painter, self.engine_data, self.width())
+            painter.end()
             return
 
         if self.current_page == "AIRPORT":
-            self._paint_page(
-                lambda painter: self.airport_info_page.draw(
-                    painter,
-                    self.database,
-                    self.config.navigation.selected_waypoint_id,
-                    self.width(),
-                    self.height(),
-                )
+            painter = QPainter(self)
+            self.airport_info_page.draw(
+                painter,
+                self.database,
+                self.config.navigation.selected_waypoint_id,
+                self.width(),
+                self.height(),
             )
+            draw_master_warning_strip(painter, self.engine_data, self.width())
+            painter.end()
             return
 
         if self.current_page == "NEAREST":
@@ -214,25 +199,29 @@ class BlakePfdDemo(QWidget):
                 -84.5120,
                 max_results=10,
             )
-            self._paint_page(
-                lambda painter: self.nearest_page.draw(
-                    painter,
-                    nearest,
-                    self.width(),
-                    self.height(),
-                )
+
+            painter = QPainter(self)
+            self.nearest_page.draw(
+                painter,
+                nearest,
+                self.width(),
+                self.height(),
             )
+            draw_master_warning_strip(painter, self.engine_data, self.width())
+            painter.end()
             return
+
         if self.current_page == "EMS":
             painter = QPainter(self)
             self.ems_page.draw(
-            painter,
-            self.engine_data,
-            self.width(),
-            self.height(),
-        )
-        painter.end()
-        return
+                painter,
+                self.engine_data,
+                self.width(),
+                self.height(),
+            )
+            draw_master_warning_strip(painter, self.engine_data, self.width())
+            painter.end()
+            return
 
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
@@ -247,6 +236,7 @@ class BlakePfdDemo(QWidget):
         taxi_state = self.safe_taxi.update(self.pfd)
         if features.show_safe_taxi and taxi_state.active:
             self.draw_safe_taxi_map(painter, taxi_state, width, height)
+            draw_master_warning_strip(painter, self.engine_data, width)
             painter.end()
             return
 
@@ -296,12 +286,13 @@ class BlakePfdDemo(QWidget):
             self.draw_route_overlay(painter, width, height)
 
         if declutter_level <= 0 and features.show_airport_info:
-            self.airport_info_page.draw(
-                painter, self.database, self.pfd.selected_airport_id, width, height
-            )
+            self.draw_selected_airport_info(painter, width, height)
 
         if declutter_level <= 0:
             self.draw_waypoint_info_box(painter, self.pfd, width, height)
+            self.draw_startup_status_box(painter, width, height)
+            self.draw_sensor_status_panel(painter, width, height)
+            self.draw_sim_profile_box(painter, width, height)
 
         if declutter_level <= 1:
             self.draw_navigation_status_box(painter, self.pfd, width, height)
@@ -331,21 +322,10 @@ class BlakePfdDemo(QWidget):
 
         if features.show_weather:
             self.draw_weather_overlay(painter, self.weather.read(), width, height)
-            
-        if declutter_level <= 0:
-            self.draw_startup_status_box(painter, width, height)
-            
-        if declutter_level <= 0:
-            self.draw_sensor_status_panel(painter, width, height)
+
+        draw_master_warning_strip(painter, self.engine_data, width)
 
         painter.end()
-
-    def _paint_page(self, draw_callback: Callable[[QPainter], None]) -> None:
-        painter = QPainter(self)
-        try:
-            draw_callback(painter)
-        finally:
-            painter.end()
 
     def draw_background(self, painter: QPainter, width: int, height: int) -> None:
         painter.fillRect(0, 0, width, height, QColor(5, 5, 8))
@@ -424,20 +404,8 @@ class BlakePfdDemo(QWidget):
         painter.rotate(-roll_deg)
         painter.translate(0, pitch_deg * 7.0)
 
-        painter.fillRect(
-            -horizon_width,
-            -horizon_height * 2,
-            horizon_width * 2,
-            horizon_height * 2,
-            QColor(25, 95, 180),
-        )
-        painter.fillRect(
-            -horizon_width,
-            0,
-            horizon_width * 2,
-            horizon_height * 2,
-            QColor(125, 70, 25),
-        )
+        painter.fillRect(-horizon_width, -horizon_height * 2, horizon_width * 2, horizon_height * 2, QColor(25, 95, 180))
+        painter.fillRect(-horizon_width, 0, horizon_width * 2, horizon_height * 2, QColor(125, 70, 25))
 
         painter.setPen(QPen(QColor(255, 255, 255), 3))
         painter.drawLine(-horizon_width, 0, horizon_width, 0)
@@ -602,27 +570,8 @@ class BlakePfdDemo(QWidget):
                 painter.drawText(x - 18, strip_y + 50, heading_label(normalized))
 
         self.draw_heading_pointer(painter, center_x, strip_y)
-        self.draw_bearing_pointer(
-            painter,
-            bearing,
-            heading,
-            center_x,
-            strip_x,
-            strip_y,
-            strip_w,
-            strip_h,
-            pixels_per_deg,
-        )
-        self.draw_desired_track_pointer(
-            painter,
-            desired_track,
-            heading,
-            center_x,
-            strip_x,
-            strip_y,
-            strip_w,
-            pixels_per_deg,
-        )
+        self.draw_bearing_pointer(painter, bearing, heading, center_x, strip_x, strip_y, strip_w, strip_h, pixels_per_deg)
+        self.draw_desired_track_pointer(painter, desired_track, heading, center_x, strip_x, strip_y, strip_w, pixels_per_deg)
 
     def draw_heading_pointer(self, painter: QPainter, center_x: int, strip_y: int) -> None:
         painter.setBrush(QBrush(QColor(255, 220, 0)))
@@ -773,11 +722,7 @@ class BlakePfdDemo(QWidget):
         if self.config.obs.enabled:
             painter.setFont(QFont("Arial", 10, QFont.Weight.Bold))
             painter.setPen(QColor(255, 255, 0))
-            painter.drawText(
-                center_x - 38,
-                center_y + radius + 22,
-                f"OBS {self.config.obs.selected_course_deg:.0f}°",
-            )
+            painter.drawText(center_x - 38, center_y + radius + 22, f"OBS {self.config.obs.selected_course_deg:.0f}°")
 
     def draw_turn_and_slip(self, painter: QPainter, pfd: FlightData, width: int, height: int) -> None:
         center_x = width // 2
@@ -846,11 +791,7 @@ class BlakePfdDemo(QWidget):
         if self.config.features.show_wind:
             parts.append(f"WIND {pfd.wind_direction_deg:.0f}°/{pfd.wind_speed_kt:.0f} KT")
 
-        painter.drawText(
-            QRectF(0, 0, width, 55),
-            Qt.AlignmentFlag.AlignCenter,
-            "    ".join(parts),
-        )
+        painter.drawText(QRectF(0, 0, width, 55), Qt.AlignmentFlag.AlignCenter, "    ".join(parts))
 
     def draw_bottom_data_bar(self, painter: QPainter, pfd: FlightData, width: int, height: int) -> None:
         painter.fillRect(0, height - 35, width, 35, QColor(0, 0, 0))
@@ -870,11 +811,7 @@ class BlakePfdDemo(QWidget):
         if self.config.features.show_vdi and self.config.vnav.enabled:
             parts.append(f"VDI {pfd.vdi:+.2f}°")
 
-        painter.drawText(
-            QRectF(0, height - 35, width, 35),
-            Qt.AlignmentFlag.AlignCenter,
-            "    ".join(parts),
-        )
+        painter.drawText(QRectF(0, height - 35, width, 35), Qt.AlignmentFlag.AlignCenter, "    ".join(parts))
 
     def draw_vnav_info_box(self, painter: QPainter, pfd: FlightData, width: int, height: int) -> None:
         box_x = width - 250
@@ -898,7 +835,6 @@ class BlakePfdDemo(QWidget):
         box_y = 60
         box_w = 240
         box_h = 85
-
         waypoint_id = self.config.navigation.selected_waypoint_id
 
         painter.fillRect(box_x, box_y, box_w, box_h, QColor(0, 0, 0))
@@ -987,12 +923,7 @@ class BlakePfdDemo(QWidget):
         radius = min(box_w, box_h) * 0.42
 
         painter.setPen(QPen(QColor(60, 60, 60), 1))
-        painter.drawEllipse(
-            center_x - int(radius),
-            center_y - int(radius),
-            int(radius * 2),
-            int(radius * 2),
-        )
+        painter.drawEllipse(center_x - int(radius), center_y - int(radius), int(radius * 2), int(radius * 2))
 
         painter.setFont(QFont("Arial", 8, QFont.Weight.Bold))
 
@@ -1052,98 +983,13 @@ class BlakePfdDemo(QWidget):
 
         if runway:
             painter.drawText(box_x + 10, box_y + 85, f"RWY {runway.le_ident}/{runway.he_ident}")
-            painter.drawText(
-                box_x + 10,
-                box_y + 110,
-                f"{runway.length_ft:.0f} x {runway.width_ft:.0f} ft {runway.surface[:10]}",
-            )
+            painter.drawText(box_x + 10, box_y + 110, f"{runway.length_ft:.0f} x {runway.width_ft:.0f} ft {runway.surface[:10]}")
 
         y = box_y + 145
         for freq in freqs[:5]:
             painter.drawText(box_x + 10, y, f"{freq.type}: {freq.frequency_mhz:.3f}")
             y += 22
 
-    def draw_terrain_status_box(self, painter: QPainter, terrain_state, width: int, height: int) -> None:
-        box_x = 20
-        box_y = 95
-        box_w = 230
-        box_h = 90
-
-        painter.fillRect(box_x, box_y, box_w, box_h, QColor(0, 0, 0))
-
-        if terrain_state.warning_level == "red":
-            color = QColor(255, 0, 0)
-        elif terrain_state.warning_level == "yellow":
-            color = QColor(255, 220, 0)
-        else:
-            color = QColor(0, 255, 0)
-
-        painter.setPen(QPen(color, 2))
-        painter.drawRect(box_x, box_y, box_w, box_h)
-
-        painter.setFont(QFont("Arial", 12, QFont.Weight.Bold))
-        painter.setPen(color)
-        painter.drawText(box_x + 10, box_y + 25, "TERRAIN")
-
-        painter.setPen(QColor(255, 255, 255))
-        painter.drawText(box_x + 10, box_y + 52, f"ELEV {terrain_state.terrain_elevation_ft:.0f} FT")
-        painter.drawText(box_x + 10, box_y + 76, f"CLR {terrain_state.clearance_ft:.0f} FT")
-
-    def draw_terrain_alert(self, painter: QPainter, terrain_state, width: int, height: int) -> None:
-        if terrain_state.warning_level == "none":
-            return
-
-        color = QColor(255, 0, 0) if terrain_state.warning_level == "red" else QColor(255, 220, 0)
-
-        painter.setPen(QPen(color, 3))
-        painter.setFont(QFont("Arial", 18, QFont.Weight.Bold))
-        painter.drawText(
-            QRectF(0, 55, width, 40),
-            Qt.AlignmentFlag.AlignCenter,
-            f"TERRAIN {terrain_state.clearance_ft:.0f} FT",
-        )
-
-    def draw_obstacle_overlay(self, painter: QPainter, obstacle_state, width: int, height: int) -> None:
-        if not obstacle_state.nearby:
-            return
-
-        box_x = 20
-        box_y = 195
-        box_w = 260
-        box_h = 90
-
-        color = QColor(255, 0, 0) if obstacle_state.warning else QColor(255, 220, 0)
-
-        painter.fillRect(box_x, box_y, box_w, box_h, QColor(0, 0, 0))
-        painter.setPen(QPen(color, 2))
-        painter.drawRect(box_x, box_y, box_w, box_h)
-
-        painter.setFont(QFont("Arial", 12, QFont.Weight.Bold))
-        painter.setPen(color)
-        painter.drawText(box_x + 10, box_y + 25, "OBSTACLE")
-
-        obstacle = obstacle_state.nearby[0]
-
-        painter.setPen(QColor(255, 255, 255))
-        painter.drawText(box_x + 10, box_y + 52, f"{obstacle.ident}")
-        painter.drawText(box_x + 10, box_y + 76, f"{obstacle.distance_nm:.1f}NM BRG {obstacle.bearing_deg:.0f}°")
-
-    def draw_safe_taxi_map(self, painter: QPainter, taxi_state, width: int, height: int) -> None:
-        painter.fillRect(0, 0, width, height, QColor(15, 15, 15))
-        painter.setPen(QPen(QColor(255, 255, 255), 2))
-        painter.setFont(QFont("Arial", 22, QFont.Weight.Bold))
-        painter.drawText(30, 45, f"SAFE TAXI - {taxi_state.airport_id}")
-
-    def draw_traffic_overlay(self, painter: QPainter, stratux_state, width: int, height: int) -> None:
-        painter.setFont(QFont("Arial", 12, QFont.Weight.Bold))
-        painter.setPen(QColor(0, 255, 255) if stratux_state.ok else QColor(255, 180, 0))
-        painter.drawText(width - 230, 80, "STRATUX ONLINE" if stratux_state.ok else "STRATUX OFFLINE")
-
-    def draw_weather_overlay(self, painter: QPainter, weather_state, width: int, height: int) -> None:
-        painter.setFont(QFont("Arial", 12, QFont.Weight.Bold))
-        painter.setPen(QColor(0, 255, 0) if weather_state.ok else QColor(255, 180, 0))
-        painter.drawText(width - 230, 105, "WX ONLINE" if weather_state.ok else "WX WAITING")
-        
     def draw_startup_status_box(self, painter: QPainter, width: int, height: int) -> None:
         status = self.startup_status
 
@@ -1164,12 +1010,8 @@ class BlakePfdDemo(QWidget):
         painter.drawText(box_x + 10, box_y + 24, status.status_text)
 
         painter.setPen(QColor(255, 255, 255))
-        painter.drawText(
-            box_x + 10,
-            box_y + 50,
-            f"APT {status.airports_loaded}  NAV {status.navaids_loaded}",
-        )
-    
+        painter.drawText(box_x + 10, box_y + 50, f"APT {status.airports_loaded}  NAV {status.navaids_loaded}")
+
     def draw_sensor_status_panel(self, painter: QPainter, width: int, height: int) -> None:
         box_x = 310
         box_y = 20
@@ -1211,11 +1053,106 @@ class BlakePfdDemo(QWidget):
                 ok_text("IAS", status.airspeed_ok),
             ]),
         )
-        painter.drawText(
-            box_x + 10,
-            box_y + 76,
-            ok_text("GPS", status.gps_ok),
-        )
+        painter.drawText(box_x + 10, box_y + 76, ok_text("GPS", status.gps_ok))
+
+    def draw_sim_profile_box(self, painter: QPainter, width: int, height: int) -> None:
+        if self.use_hardware:
+            return
+
+        profile = self.config.simulation.profile.upper()
+
+        box_x = 620
+        box_y = 20
+        box_w = 230
+        box_h = 65
+
+        painter.fillRect(box_x, box_y, box_w, box_h, QColor(0, 0, 0))
+        painter.setPen(QPen(QColor(0, 180, 255), 2))
+        painter.drawRect(box_x, box_y, box_w, box_h)
+
+        painter.setFont(QFont("Arial", 11, QFont.Weight.Bold))
+        painter.setPen(QColor(0, 180, 255))
+        painter.drawText(box_x + 10, box_y + 25, "SIM PROFILE")
+
+        painter.setPen(QColor(255, 255, 255))
+        painter.drawText(box_x + 10, box_y + 50, profile)
+
+    def draw_terrain_status_box(self, painter: QPainter, terrain_state, width: int, height: int) -> None:
+        box_x = 20
+        box_y = 95
+        box_w = 230
+        box_h = 90
+
+        painter.fillRect(box_x, box_y, box_w, box_h, QColor(0, 0, 0))
+
+        if terrain_state.warning_level == "red":
+            color = QColor(255, 0, 0)
+        elif terrain_state.warning_level == "yellow":
+            color = QColor(255, 220, 0)
+        else:
+            color = QColor(0, 255, 0)
+
+        painter.setPen(QPen(color, 2))
+        painter.drawRect(box_x, box_y, box_w, box_h)
+
+        painter.setFont(QFont("Arial", 12, QFont.Weight.Bold))
+        painter.setPen(color)
+        painter.drawText(box_x + 10, box_y + 25, "TERRAIN")
+
+        painter.setPen(QColor(255, 255, 255))
+        painter.drawText(box_x + 10, box_y + 52, f"ELEV {terrain_state.terrain_elevation_ft:.0f} FT")
+        painter.drawText(box_x + 10, box_y + 76, f"CLR {terrain_state.clearance_ft:.0f} FT")
+
+    def draw_terrain_alert(self, painter: QPainter, terrain_state, width: int, height: int) -> None:
+        if terrain_state.warning_level == "none":
+            return
+
+        color = QColor(255, 0, 0) if terrain_state.warning_level == "red" else QColor(255, 220, 0)
+
+        painter.setPen(QPen(color, 3))
+        painter.setFont(QFont("Arial", 18, QFont.Weight.Bold))
+        painter.drawText(QRectF(0, 55, width, 40), Qt.AlignmentFlag.AlignCenter, f"TERRAIN {terrain_state.clearance_ft:.0f} FT")
+
+    def draw_obstacle_overlay(self, painter: QPainter, obstacle_state, width: int, height: int) -> None:
+        if not obstacle_state.nearby:
+            return
+
+        box_x = 20
+        box_y = 195
+        box_w = 260
+        box_h = 90
+
+        color = QColor(255, 0, 0) if obstacle_state.warning else QColor(255, 220, 0)
+
+        painter.fillRect(box_x, box_y, box_w, box_h, QColor(0, 0, 0))
+        painter.setPen(QPen(color, 2))
+        painter.drawRect(box_x, box_y, box_w, box_h)
+
+        painter.setFont(QFont("Arial", 12, QFont.Weight.Bold))
+        painter.setPen(color)
+        painter.drawText(box_x + 10, box_y + 25, "OBSTACLE")
+
+        obstacle = obstacle_state.nearby[0]
+
+        painter.setPen(QColor(255, 255, 255))
+        painter.drawText(box_x + 10, box_y + 52, f"{obstacle.ident}")
+        painter.drawText(box_x + 10, box_y + 76, f"{obstacle.distance_nm:.1f}NM BRG {obstacle.bearing_deg:.0f}°")
+
+    def draw_safe_taxi_map(self, painter: QPainter, taxi_state, width: int, height: int) -> None:
+        painter.fillRect(0, 0, width, height, QColor(15, 15, 15))
+        painter.setPen(QPen(QColor(255, 255, 255), 2))
+        painter.setFont(QFont("Arial", 22, QFont.Weight.Bold))
+        painter.drawText(30, 45, f"SAFE TAXI - {taxi_state.airport_id}")
+
+    def draw_traffic_overlay(self, painter: QPainter, stratux_state, width: int, height: int) -> None:
+        painter.setFont(QFont("Arial", 12, QFont.Weight.Bold))
+        painter.setPen(QColor(0, 255, 255) if stratux_state.ok else QColor(255, 180, 0))
+        painter.drawText(width - 230, 80, "STRATUX ONLINE" if stratux_state.ok else "STRATUX OFFLINE")
+
+    def draw_weather_overlay(self, painter: QPainter, weather_state, width: int, height: int) -> None:
+        painter.setFont(QFont("Arial", 12, QFont.Weight.Bold))
+        painter.setPen(QColor(0, 255, 0) if weather_state.ok else QColor(255, 180, 0))
+        painter.drawText(width - 230, 105, "WX ONLINE" if weather_state.ok else "WX WAITING")
 
 
 def point(x: float, y: float) -> QPointF:
@@ -1239,11 +1176,12 @@ def heading_label(heading: int) -> str:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Blake PFD visual demo")
-    parser.add_argument("--replay-log", help="Replay a recorded flight log CSV")
 
     mode_group = parser.add_mutually_exclusive_group()
     mode_group.add_argument("--sim", action="store_true", help="Run using simulated sensor data")
     mode_group.add_argument("--hardware", action="store_true", help="Run using real hardware sensor readers")
+
+    parser.add_argument("--replay-log", help="Replay a recorded flight log CSV")
 
     return parser.parse_args()
 
