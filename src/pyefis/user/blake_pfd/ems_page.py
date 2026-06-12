@@ -14,129 +14,175 @@ class EmsPage:
         width: int,
         height: int,
     ) -> None:
-
         painter.fillRect(0, 0, width, height, QColor(0, 0, 0))
 
         painter.setPen(QColor(0, 255, 0))
         painter.setFont(QFont("Arial", 24, QFont.Weight.Bold))
-
         painter.drawText(
             QRectF(0, 20, width, 40),
             Qt.AlignmentFlag.AlignCenter,
             "ENGINE MONITORING SYSTEM",
         )
-        self.draw_annunciators(
+
+        self.draw_annunciators(painter, engine, width)
+
+        y = 105
+        painter.setFont(QFont("Arial", 16, QFont.Weight.Bold))
+
+        self.draw_value(painter, 40, y, "RPM", engine.rpm, "", self.rpm_color(engine.rpm))
+        y += 35
+
+        self.draw_value(painter, 40, y, "VOLTS", engine.volts, "V", self.voltage_color(engine.volts), decimals=1)
+        y += 35
+
+        self.draw_value(painter, 40, y, "AMPS", engine.amps, "A", QColor(255, 255, 255), decimals=1, signed=True)
+        y += 35
+
+        self.draw_value(
             painter,
-            engine,
-            width,
+            40,
+            y,
+            "OIL PSI",
+            engine.oil_pressure_psi,
+            "",
+            self.oil_pressure_color(engine.oil_pressure_psi, engine.rpm),
         )
-
-        y = 90
-
-        painter.setFont(QFont("Arial", 16))
-        painter.setPen(QColor(255, 255, 255))
-
-        painter.drawText(40, y, f"RPM:            {engine.rpm:.0f}")
         y += 35
 
-        painter.drawText(40, y, f"VOLTS:          {engine.volts:.1f}")
+        self.draw_value(painter, 40, y, "OIL TEMP", engine.oil_temp_f, "°F", self.oil_temp_color(engine.oil_temp_f))
         y += 35
 
-        painter.drawText(40, y, f"AMPS:           {engine.amps:+.1f}")
+        self.draw_value(painter, 40, y, "FUEL PSI", engine.fuel_pressure_psi, "", QColor(255, 255, 255), decimals=1)
+        y += 45
+
+        self.draw_value(painter, 40, y, "FUEL FLOW", engine.fuel_flow_gph, "GPH", QColor(255, 255, 255), decimals=1)
         y += 35
 
-        painter.drawText(40, y, f"OIL PSI:        {engine.oil_pressure_psi:.0f}")
+        self.draw_value(painter, 40, y, "FUEL REM", engine.fuel_remaining_gal, "GAL", QColor(255, 255, 255), decimals=1)
         y += 35
 
-        painter.drawText(40, y, f"OIL TEMP:       {engine.oil_temp_f:.0f}°F")
+        self.draw_value(painter, 40, y, "FUEL USED", engine.fuel_used_gal, "GAL", QColor(255, 255, 255), decimals=1)
         y += 35
 
-        painter.drawText(40, y, f"FUEL PSI:       {engine.fuel_pressure_psi:.1f}")
-        y += 50
+        self.draw_value(painter, 40, y, "ENDURANCE", engine.endurance_hr, "HR", QColor(255, 255, 255), decimals=1)
 
-        painter.setFont(QFont("Arial", 14, QFont.Weight.Bold))
-
-        for i, cht in enumerate(engine.cht_f):
-            painter.setPen(self.temperature_color(cht, 425, 450))
-            painter.drawText(
-                40,
-                y,
-                f"CHT{i+1}: {cht:.0f}°F",
-            )
-            y += 28
-
-        y = 300
-
-        for i, egt in enumerate(engine.egt_f):
-            painter.setPen(self.temperature_color(egt, 1450, 1500))
-            painter.drawText(
-                350,
-                y,
-                f"EGT{i+1}: {egt:.0f}°F",
-            )
-            y += 35
-
-        y = height - 120
-
-        painter.setFont(QFont("Arial", 14, QFont.Weight.Bold))
-
-        painter.setPen(QColor(0, 255, 0) if engine.ignition_a else QColor(255, 0, 0))
-        painter.drawText(40, y, f"IGN A {'ON' if engine.ignition_a else 'OFF'}")
-
-        y += 30
-
-        painter.setPen(QColor(0, 255, 0) if engine.ignition_b else QColor(255, 0, 0))
-        painter.drawText(40, y, f"IGN B {'ON' if engine.ignition_b else 'OFF'}")
-
-        y += 30
-
-        painter.setPen(QColor(0, 255, 0) if engine.alternator_online else QColor(255, 0, 0))
-        painter.drawText(40, y, f"ALT {'ON' if engine.alternator_online else 'OFF'}")
-
-        y += 30
-
-        painter.setPen(QColor(255, 220, 0) if engine.starter_engaged else QColor(255, 255, 255))
-        painter.drawText(40, y, f"START {'ON' if engine.starter_engaged else 'OFF'}")
+        self.draw_cht_column(painter, engine, x=390, y=105)
+        self.draw_egt_column(painter, engine, x=620, y=105)
+        self.draw_status_indicators(painter, engine, width, height)
 
         painter.setPen(QColor(130, 130, 130))
         painter.setFont(QFont("Arial", 11))
+        painter.drawText(40, height - 20, "P = PFD    E = EMS")
 
-        painter.drawText(
-            40,
-            height - 20,
-            "P = PFD    E = EMS",
-        )
-        
-    def draw_annunciators(
+    def draw_value(
         self,
         painter: QPainter,
-        engine: EngineData,
-        width: int,
+        x: int,
+        y: int,
+        label: str,
+        value: float,
+        unit: str,
+        color: QColor,
+        decimals: int = 0,
+        signed: bool = False,
     ) -> None:
+        painter.setPen(QColor(255, 255, 255))
+        painter.drawText(x, y, f"{label:<12}")
 
-        annunciators = []
+        painter.setPen(color)
 
-        if engine.rpm > 1700 and engine.oil_pressure_psi < 16:
+        if signed:
+            text = f"{value:+.{decimals}f}"
+        else:
+            text = f"{value:.{decimals}f}"
+
+        painter.drawText(x + 155, y, f"{text} {unit}")
+
+    def draw_cht_column(self, painter: QPainter, engine: EngineData, x: int, y: int) -> None:
+        painter.setFont(QFont("Arial", 16, QFont.Weight.Bold))
+        painter.setPen(QColor(0, 180, 255))
+        painter.drawText(x, y, "CHT")
+
+        y += 35
+
+        for index, cht in enumerate(engine.cht_f, start=1):
+            painter.setPen(self.cht_color(cht))
+            painter.drawText(x, y, f"CHT{index}: {cht:.0f}°F")
+            y += 32
+
+    def draw_egt_column(self, painter: QPainter, engine: EngineData, x: int, y: int) -> None:
+        painter.setFont(QFont("Arial", 16, QFont.Weight.Bold))
+        painter.setPen(QColor(0, 180, 255))
+        painter.drawText(x, y, "EGT")
+
+        y += 35
+
+        for index, egt in enumerate(engine.egt_f, start=1):
+            painter.setPen(self.egt_color(egt))
+            painter.drawText(x, y, f"EGT{index}: {egt:.0f}°F")
+            y += 32
+
+    def draw_status_indicators(self, painter: QPainter, engine: EngineData, width: int, height: int) -> None:
+        x = width - 220
+        y = height - 170
+
+        painter.setFont(QFont("Arial", 15, QFont.Weight.Bold))
+
+        self.draw_status(painter, x, y, "IGN A", engine.ignition_a)
+        y += 35
+
+        self.draw_status(painter, x, y, "IGN B", engine.ignition_b)
+        y += 35
+
+        self.draw_status(painter, x, y, "ALT", engine.alternator_online)
+        y += 35
+
+        starter_color = QColor(255, 220, 0) if engine.starter_engaged else QColor(255, 255, 255)
+        painter.setPen(starter_color)
+        painter.drawText(x, y, f"START {'ON' if engine.starter_engaged else 'OFF'}")
+
+    def draw_status(self, painter: QPainter, x: int, y: int, label: str, ok: bool) -> None:
+        painter.setPen(QColor(0, 255, 0) if ok else QColor(255, 0, 0))
+        painter.drawText(x, y, f"{label} {'ON' if ok else 'OFF'}")
+
+    def draw_annunciators(self, painter: QPainter, engine: EngineData, width: int) -> None:
+        annunciators: list[tuple[str, QColor]] = []
+
+        if engine.rpm > 2000 and engine.oil_pressure_psi < 20:
             annunciators.append(("LOW OIL PRESS", QColor(255, 0, 0)))
 
-        if engine.oil_temp_f > 260:
+        if engine.oil_pressure_psi <= 15:
+            annunciators.append(("OIL PRESS", QColor(255, 0, 0)))
+
+        if engine.oil_temp_f >= 260:
             annunciators.append(("HIGH OIL TEMP", QColor(255, 0, 0)))
-        elif engine.oil_temp_f > 235:
+        elif engine.oil_temp_f >= 235:
             annunciators.append(("OIL TEMP", QColor(255, 220, 0)))
 
-        if engine.volts < 12.0:
-            annunciators.append(("LOW VOLTS", QColor(255, 0, 0)))
-        elif engine.volts < 12.5:
+        if engine.volts < 12.0 or engine.volts > 16.0:
+            annunciators.append(("VOLTS", QColor(255, 0, 0)))
+        elif engine.volts < 13.2 or engine.volts > 15.5:
             annunciators.append(("VOLTS", QColor(255, 220, 0)))
+
+        if max(engine.cht_f or [0.0]) >= 450:
+            annunciators.append(("HIGH CHT", QColor(255, 0, 0)))
+        elif max(engine.cht_f or [0.0]) >= 425:
+            annunciators.append(("CHT", QColor(255, 220, 0)))
+
+        if max(engine.egt_f or [0.0]) >= 1600:
+            annunciators.append(("HIGH EGT", QColor(255, 0, 0)))
+
+        if engine.rpm > 3500:
+            annunciators.append(("RPM", QColor(255, 0, 0)))
 
         if not engine.alternator_online:
             annunciators.append(("ALT FAIL", QColor(255, 0, 0)))
 
         if not engine.ignition_a:
-            annunciators.append(("IGN A", QColor(255, 0, 0)))
+            annunciators.append(("IGN A OFF", QColor(255, 0, 0)))
 
         if not engine.ignition_b:
-            annunciators.append(("IGN B", QColor(255, 0, 0)))
+            annunciators.append(("IGN B OFF", QColor(255, 0, 0)))
 
         if engine.starter_engaged:
             annunciators.append(("START", QColor(255, 220, 0)))
@@ -145,32 +191,72 @@ class EmsPage:
             annunciators.append(("ENGINE NORMAL", QColor(0, 255, 0)))
 
         x = 20
+        y = 62
+        box_w = 150
+        box_h = 28
 
-        painter.setFont(QFont("Arial", 12, QFont.Weight.Bold))
+        painter.setFont(QFont("Arial", 11, QFont.Weight.Bold))
 
-        for text, color in annunciators:
-            painter.fillRect(x, 55, 140, 28, color)
-
+        for text, color in annunciators[:6]:
+            painter.fillRect(x, y, box_w, box_h, color)
             painter.setPen(QColor(0, 0, 0))
             painter.drawText(
-                QRectF(x, 55, 140, 28),
+                QRectF(x, y, box_w, box_h),
                 Qt.AlignmentFlag.AlignCenter,
                 text,
             )
+            x += box_w + 10
 
-            x += 150
-
-    def temperature_color(
-        self,
-        value: float,
-        yellow_limit: float,
-        red_limit: float,
-    ) -> QColor:
-
-        if value >= red_limit:
+    def rpm_color(self, rpm: float) -> QColor:
+        if rpm > 3500:
             return QColor(255, 0, 0)
 
-        if value >= yellow_limit:
+        return QColor(0, 255, 0)
+
+    def cht_color(self, value: float) -> QColor:
+        if value >= 450:
+            return QColor(255, 0, 0)
+
+        if value >= 425:
+            return QColor(255, 220, 0)
+
+        return QColor(0, 255, 0)
+
+    def egt_color(self, value: float) -> QColor:
+        if value >= 1600:
+            return QColor(255, 0, 0)
+
+        return QColor(0, 255, 0)
+
+    def oil_temp_color(self, value: float) -> QColor:
+        if value >= 260:
+            return QColor(255, 0, 0)
+
+        if value >= 235:
+            return QColor(255, 220, 0)
+
+        return QColor(0, 255, 0)
+
+    def oil_pressure_color(self, pressure: float, rpm: float) -> QColor:
+        if pressure <= 15:
+            return QColor(255, 0, 0)
+
+        if rpm > 2000 and pressure < 20:
+            return QColor(255, 0, 0)
+
+        if pressure >= 50:
+            return QColor(255, 220, 0)
+
+        if pressure < 20:
+            return QColor(255, 220, 0)
+
+        return QColor(0, 255, 0)
+
+    def voltage_color(self, volts: float) -> QColor:
+        if volts < 12.0 or volts > 16.0:
+            return QColor(255, 0, 0)
+
+        if volts < 13.2 or volts > 15.5:
             return QColor(255, 220, 0)
 
         return QColor(0, 255, 0)
