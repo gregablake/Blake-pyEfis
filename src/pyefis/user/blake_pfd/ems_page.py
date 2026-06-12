@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from PyQt6.QtCore import Qt, QRectF
-from PyQt6.QtGui import QColor, QFont, QPainter
+from PyQt6.QtGui import QColor, QFont, QPainter, QPen
 
 from pyefis.user.blake_pfd.engine_data import EngineData
 
@@ -106,8 +106,16 @@ class EmsPage:
         y += 35
 
         for index, cht in enumerate(engine.cht_f, start=1):
-            painter.setPen(self.cht_color(cht))
-            painter.drawText(x, y, f"CHT{index}: {cht:.0f}°F")
+            self.draw_bar(
+                painter=painter,
+                x=x,
+                y=y,
+                label=f"CHT{index}",
+                value=cht,
+                min_value=200,
+                max_value=500,
+                color=self.cht_color(cht),
+            )
             y += 32
 
     def draw_egt_column(self, painter: QPainter, engine: EngineData, x: int, y: int) -> None:
@@ -118,8 +126,16 @@ class EmsPage:
         y += 35
 
         for index, egt in enumerate(engine.egt_f, start=1):
-            painter.setPen(self.egt_color(egt))
-            painter.drawText(x, y, f"EGT{index}: {egt:.0f}°F")
+            self.draw_bar(
+                painter=painter,
+                x=x,
+                y=y,
+                label=f"EGT{index}",
+                value=egt,
+                min_value=1000,
+                max_value=1650,
+                color=self.egt_color(egt),
+            )
             y += 32
 
     def draw_status_indicators(self, painter: QPainter, engine: EngineData, width: int, height: int) -> None:
@@ -206,6 +222,37 @@ class EmsPage:
                 text,
             )
             x += box_w + 10
+            
+    def draw_bar(
+        self,
+        painter: QPainter,
+        x: int,
+        y: int,
+        label: str,
+        value: float,
+        min_value: float,
+        max_value: float,
+        color: QColor,
+        unit: str = "°F",
+    ) -> None:
+        bar_w = 130
+        bar_h = 16
+
+        painter.setPen(QColor(255, 255, 255))
+        painter.drawText(x, y, label)
+
+        painter.setPen(QPen(QColor(90, 90, 90), 1))
+        painter.drawRect(x + 65, y - 14, bar_w, bar_h)
+
+        ratio = (value - min_value) / (max_value - min_value)
+        ratio = max(0.0, min(1.0, ratio))
+
+        fill_w = int(bar_w * ratio)
+
+        painter.fillRect(x + 66, y - 13, fill_w, bar_h - 2, color)
+
+        painter.setPen(color)
+        painter.drawText(x + 210, y, f"{value:.0f}{unit}")
 
     def rpm_color(self, rpm: float) -> QColor:
         if rpm > 3500:
@@ -260,3 +307,5 @@ class EmsPage:
             return QColor(255, 220, 0)
 
         return QColor(0, 255, 0)
+    
+    
