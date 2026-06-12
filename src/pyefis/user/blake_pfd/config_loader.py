@@ -48,7 +48,7 @@ class FeatureConfig:
     show_vdi: bool = True
     show_hsi: bool = True
     show_synthetic_vision: bool = False
-    show_terrain: bool = False
+    show_terrain: bool = True
     show_highway_in_sky: bool = False
     show_safe_taxi: bool = False
     show_traffic: bool = False
@@ -56,6 +56,7 @@ class FeatureConfig:
     show_obstacles: bool = True
     show_moving_map: bool = True
     show_airport_info: bool = True
+    show_route: bool = True
     
 @dataclass
 class NavigationConfig:
