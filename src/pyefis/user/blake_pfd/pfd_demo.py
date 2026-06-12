@@ -84,6 +84,12 @@ class BlakePfdDemo(QWidget):
         elif event.key() == Qt.Key.Key_P:
             self.current_page = "PFD"
 
+        elif self.current_page == "FMS" and event.key() == Qt.Key.Key_Up:
+            self.fms_page.move_selection(-1, self.route_manager)
+
+        elif self.current_page == "FMS" and event.key() == Qt.Key.Key_Down:
+            self.fms_page.move_selection(1, self.route_manager)
+
         self.update()
 
     def update_data(self) -> None:
