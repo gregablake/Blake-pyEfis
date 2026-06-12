@@ -20,6 +20,18 @@ class FmsPage:
             0,
             min(len(waypoints) - 1, self.selected_index + direction),
         )
+        
+    def get_selected_waypoint(self, route_manager) -> str | None:
+        route = route_manager.load_route()
+        waypoints = route.get("waypoints", [])
+
+        if not waypoints:
+            return None
+
+        if self.selected_index >= len(waypoints):
+            return None
+
+        return waypoints[self.selected_index]
 
     def draw(
         self,
@@ -81,4 +93,8 @@ class FmsPage:
 
         painter.setPen(QColor(130, 130, 130))
         painter.setFont(QFont("Arial", 11))
-        painter.drawText(40, height - 40, "UP/DOWN = select    P = PFD")
+        painter.drawText(
+            40,
+            height - 40,
+            "UP/DOWN = SELECT   ENTER = DIRECT-TO   P = PFD",
+        )

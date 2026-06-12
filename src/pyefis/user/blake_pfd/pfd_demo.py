@@ -84,13 +84,36 @@ class BlakePfdDemo(QWidget):
         elif event.key() == Qt.Key.Key_P:
             self.current_page = "PFD"
 
-        elif self.current_page == "FMS" and event.key() == Qt.Key.Key_Up:
-            self.fms_page.move_selection(-1, self.route_manager)
+        elif self.current_page == "FMS":
 
-        elif self.current_page == "FMS" and event.key() == Qt.Key.Key_Down:
-            self.fms_page.move_selection(1, self.route_manager)
+            if event.key() == Qt.Key.Key_Up:
+                self.fms_page.move_selection(-1, self.route_manager)
+
+            elif event.key() == Qt.Key.Key_Down:
+                self.fms_page.move_selection(1, self.route_manager)
+
+            elif event.key() in (
+                Qt.Key.Key_Return,
+                Qt.Key.Key_Enter,
+            ):
+                selected = self.fms_page.get_selected_waypoint(
+                    self.route_manager
+                )
+
+                if selected is not None:
+                    self.activate_direct_to(selected)
 
         self.update()
+        
+    def activate_direct_to(self, waypoint_id: str) -> None:
+        print(f"Activating Direct-To {waypoint_id}")
+
+        self.config.navigation.selected_waypoint_id = waypoint_id
+
+        try:
+            self.route_manager.activate_direct_to(waypoint_id)
+        except AttributeError:
+            pass
 
     def update_data(self) -> None:
         if self.replay_source is not None:
