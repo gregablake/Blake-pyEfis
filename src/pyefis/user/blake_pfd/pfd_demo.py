@@ -28,6 +28,7 @@ from pyefis.user.blake_pfd.startup_check import run_startup_check
 from pyefis.user.blake_pfd.flight_logger import FlightLogger
 from pyefis.user.blake_pfd.log_replay import LogReplaySource
 from pyefis.user.blake_pfd.fms_page import FmsPage
+from pyefis.user.blake_pfd.airport_info_page import AirportInfoPage
 
 
 class BlakePfdDemo(QWidget):
@@ -44,8 +45,11 @@ class BlakePfdDemo(QWidget):
         self.database = AviationDatabase()
         self.database.load_all()
         
+        
+        self.airport_info_page = AirportInfoPage()
         self.fms_page = FmsPage()
         self.current_page = "PFD"
+        
 
         self.route_manager = RouteManager()
         self.flight_computer = FlightComputer()
@@ -77,6 +81,7 @@ class BlakePfdDemo(QWidget):
         self.timer.timeout.connect(self.update_data)
         self.timer.start(50)
         
+        
     def keyPressEvent(self, event) -> None:
         if event.key() == Qt.Key.Key_F:
             self.current_page = "FMS"
@@ -102,6 +107,9 @@ class BlakePfdDemo(QWidget):
 
                 if selected is not None:
                     self.activate_direct_to(selected)
+                    
+        elif event.key() == Qt.Key.Key_A:
+                self.current_page = "AIRPORT"
 
         self.update()
         
@@ -210,7 +218,9 @@ class BlakePfdDemo(QWidget):
             self.draw_route_overlay(painter, width, height)
 
         if declutter_level <= 0 and features.show_airport_info:
-            self.draw_selected_airport_info(painter, width, height)
+            self.airport_info_page.draw(
+                painter, self.database, self.pfd.selected_airport_id, width, height
+            )
 
         if declutter_level <= 0:
             self.draw_waypoint_info_box(painter, self.pfd, width, height)
@@ -259,6 +269,18 @@ class BlakePfdDemo(QWidget):
                 height,
             )
         painter.end()
+        
+        if self.current_page == "AIRPORT":
+            painter = QPainter(self)
+            self.airport_info_page.draw(
+            painter,
+            self.database,
+            self.config.navigation.selected_waypoint_id,
+            self.width(),
+            self.height(),
+        )
+        painter.end()
+        return
 
     def draw_background(self, painter: QPainter, width: int, height: int) -> None:
         painter.fillRect(0, 0, width, height, QColor(5, 5, 8))
