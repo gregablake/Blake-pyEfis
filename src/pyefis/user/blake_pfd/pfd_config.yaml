@@ -83,3 +83,5 @@ declutter:
 logging:
   enabled: true
   interval_s: 1.0
+simulation:
+  profile: straight

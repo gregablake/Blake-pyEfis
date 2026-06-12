@@ -113,6 +113,7 @@ class BlakePfdConfig:
     obs: ObsConfig
     declutter: DeclutterConfig
     logging: LoggingConfig
+    simulation: SimulationConfig
 @dataclass
 class RouteConfig:
     auto_sequence: bool = True
@@ -141,6 +142,9 @@ class DeclutterConfig:
 class LoggingConfig:
     enabled: bool = True
     interval_s: float = 1.0
+@dataclass
+class SimulationConfig:
+    profile: str = "straight"
 
 
 def load_config(path: Path = CONFIG_PATH) -> BlakePfdConfig:
@@ -169,6 +173,7 @@ def load_config(path: Path = CONFIG_PATH) -> BlakePfdConfig:
         moving_map=MovingMapConfig(**raw.get("moving_map", {})),
         obs=ObsConfig(**raw.get("obs", {})),
         declutter=DeclutterConfig(**raw.get("declutter", {})),
+        simulation=SimulationConfig(**raw.get("simulation", {})),
         logging=LoggingConfig(**raw.get("logging", {}))
     )
 

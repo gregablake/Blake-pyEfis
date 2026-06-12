@@ -1,130 +1,105 @@
-"""
-Blake PFD simulated sensor source.
-
-This creates fake live-changing aircraft data so we can test the PFD brain
-without real BNO085, BMP388, MPXV7002DP, GPS, or Stratux connected yet.
-"""
-
 from __future__ import annotations
 
-from math import radians, sin, cos
-from time import monotonic, sleep
+from dataclasses import dataclass
+from math import sin
+from time import monotonic
 
-from pyefis.user.blake_pfd.airdata import AirDataComputer, RawSensorInputs
+from pyefis.user.blake_pfd.config_loader import load_config
+
+
+@dataclass
+class RawSensorData:
+    differential_pressure_pa: float = 250.0
+    static_pressure_pa: float = 101325.0
+    outside_air_temp_c: float = 15.0
+
+    heading_deg: float = 90.0
+    gps_track_deg: float = 90.0
+    gps_ground_speed_kt: float = 95.0
+
+    yaw_rate_deg_s: float = 0.0
+    accel_y_g: float = 0.0
+    accel_z_g: float = 1.0
+
+    waypoint_bearing_deg: float = 90.0
+    desired_track_deg: float = 90.0
+    cdi_deflection_nm: float = 0.0
+    vdi_deflection_deg: float = 0.0
+
+    gps_lat_deg: float = 39.1031
+    gps_lon_deg: float = -84.5120
 
 
 class SimulatedSensorSource:
-    """
-    Generates fake aircraft sensor values.
-
-    Later, this class gets replaced by real hardware readers:
-    - BNO085 reader
-    - BMP388 reader
-    - MPXV7002DP/ADS1115 reader
-    - GPS reader
-    - Stratux GDL90 reader
-    """
-
     def __init__(self) -> None:
         self.start_time_s = monotonic()
+        self.config = load_config()
 
-    def read(self) -> RawSensorInputs:
-        """
-        Return one simulated sensor packet.
-        """
+    def read(self) -> RawSensorData:
+        elapsed_s = monotonic() - self.start_time_s
 
-        t = monotonic() - self.start_time_s
+        indicated_airspeed_kt = 95.0 + (sin(elapsed_s * 0.35) * 5.0)
+        altitude_ft = 1200.0 + (sin(elapsed_s * 0.18) * 80.0)
+        heading_deg = 90.0 + (sin(elapsed_s * 0.12) * 8.0)
+        gps_track_deg = heading_deg
+        gps_ground_speed_kt = indicated_airspeed_kt + 3.0
+        yaw_rate_deg_s = sin(elapsed_s * 0.4) * 0.6
 
-        # Simulated attitude.
-        pitch_deg = 3.0 * sin(t * 0.45)
-        roll_deg = 20.0 * sin(t * 0.25)
+        gps_lat_deg = 39.1031
+        gps_lon_deg = -84.5120
 
-        # Simulated heading slowly turning.
-        heading_deg = (270.0 + (t * 2.0)) % 360.0
+        profile = self.config.simulation.profile
 
-        # Simulated yaw/turn rate.
-        yaw_rate_deg_s = 2.8 * sin(t * 0.35)
+        if profile == "climb":
+            altitude_ft += elapsed_s * 8.0
 
-        # Simulated slip/skid.
-        accel_y_g = 0.12 * sin(t * 0.7)
-        accel_z_g = 1.0
+        elif profile == "descent":
+            altitude_ft -= elapsed_s * 6.0
 
-        # Simulated pitot differential pressure.
-        # Roughly cycles around cruise-speed-ish values.
-        differential_pressure_pa = 850.0 + (250.0 * sin(t * 0.18))
+        elif profile == "left_turn":
+            heading_deg -= elapsed_s * 3.0
+            gps_track_deg = heading_deg
+            yaw_rate_deg_s = -3.0
 
-        # Simulated static pressure.
-        # Lower pressure = higher altitude.
-        static_pressure_pa = 101325.0 - 1800.0 - (500.0 * sin(t * 0.12))
+        elif profile == "right_turn":
+            heading_deg += elapsed_s * 3.0
+            gps_track_deg = heading_deg
+            yaw_rate_deg_s = 3.0
 
-        # Simulated OAT.
-        outside_air_temp_c = 18.0 + (2.0 * sin(t * 0.05))
+        elif profile == "approach":
+            altitude_ft = max(700.0, 3500.0 - elapsed_s * 12.0)
+            indicated_airspeed_kt = 85.0
+            gps_ground_speed_kt = 82.0
 
-        # Simulated GPS data.
-        gps_track_deg = (heading_deg + 3.0 * sin(t * 0.22)) % 360.0
-        gps_ground_speed_kt = 115.0 + (8.0 * sin(t * 0.2))
+        static_pressure_pa = altitude_to_pressure_pa(altitude_ft)
+        differential_pressure_pa = ias_to_differential_pressure_pa(indicated_airspeed_kt)
 
-        # Simulated waypoint/nav info.
-        waypoint_bearing_deg = 290.0
-        desired_track_deg = 285.0
-        cdi_deflection_nm = 0.75 * sin(t * 0.16)
-        vdi_deflection_deg = 0.8 * sin(t * 0.12)
-
-        return RawSensorInputs(
+        return RawSensorData(
             differential_pressure_pa=differential_pressure_pa,
             static_pressure_pa=static_pressure_pa,
-            outside_air_temp_c=outside_air_temp_c,
-            pitch_deg=pitch_deg,
-            roll_deg=roll_deg,
-            yaw_rate_deg_s=yaw_rate_deg_s,
-            accel_x_g=0.0,
-            accel_y_g=accel_y_g,
-            accel_z_g=accel_z_g,
-            heading_deg=heading_deg,
-            gps_track_deg=gps_track_deg,
+            outside_air_temp_c=15.0,
+            heading_deg=heading_deg % 360.0,
+            gps_track_deg=gps_track_deg % 360.0,
             gps_ground_speed_kt=gps_ground_speed_kt,
-            waypoint_bearing_deg=waypoint_bearing_deg,
-            desired_track_deg=desired_track_deg,
-            cdi_deflection_nm=cdi_deflection_nm,
-            vdi_deflection_deg=vdi_deflection_deg,
+            yaw_rate_deg_s=yaw_rate_deg_s,
+            accel_y_g=0.05 if abs(yaw_rate_deg_s) > 1.0 else 0.0,
+            accel_z_g=1.0,
+            waypoint_bearing_deg=90.0,
+            desired_track_deg=90.0,
+            cdi_deflection_nm=sin(elapsed_s * 0.15) * 0.4,
+            vdi_deflection_deg=sin(elapsed_s * 0.10) * 0.4,
+            gps_lat_deg=gps_lat_deg,
+            gps_lon_deg=gps_lon_deg,
         )
 
 
-def print_pfd_line() -> None:
-    """
-    Demo loop that prints changing PFD values.
-    Press Ctrl+C to stop.
-    """
-
-    sensors = SimulatedSensorSource()
-    airdata = AirDataComputer()
-
-    print("Blake PFD sensor simulator started.")
-    print("Press Ctrl+C to stop.")
-    print()
-
-    while True:
-        raw = sensors.read()
-        pfd = airdata.update(raw)
-
-        line = (
-            f"IAS {pfd.indicated_airspeed_kt:5.1f} kt | "
-            f"TAS {pfd.true_airspeed_kt:5.1f} kt | "
-            f"ALT {pfd.altitude_ft:6.0f} ft | "
-            f"VSI {pfd.vertical_speed_fpm:7.0f} fpm | "
-            f"P {pfd.pitch_deg:5.1f} | "
-            f"R {pfd.roll_deg:5.1f} | "
-            f"HDG {pfd.heading_deg:6.1f} | "
-            f"GS {pfd.ground_speed_kt:5.1f} | "
-            f"TRN {pfd.turn_rate_deg_s:5.2f} | "
-            f"BALL {pfd.slip_skid:5.2f} | "
-            f"CDI {pfd.cdi_deflection_nm:5.2f} | "
-            f"VDI {pfd.vdi_deflection_deg:5.2f}"
-        )
-
-        print(line)
-        sleep(0.25)
+def altitude_to_pressure_pa(altitude_ft: float) -> float:
+    return 101325.0 * (1.0 - altitude_ft / 145366.45) ** (1.0 / 0.190284)
 
 
-if __name__ == "__main__":
-    print_pfd_line()
+def ias_to_differential_pressure_pa(ias_kt: float) -> float:
+    knots_per_mps = 1.943844
+    air_density_sea_level = 1.225
+
+    airspeed_mps = ias_kt / knots_per_mps
+    return 0.5 * air_density_sea_level * airspeed_mps ** 2
