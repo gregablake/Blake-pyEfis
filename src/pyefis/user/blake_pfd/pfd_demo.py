@@ -31,6 +31,8 @@ from pyefis.user.blake_pfd.log_replay import LogReplaySource
 from pyefis.user.blake_pfd.fms_page import FmsPage
 from pyefis.user.blake_pfd.airport_info_page import AirportInfoPage
 from pyefis.user.blake_pfd.nearest_page import NearestPage
+from pyefis.user.blake_pfd.ems_page import EmsPage
+from pyefis.user.blake_pfd.engine_sim import SimulatedEngineSource
 
 
 class BlakePfdDemo(QWidget):
@@ -40,6 +42,9 @@ class BlakePfdDemo(QWidget):
         self.flight_logger = FlightLogger(
             log_interval_s=self.config.logging.interval_s,
         )
+        self.ems_page = EmsPage()
+        self.engine_source = SimulatedEngineSource()
+        self.engine_data = self.engine_source.read()
         self.config = load_config()
         self.startup_status = run_startup_check()
         print(self.startup_status)
@@ -142,8 +147,11 @@ class BlakePfdDemo(QWidget):
                 
         elif event.key() == Qt.Key.Key_N:
             self.current_page = "NEAREST"
+            
+        elif event.key() == Qt.Key.Key_E:
+             self.current_page = "EMS"
 
-        self.update()
+        self.update() 
         
     def activate_direct_to(self, waypoint_id: str) -> None:
         print(f"Activating Direct-To {waypoint_id}")
@@ -156,6 +164,7 @@ class BlakePfdDemo(QWidget):
             pass
 
     def update_data(self) -> None:
+        self.engine_data = self.engine_source.read()
         if self.replay_source is not None:
            self.pfd = self.replay_source.read()
         else:
@@ -214,6 +223,16 @@ class BlakePfdDemo(QWidget):
                 )
             )
             return
+        if self.current_page == "EMS":
+            painter = QPainter(self)
+            self.ems_page.draw(
+            painter,
+            self.engine_data,
+            self.width(),
+            self.height(),
+        )
+        painter.end()
+        return
 
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
