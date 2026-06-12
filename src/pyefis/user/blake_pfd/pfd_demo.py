@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+from collections.abc import Callable
 from math import cos, radians, sin
 
 from PyQt6.QtCore import Qt, QTimer, QRectF, QPointF
@@ -29,6 +30,7 @@ from pyefis.user.blake_pfd.flight_logger import FlightLogger
 from pyefis.user.blake_pfd.log_replay import LogReplaySource
 from pyefis.user.blake_pfd.fms_page import FmsPage
 from pyefis.user.blake_pfd.airport_info_page import AirportInfoPage
+from pyefis.user.blake_pfd.nearest_page import NearestPage
 
 
 class BlakePfdDemo(QWidget):
@@ -49,6 +51,8 @@ class BlakePfdDemo(QWidget):
         self.airport_info_page = AirportInfoPage()
         self.fms_page = FmsPage()
         self.current_page = "PFD"
+        
+        self.nearest_page = NearestPage()
         
 
         self.route_manager = RouteManager()
@@ -108,8 +112,36 @@ class BlakePfdDemo(QWidget):
                 if selected is not None:
                     self.activate_direct_to(selected)
                     
+        elif self.current_page == "NEAREST":
+
+            nearest = self.database.nearest_airports(
+                39.1031,
+                -84.5120,
+                max_results=10,
+            )
+
+            if event.key() == Qt.Key.Key_Up:
+                self.nearest_page.move_selection(-1, nearest)
+
+            elif event.key() == Qt.Key.Key_Down:
+                self.nearest_page.move_selection(1, nearest)
+
+            elif event.key() in (
+                Qt.Key.Key_Return,
+                Qt.Key.Key_Enter,
+            ):
+                selection = self.nearest_page.selected_airport(nearest)
+
+                if selection is not None:
+                    distance_nm, airport = selection
+
+                    self.activate_direct_to(airport.ident)
+                    
         elif event.key() == Qt.Key.Key_A:
-                self.current_page = "AIRPORT"
+            self.current_page = "AIRPORT"
+                
+        elif event.key() == Qt.Key.Key_N:
+            self.current_page = "NEAREST"
 
         self.update()
         
@@ -142,18 +174,45 @@ class BlakePfdDemo(QWidget):
         
         if self.pfd is None:
             return
-        
-        if self.current_page == "FMS":
-            painter = QPainter(self)
-            self.fms_page.draw(
-               painter,
-               self.route_manager,
-               self.pfd,
-               self.width(),
-               self.height(),
-            )
 
-            painter.end()
+        if self.current_page == "FMS":
+            self._paint_page(
+                lambda painter: self.fms_page.draw(
+                    painter,
+                    self.route_manager,
+                    self.pfd,
+                    self.width(),
+                    self.height(),
+                )
+            )
+            return
+
+        if self.current_page == "AIRPORT":
+            self._paint_page(
+                lambda painter: self.airport_info_page.draw(
+                    painter,
+                    self.database,
+                    self.config.navigation.selected_waypoint_id,
+                    self.width(),
+                    self.height(),
+                )
+            )
+            return
+
+        if self.current_page == "NEAREST":
+            nearest = self.database.nearest_airports(
+                39.1031,
+                -84.5120,
+                max_results=10,
+            )
+            self._paint_page(
+                lambda painter: self.nearest_page.draw(
+                    painter,
+                    nearest,
+                    self.width(),
+                    self.height(),
+                )
+            )
             return
 
         painter = QPainter(self)
@@ -260,27 +319,14 @@ class BlakePfdDemo(QWidget):
         if declutter_level <= 0:
             self.draw_sensor_status_panel(painter, width, height)
 
-        if self.current_page == "FMS":
-            self.fms_page.draw(
-                painter,
-                self.route_manager,
-                self.pfd,
-                width,
-                height,
-            )
         painter.end()
-        
-        if self.current_page == "AIRPORT":
-            painter = QPainter(self)
-            self.airport_info_page.draw(
-            painter,
-            self.database,
-            self.config.navigation.selected_waypoint_id,
-            self.width(),
-            self.height(),
-        )
-        painter.end()
-        return
+
+    def _paint_page(self, draw_callback: Callable[[QPainter], None]) -> None:
+        painter = QPainter(self)
+        try:
+            draw_callback(painter)
+        finally:
+            painter.end()
 
     def draw_background(self, painter: QPainter, width: int, height: int) -> None:
         painter.fillRect(0, 0, width, height, QColor(5, 5, 8))
