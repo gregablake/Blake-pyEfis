@@ -85,3 +85,5 @@ logging:
   interval_s: 1.0
 simulation:
   profile: straight
+  paused: false
+  reset_counter: 1

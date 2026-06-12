@@ -146,6 +146,8 @@ class LoggingConfig:
 @dataclass
 class SimulationConfig:
     profile: str = "straight"
+    paused: bool = False
+    reset_counter: int = 0
 
 
 def load_config(path: Path = CONFIG_PATH) -> BlakePfdConfig:

@@ -34,9 +34,17 @@ class SimulatedSensorSource:
     def __init__(self) -> None:
         self.start_time_s = monotonic()
         self.config = load_config()
+        self.last_reset_counter = self.config.simulation.reset_counter
 
     def read(self) -> RawSensorData:
-        elapsed_s = monotonic() - self.start_time_s
+        self.config = load_config()
+        if self.last_reset_counter != self.config.simulation.reset_counter:
+            self.start_time_s = monotonic()
+            self.last_reset_counter = self.config.simulation.reset_counter
+        if self.config.simulation.paused:
+            elapsed_s = 0.0
+        else:
+            elapsed_s = monotonic() - self.start_time_s
 
         indicated_airspeed_kt = 95.0 + (sin(elapsed_s * 0.35) * 5.0)
         altitude_ft = 1200.0 + (sin(elapsed_s * 0.18) * 80.0)

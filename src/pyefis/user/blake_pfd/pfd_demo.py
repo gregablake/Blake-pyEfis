@@ -27,6 +27,7 @@ from pyefis.user.blake_pfd.weather_reader import WeatherReader
 from pyefis.user.blake_pfd.startup_check import run_startup_check
 from pyefis.user.blake_pfd.flight_logger import FlightLogger
 from pyefis.user.blake_pfd.log_replay import LogReplaySource
+from pyefis.user.blake_pfd.fms_page import FmsPage
 
 
 class BlakePfdDemo(QWidget):
@@ -42,6 +43,9 @@ class BlakePfdDemo(QWidget):
 
         self.database = AviationDatabase()
         self.database.load_all()
+        
+        self.fms_page = FmsPage()
+        self.current_page = "PFD"
 
         self.route_manager = RouteManager()
         self.flight_computer = FlightComputer()
@@ -72,6 +76,15 @@ class BlakePfdDemo(QWidget):
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.update_data)
         self.timer.start(50)
+        
+    def keyPressEvent(self, event) -> None:
+        if event.key() == Qt.Key.Key_F:
+            self.current_page = "FMS"
+
+        elif event.key() == Qt.Key.Key_P:
+            self.current_page = "PFD"
+
+        self.update()
 
     def update_data(self) -> None:
         if self.replay_source is not None:
@@ -89,7 +102,21 @@ class BlakePfdDemo(QWidget):
     
 
     def paintEvent(self, event) -> None:  # noqa: N802
+        
         if self.pfd is None:
+            return
+        
+        if self.current_page == "FMS":
+            painter = QPainter(self)
+            self.fms_page.draw(
+               painter,
+               self.route_manager,
+               self.pfd,
+               self.width(),
+               self.height(),
+            )
+
+            painter.end()
             return
 
         painter = QPainter(self)
@@ -194,6 +221,14 @@ class BlakePfdDemo(QWidget):
         if declutter_level <= 0:
             self.draw_sensor_status_panel(painter, width, height)
 
+        if self.current_page == "FMS":
+            self.fms_page.draw(
+                painter,
+                self.route_manager,
+                self.pfd,
+                width,
+                height,
+            )
         painter.end()
 
     def draw_background(self, painter: QPainter, width: int, height: int) -> None:
