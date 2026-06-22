@@ -62,7 +62,7 @@
 | src/pyefis/user/blake\_pfd/database\_importer.py        |      139 |       85 |       28 |        1 |     33% |52-70, 72-75, 78-81, 84-95, 105-127, 130-141, 151, 153, 156, 158-163, 166, 175-192, 201-215, 218-239, 241 |
 | src/pyefis/user/blake\_pfd/direct\_to.py                |       36 |       36 |        4 |        0 |      0% |      1-62 |
 | src/pyefis/user/blake\_pfd/ems\_page.py                 |      195 |      195 |       78 |        0 |      0% |     1-461 |
-| src/pyefis/user/blake\_pfd/ems\_trend\_page.py          |       29 |       29 |        0 |        0 |      0% |      1-54 |
+| src/pyefis/user/blake\_pfd/ems\_trend\_page.py          |       76 |       76 |        8 |        0 |      0% |     1-158 |
 | src/pyefis/user/blake\_pfd/engine\_data.py              |       20 |       20 |        0 |        0 |      0% |      1-27 |
 | src/pyefis/user/blake\_pfd/engine\_sim.py               |       32 |       32 |        2 |        0 |      0% |      1-78 |
 | src/pyefis/user/blake\_pfd/flight\_computer.py          |      104 |       65 |       18 |        0 |     32% |54-63, 66-131, 134-147, 156-176, 180-188, 192-196, 200 |
@@ -105,7 +105,7 @@
 | src/pyefis/user/hooks/keys.py                           |       19 |       19 |        4 |        0 |      0% |     20-53 |
 | src/pyefis/user/screens/\_\_init\_\_.py                 |        0 |        0 |        0 |        0 |    100% |           |
 | src/pyefis/version.py                                   |        2 |        0 |        0 |        0 |    100% |           |
-| **TOTAL**                                               | **10418** | **6059** | **2740** |  **119** | **39%** |           |
+| **TOTAL**                                               | **10465** | **6106** | **2748** |  **119** | **39%** |           |
 
 
 ## Setup coverage badge
