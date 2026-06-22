@@ -65,11 +65,11 @@
 | src/pyefis/user/blake\_pfd/engine\_data.py              |       20 |       20 |        0 |        0 |      0% |      1-27 |
 | src/pyefis/user/blake\_pfd/engine\_sim.py               |       32 |       32 |        2 |        0 |      0% |      1-78 |
 | src/pyefis/user/blake\_pfd/flight\_computer.py          |      104 |       65 |       18 |        0 |     32% |54-63, 66-131, 134-147, 156-176, 180-188, 192-196, 200 |
-| src/pyefis/user/blake\_pfd/flight\_logger.py            |       39 |       39 |       12 |        0 |      0% |      1-57 |
+| src/pyefis/user/blake\_pfd/flight\_logger.py            |       44 |       44 |       18 |        0 |      0% |      1-67 |
 | src/pyefis/user/blake\_pfd/fms\_page.py                 |       58 |       58 |       12 |        0 |      0% |      1-96 |
 | src/pyefis/user/blake\_pfd/hardware\_readers.py         |      209 |      209 |       18 |        0 |      0% |    19-528 |
 | src/pyefis/user/blake\_pfd/log\_replay.py               |       22 |       22 |        2 |        0 |      0% |      1-31 |
-| src/pyefis/user/blake\_pfd/log\_viewer.py               |       84 |       84 |       36 |        0 |      0% |     1-118 |
+| src/pyefis/user/blake\_pfd/log\_viewer.py               |       92 |       92 |       44 |        0 |      0% |     1-136 |
 | src/pyefis/user/blake\_pfd/master\_warning.py           |       50 |       50 |       28 |        0 |      0% |      1-81 |
 | src/pyefis/user/blake\_pfd/moving\_map.py               |       23 |       23 |        2 |        0 |      0% |      1-54 |
 | src/pyefis/user/blake\_pfd/nav\_math.py                 |       67 |       37 |        2 |        0 |     43% |41-80, 98-105, 114-126, 136-152, 160-164, 168, 172, 176 |
@@ -104,7 +104,7 @@
 | src/pyefis/user/hooks/keys.py                           |       19 |       19 |        4 |        0 |      0% |     20-53 |
 | src/pyefis/user/screens/\_\_init\_\_.py                 |        0 |        0 |        0 |        0 |    100% |           |
 | src/pyefis/version.py                                   |        2 |        0 |        0 |        0 |    100% |           |
-| **TOTAL**                                               | **10365** | **6006** | **2722** |  **119** | **39%** |           |
+| **TOTAL**                                               | **10378** | **6019** | **2736** |  **119** | **39%** |           |
 
 
 ## Setup coverage badge
