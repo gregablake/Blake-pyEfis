@@ -61,7 +61,7 @@
 | src/pyefis/user/blake\_pfd/data/csv\_loader.py          |       36 |        7 |        8 |        1 |     73% |18, 26, 51-56 |
 | src/pyefis/user/blake\_pfd/database\_importer.py        |      139 |       85 |       28 |        1 |     33% |52-70, 72-75, 78-81, 84-95, 105-127, 130-141, 151, 153, 156, 158-163, 166, 175-192, 201-215, 218-239, 241 |
 | src/pyefis/user/blake\_pfd/direct\_to.py                |       36 |       36 |        4 |        0 |      0% |      1-62 |
-| src/pyefis/user/blake\_pfd/ems\_alert\_history.py       |       62 |       62 |       12 |        0 |      0% |     1-103 |
+| src/pyefis/user/blake\_pfd/ems\_alert\_history.py       |       75 |       75 |       14 |        0 |      0% |     1-127 |
 | src/pyefis/user/blake\_pfd/ems\_page.py                 |      195 |      195 |       78 |        0 |      0% |     1-461 |
 | src/pyefis/user/blake\_pfd/ems\_trend\_page.py          |       97 |       97 |       12 |        0 |      0% |     1-214 |
 | src/pyefis/user/blake\_pfd/engine\_data.py              |       20 |       20 |        0 |        0 |      0% |      1-27 |
@@ -106,7 +106,7 @@
 | src/pyefis/user/hooks/keys.py                           |       19 |       19 |        4 |        0 |      0% |     20-53 |
 | src/pyefis/user/screens/\_\_init\_\_.py                 |        0 |        0 |        0 |        0 |    100% |           |
 | src/pyefis/version.py                                   |        2 |        0 |        0 |        0 |    100% |           |
-| **TOTAL**                                               | **10569** | **6210** | **2774** |  **119** | **38%** |           |
+| **TOTAL**                                               | **10582** | **6223** | **2776** |  **119** | **38%** |           |
 
 
 ## Setup coverage badge
