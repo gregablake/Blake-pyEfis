@@ -65,7 +65,7 @@
 | src/pyefis/user/blake\_pfd/engine\_data.py              |       20 |       20 |        0 |        0 |      0% |      1-27 |
 | src/pyefis/user/blake\_pfd/engine\_sim.py               |       32 |       32 |        2 |        0 |      0% |      1-78 |
 | src/pyefis/user/blake\_pfd/flight\_computer.py          |      104 |       65 |       18 |        0 |     32% |54-63, 66-131, 134-147, 156-176, 180-188, 192-196, 200 |
-| src/pyefis/user/blake\_pfd/flight\_logger.py            |       35 |       35 |        8 |        0 |      0% |      1-52 |
+| src/pyefis/user/blake\_pfd/flight\_logger.py            |       39 |       39 |       12 |        0 |      0% |      1-57 |
 | src/pyefis/user/blake\_pfd/fms\_page.py                 |       58 |       58 |       12 |        0 |      0% |      1-96 |
 | src/pyefis/user/blake\_pfd/hardware\_readers.py         |      209 |      209 |       18 |        0 |      0% |    19-528 |
 | src/pyefis/user/blake\_pfd/log\_replay.py               |       22 |       22 |        2 |        0 |      0% |      1-31 |
@@ -78,7 +78,7 @@
 | src/pyefis/user/blake\_pfd/nearest\_page.py             |       32 |       32 |        8 |        0 |      0% |      1-82 |
 | src/pyefis/user/blake\_pfd/obstacles.py                 |       22 |       22 |        0 |        0 |      0% |      1-40 |
 | src/pyefis/user/blake\_pfd/performance\_calculations.py |       24 |       18 |        0 |        0 |     25% |16-19, 30-31, 47-64, 68 |
-| src/pyefis/user/blake\_pfd/pfd\_demo.py                 |      765 |      765 |      176 |        0 |      0% |    1-1202 |
+| src/pyefis/user/blake\_pfd/pfd\_demo.py                 |      765 |      765 |      176 |        0 |      0% |    1-1204 |
 | src/pyefis/user/blake\_pfd/route\_manager.py            |       66 |       44 |       18 |        1 |     27% |24-25, 32-48, 55-61, 64-71, 74-84, 90-103, 105-108, 111-123, 127 |
 | src/pyefis/user/blake\_pfd/safe\_taxi.py                |       16 |       16 |        0 |        0 |      0% |      1-23 |
 | src/pyefis/user/blake\_pfd/sensors\_sim.py              |       70 |       43 |       14 |        0 |     32% |35-37, 40-85, 105, 109-113 |
@@ -104,7 +104,7 @@
 | src/pyefis/user/hooks/keys.py                           |       19 |       19 |        4 |        0 |      0% |     20-53 |
 | src/pyefis/user/screens/\_\_init\_\_.py                 |        0 |        0 |        0 |        0 |    100% |           |
 | src/pyefis/version.py                                   |        2 |        0 |        0 |        0 |    100% |           |
-| **TOTAL**                                               | **10339** | **5980** | **2702** |  **119** | **39%** |           |
+| **TOTAL**                                               | **10343** | **5984** | **2706** |  **119** | **39%** |           |
 
 
 ## Setup coverage badge
