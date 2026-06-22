@@ -48,6 +48,18 @@ def summarize_log(path: Path) -> None:
     ias = values("ias_kt")
     alt = values("pressure_alt_ft")
     gs = values("ground_speed_kt")
+    rpm = values("engine_rpm")
+    oil_pressure = values("engine_oil_pressure_psi")
+    oil_temp = values("engine_oil_temp_f")
+    fuel_remaining = values("engine_fuel_remaining_gal")
+    cht_values = []
+    egt_values = []
+
+    for index in range(1, 7):
+        cht_values.extend(values(f"engine_cht_f_{index}"))
+
+    for index in range(1, 3):
+        egt_values.extend(values(f"engine_egt_f_{index}"))
 
     print()
     print(f"Log: {path.name}")
@@ -62,6 +74,24 @@ def summarize_log(path: Path) -> None:
         print(f"ALT min/max: {min(alt):.0f} / {max(alt):.0f} ft")
     if gs:
         print(f"GS max: {max(gs):.0f} kt")
+
+    if rpm:
+        print(f"RPM max: {max(rpm):.0f}")
+
+    if oil_pressure:
+        print(f"Oil PSI min/max: {min(oil_pressure):.0f} / {max(oil_pressure):.0f}")
+
+    if oil_temp:
+        print(f"Oil temp max: {max(oil_temp):.0f} °F")
+
+    if fuel_remaining:
+        print(f"Fuel remaining end: {fuel_remaining[-1]:.1f} gal")
+
+    if cht_values:
+        print(f"CHT max: {max(cht_values):.0f} °F")
+
+    if egt_values:
+        print(f"EGT max: {max(egt_values):.0f} °F")
 
     print()
 
