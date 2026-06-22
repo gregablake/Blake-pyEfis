@@ -9,6 +9,8 @@ from PyQt6.QtGui import QColor, QFont, QPainter
 
 from pyefis.user.blake_pfd.engine_data import EngineData
 from pyefis.user.blake_pfd.master_warning import get_engine_warnings
+import csv
+from pathlib import Path
 
 
 @dataclass
@@ -25,6 +27,9 @@ class EmsAlertHistory:
         self.active_alerts: set[str] = set()
         self.acknowledged_alerts: set[str] = set()
         self.silenced: bool = False
+        self.log_dir = Path(__file__).parent / "logs"
+        self.log_dir.mkdir(exist_ok=True)
+        self.log_path = self.log_dir / "ems_alert_history.csv"
 
     def update(self, engine: EngineData) -> None:
         warnings = get_engine_warnings(engine)
@@ -41,7 +46,7 @@ class EmsAlertHistory:
                     acknowledged=False,
                 )
             )
-
+        self.write_alert_to_csv(text)
         cleared_alerts = self.active_alerts - current
 
         for text in cleared_alerts:
@@ -61,6 +66,25 @@ class EmsAlertHistory:
 
     def has_unacknowledged_active_alerts(self) -> bool:
         return bool(self.active_alerts - self.acknowledged_alerts)
+
+    def write_alert_to_csv(self, text: str) -> None:
+        file_exists = self.log_path.exists()
+
+        with self.log_path.open("a", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(
+                f,
+                fieldnames=["timestamp_utc", "alert"],
+            )
+
+            if not file_exists:
+                writer.writeheader()
+
+            writer.writerow(
+                {
+                    "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+                    "alert": text,
+                }
+            )
 
     def draw(self, painter: QPainter, width: int, height: int) -> None:
         painter.fillRect(0, 0, width, height, QColor(0, 0, 0))
