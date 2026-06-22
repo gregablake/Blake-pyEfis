@@ -57,14 +57,14 @@ class BlakePfdDemo(QWidget):
         self.airport_info_page = AirportInfoPage()
         self.nearest_page = NearestPage()
         self.ems_page = EmsPage()
-        self.engine_source = SimulatedEngineSource()
-        self.engine_data = self.engine_source.read()
+        self.ems_trend_page = EmsTrendPage()
         self.ems_alert_history = EmsAlertHistory()
 
-        self.flight_logger.maybe_log(
-            self.pfd,
-            waypoint_id=self.config.navigation.selected_waypoint_id,
-            engine=self.engine_data,
+        self.engine_source = SimulatedEngineSource()
+        self.engine_data = self.engine_source.read()
+
+        self.flight_logger = FlightLogger(
+            log_interval_s=self.config.logging.interval_s,
         )
 
         self.stratux = StratuxReader(
@@ -88,7 +88,6 @@ class BlakePfdDemo(QWidget):
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.update_data)
         self.timer.start(50)
-        self.ems_trend_page = EmsTrendPage()
 
     def update_data(self) -> None:
         if self.replay_source is not None:
@@ -105,34 +104,54 @@ class BlakePfdDemo(QWidget):
             self.flight_logger.maybe_log(
                 self.pfd,
                 waypoint_id=self.config.navigation.selected_waypoint_id,
+                engine=self.engine_data,
             )
 
         self.update()
 
     def keyPressEvent(self, event) -> None:  # noqa: N802
-        if event.key() == Qt.Key.Key_P:
+        key = event.key()
+
+        if self.current_page == "EMS_ALERTS":
+            if key == Qt.Key.Key_A:
+                self.ems_alert_history.acknowledge_active()
+                self.update()
+                return
+
+            if key == Qt.Key.Key_S:
+                self.ems_alert_history.toggle_silence()
+                self.update()
+                return
+
+        if key == Qt.Key.Key_P:
             self.current_page = "PFD"
 
-        elif event.key() == Qt.Key.Key_F:
+        elif key == Qt.Key.Key_F:
             self.current_page = "FMS"
 
-        elif event.key() == Qt.Key.Key_A:
+        elif key == Qt.Key.Key_A:
             self.current_page = "AIRPORT"
 
-        elif event.key() == Qt.Key.Key_N:
+        elif key == Qt.Key.Key_N:
             self.current_page = "NEAREST"
 
-        elif event.key() == Qt.Key.Key_E:
+        elif key == Qt.Key.Key_E:
             self.current_page = "EMS"
 
+        elif key == Qt.Key.Key_T:
+            self.current_page = "EMS_TREND"
+
+        elif key == Qt.Key.Key_H:
+            self.current_page = "EMS_ALERTS"
+
         elif self.current_page == "FMS":
-            if event.key() == Qt.Key.Key_Up:
+            if key == Qt.Key.Key_Up:
                 self.fms_page.move_selection(-1, self.route_manager)
 
-            elif event.key() == Qt.Key.Key_Down:
+            elif key == Qt.Key.Key_Down:
                 self.fms_page.move_selection(1, self.route_manager)
 
-            elif event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+            elif key in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
                 selected = self.fms_page.get_selected_waypoint(self.route_manager)
                 if selected is not None:
                     self.activate_direct_to(selected)
@@ -144,24 +163,18 @@ class BlakePfdDemo(QWidget):
                 max_results=10,
             )
 
-            if event.key() == Qt.Key.Key_Up:
+            if key == Qt.Key.Key_Up:
                 self.nearest_page.move_selection(-1, nearest)
 
-            elif event.key() == Qt.Key.Key_Down:
+            elif key == Qt.Key.Key_Down:
                 self.nearest_page.move_selection(1, nearest)
 
-            elif event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+            elif key in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
                 selection = self.nearest_page.selected_airport(nearest)
 
                 if selection is not None:
                     _distance_nm, airport = selection
                     self.activate_direct_to(airport.ident)
-
-        elif event.key() == Qt.Key.Key_T:
-            self.current_page = "EMS_TREND"
-
-        elif event.key() == Qt.Key.Key_H:
-            self.current_page = "EMS_ALERTS"
 
         self.update()
 

@@ -16,12 +16,15 @@ class AlertRecord:
     timestamp_utc: str
     text: str
     color_name: str
+    acknowledged: bool = False
 
 
 class EmsAlertHistory:
     def __init__(self, max_alerts: int = 100) -> None:
         self.alerts: deque[AlertRecord] = deque(maxlen=max_alerts)
         self.active_alerts: set[str] = set()
+        self.acknowledged_alerts: set[str] = set()
+        self.silenced: bool = False
 
     def update(self, engine: EngineData) -> None:
         warnings = get_engine_warnings(engine)
@@ -35,10 +38,29 @@ class EmsAlertHistory:
                     timestamp_utc=datetime.now(timezone.utc).strftime("%H:%M:%S"),
                     text=text,
                     color_name="WARN",
+                    acknowledged=False,
                 )
             )
 
+        cleared_alerts = self.active_alerts - current
+
+        for text in cleared_alerts:
+            self.acknowledged_alerts.discard(text)
+
         self.active_alerts = current
+
+    def acknowledge_active(self) -> None:
+        self.acknowledged_alerts.update(self.active_alerts)
+
+        for alert in self.alerts:
+            if alert.text in self.active_alerts:
+                alert.acknowledged = True
+
+    def toggle_silence(self) -> None:
+        self.silenced = not self.silenced
+
+    def has_unacknowledged_active_alerts(self) -> bool:
+        return bool(self.active_alerts - self.acknowledged_alerts)
 
     def draw(self, painter: QPainter, width: int, height: int) -> None:
         painter.fillRect(0, 0, width, height, QColor(0, 0, 0))
@@ -51,23 +73,35 @@ class EmsAlertHistory:
             "EMS ALERT HISTORY",
         )
 
-        painter.setFont(QFont("Arial", 15, QFont.Weight.Bold))
+        painter.setFont(QFont("Arial", 13, QFont.Weight.Bold))
+        painter.setPen(QColor(255, 255, 255))
+        painter.drawText(
+            40,
+            80,
+            f"ACK: {len(self.acknowledged_alerts)}   SILENCED: {'YES' if self.silenced else 'NO'}",
+        )
 
-        y = 95
+        painter.setFont(QFont("Arial", 15, QFont.Weight.Bold))
+        y = 120
 
         if not self.alerts:
             painter.setPen(QColor(0, 255, 0))
             painter.drawText(40, y, "No alerts recorded.")
         else:
-            for alert in list(self.alerts)[:18]:
+            for alert in list(self.alerts)[:16]:
                 painter.setPen(QColor(255, 255, 255))
                 painter.drawText(40, y, alert.timestamp_utc)
 
-                painter.setPen(QColor(255, 220, 0))
-                painter.drawText(160, y, alert.text)
+                painter.setPen(QColor(130, 130, 130) if alert.acknowledged else QColor(255, 220, 0))
+                suffix = " ACK" if alert.acknowledged else ""
+                painter.drawText(160, y, f"{alert.text}{suffix}")
 
                 y += 30
 
         painter.setPen(QColor(130, 130, 130))
         painter.setFont(QFont("Arial", 11))
-        painter.drawText(40, height - 40, "E = EMS    T = TRENDS    P = PFD")
+        painter.drawText(
+            40,
+            height - 40,
+            "A = ACKNOWLEDGE    S = SILENCE    E = EMS    T = TRENDS    P = PFD",
+        )
