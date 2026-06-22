@@ -34,6 +34,7 @@ from pyefis.user.blake_pfd.synthetic_vision import (
 from pyefis.user.blake_pfd.terrain import TerrainComputer
 from pyefis.user.blake_pfd.weather_reader import WeatherReader
 from pyefis.user.blake_pfd.ems_trend_page import EmsTrendPage
+from pyefis.user.blake_pfd.ems_alert_history import EmsAlertHistory
 
 
 class BlakePfdDemo(QWidget):
@@ -42,10 +43,8 @@ class BlakePfdDemo(QWidget):
 
         self.config = load_config()
         self.startup_status = run_startup_check()
-
         self.database = AviationDatabase()
         self.database.load_all()
-
         self.route_manager = RouteManager()
         self.flight_computer = FlightComputer()
         self.synthetic_vision = SyntheticVisionComputer()
@@ -54,14 +53,13 @@ class BlakePfdDemo(QWidget):
         self.terrain = TerrainComputer()
         self.obstacles = ObstacleComputer()
         self.weather = WeatherReader()
-
         self.fms_page = FmsPage()
         self.airport_info_page = AirportInfoPage()
         self.nearest_page = NearestPage()
         self.ems_page = EmsPage()
-
         self.engine_source = SimulatedEngineSource()
         self.engine_data = self.engine_source.read()
+        self.ems_alert_history = EmsAlertHistory()
 
         self.flight_logger.maybe_log(
             self.pfd,
@@ -77,7 +75,6 @@ class BlakePfdDemo(QWidget):
         self.replay_source = LogReplaySource(replay_log) if replay_log else None
         self.sensors = BlakeHardwareSensorSource() if use_hardware else SimulatedSensorSource()
         self.use_hardware = use_hardware
-
         self.pfd: FlightData | None = None
         self.current_page = "PFD"
 
@@ -101,6 +98,7 @@ class BlakePfdDemo(QWidget):
             self.pfd = self.flight_computer.update(raw)
 
         self.engine_data = self.engine_source.read()
+        self.ems_alert_history.update(self.engine_data)
         self.ems_trend_page.add_sample(self.engine_data)
 
         if self.config.logging.enabled and self.pfd is not None:
@@ -161,6 +159,9 @@ class BlakePfdDemo(QWidget):
 
         elif event.key() == Qt.Key.Key_T:
             self.current_page = "EMS_TREND"
+
+        elif event.key() == Qt.Key.Key_H:
+            self.current_page = "EMS_ALERTS"
 
         self.update()
 
@@ -230,7 +231,18 @@ class BlakePfdDemo(QWidget):
             draw_master_warning_strip(painter, self.engine_data, self.width())
             painter.end()
             return
-
+        
+        if self.current_page == "EMS_ALERTS":
+            painter = QPainter(self)
+            self.ems_alert_history.draw(
+                painter,
+                self.width(),
+                self.height(),
+            )
+            draw_master_warning_strip(painter, self.engine_data, self.width())
+            painter.end()
+            return
+        
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
