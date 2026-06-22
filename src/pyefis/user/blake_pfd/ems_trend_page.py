@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections import deque
 
 from PyQt6.QtCore import Qt, QRectF
-from PyQt6.QtGui import QColor, QFont, QPainter, QPen, QPolygonF
+from PyQt6.QtGui import QColor, QFont, QPainter, QPen
 
 from pyefis.user.blake_pfd.engine_data import EngineData
 
@@ -30,15 +30,20 @@ class EmsTrendPage:
         painter.setPen(QColor(255, 255, 255))
         painter.drawText(40, 90, f"Samples: {len(self.samples)}")
 
-        self.draw_cht_chart(painter, 40, 125, width - 80, 190)
-        self.draw_engine_chart(painter, 40, 350, width - 80, 190)
+        chart_w = (width - 100) // 2
+        chart_h = 185
+
+        self.draw_cht_chart(painter, 40, 125, chart_w, chart_h)
+        self.draw_egt_chart(painter, 60 + chart_w, 125, chart_w, chart_h)
+        self.draw_engine_chart(painter, 40, 345, chart_w, chart_h)
+        self.draw_fuel_chart(painter, 60 + chart_w, 345, chart_w, chart_h)
 
         painter.setPen(QColor(130, 130, 130))
         painter.setFont(QFont("Arial", 11))
         painter.drawText(40, height - 40, "E = EMS    P = PFD    T = TRENDS")
 
     def draw_cht_chart(self, painter: QPainter, x: int, y: int, w: int, h: int) -> None:
-        self.draw_chart_frame(painter, x, y, w, h, "CHT 1-6 TREND", "250-450°F")
+        self.draw_chart_frame(painter, x, y, w, h, "CHT 1-6", "250-450°F")
 
         colors = [
             QColor(0, 255, 0),
@@ -55,20 +60,26 @@ class EmsTrendPage:
                 for sample in self.samples
                 if len(sample.cht_f) > cylinder
             ]
-            self.draw_line(
-                painter,
-                values,
-                x,
-                y,
-                w,
-                h,
-                min_value=250,
-                max_value=450,
-                color=colors[cylinder],
-            )
+            self.draw_line(painter, values, x, y, w, h, 250, 450, colors[cylinder])
+
+    def draw_egt_chart(self, painter: QPainter, x: int, y: int, w: int, h: int) -> None:
+        self.draw_chart_frame(painter, x, y, w, h, "EGT 1-2", "1000-1650°F")
+
+        colors = [
+            QColor(255, 120, 0),
+            QColor(255, 255, 255),
+        ]
+
+        for probe in range(2):
+            values = [
+                sample.egt_f[probe]
+                for sample in self.samples
+                if len(sample.egt_f) > probe
+            ]
+            self.draw_line(painter, values, x, y, w, h, 1000, 1650, colors[probe])
 
     def draw_engine_chart(self, painter: QPainter, x: int, y: int, w: int, h: int) -> None:
-        self.draw_chart_frame(painter, x, y, w, h, "OIL TEMP / OIL PSI / VOLTS", "scaled")
+        self.draw_chart_frame(painter, x, y, w, h, "OIL / VOLTS", "scaled")
 
         oil_temp = [sample.oil_temp_f for sample in self.samples]
         oil_psi = [sample.oil_pressure_psi for sample in self.samples]
@@ -78,13 +89,40 @@ class EmsTrendPage:
         self.draw_line(painter, oil_psi, x, y, w, h, 0, 80, QColor(0, 255, 255))
         self.draw_line(painter, volts, x, y, w, h, 10, 16, QColor(255, 255, 0))
 
-        painter.setFont(QFont("Arial", 10, QFont.Weight.Bold))
-        painter.setPen(QColor(255, 120, 0))
-        painter.drawText(x + 15, y + h - 45, "OIL TEMP")
-        painter.setPen(QColor(0, 255, 255))
-        painter.drawText(x + 115, y + h - 45, "OIL PSI")
-        painter.setPen(QColor(255, 255, 0))
-        painter.drawText(x + 205, y + h - 45, "VOLTS")
+        self.draw_legend(
+            painter,
+            x,
+            y,
+            h,
+            [
+                ("OIL TEMP", QColor(255, 120, 0)),
+                ("OIL PSI", QColor(0, 255, 255)),
+                ("VOLTS", QColor(255, 255, 0)),
+            ],
+        )
+
+    def draw_fuel_chart(self, painter: QPainter, x: int, y: int, w: int, h: int) -> None:
+        self.draw_chart_frame(painter, x, y, w, h, "FUEL", "scaled")
+
+        fuel_remaining = [sample.fuel_remaining_gal for sample in self.samples]
+        fuel_flow = [sample.fuel_flow_gph for sample in self.samples]
+        endurance = [sample.endurance_hr for sample in self.samples]
+
+        self.draw_line(painter, fuel_remaining, x, y, w, h, 0, 30, QColor(0, 255, 0))
+        self.draw_line(painter, fuel_flow, x, y, w, h, 0, 12, QColor(0, 180, 255))
+        self.draw_line(painter, endurance, x, y, w, h, 0, 5, QColor(255, 255, 0))
+
+        self.draw_legend(
+            painter,
+            x,
+            y,
+            h,
+            [
+                ("FUEL REM", QColor(0, 255, 0)),
+                ("FLOW", QColor(0, 180, 255)),
+                ("ENDUR", QColor(255, 255, 0)),
+            ],
+        )
 
     def draw_chart_frame(
         self,
@@ -105,12 +143,30 @@ class EmsTrendPage:
 
         painter.setPen(QColor(130, 130, 130))
         painter.setFont(QFont("Arial", 10))
-        painter.drawText(x + w - 110, y + 25, scale_text)
+        painter.drawText(x + w - 95, y + 25, scale_text)
 
         painter.setPen(QPen(QColor(40, 40, 40), 1))
         for i in range(1, 4):
             grid_y = y + int((h / 4) * i)
             painter.drawLine(x, grid_y, x + w, grid_y)
+
+    def draw_legend(
+        self,
+        painter: QPainter,
+        x: int,
+        y: int,
+        h: int,
+        items: list[tuple[str, QColor]],
+    ) -> None:
+        legend_x = x + 12
+        legend_y = y + h - 18
+
+        painter.setFont(QFont("Arial", 8, QFont.Weight.Bold))
+
+        for label, color in items:
+            painter.setPen(color)
+            painter.drawText(legend_x, legend_y, label)
+            legend_x += 75
 
     def draw_line(
         self,
@@ -127,10 +183,10 @@ class EmsTrendPage:
         if len(values) < 2:
             return
 
-        plot_x = x + 40
+        plot_x = x + 32
         plot_y = y + 35
-        plot_w = w - 70
-        plot_h = h - 55
+        plot_w = w - 55
+        plot_h = h - 60
 
         painter.setPen(QPen(color, 2))
 
