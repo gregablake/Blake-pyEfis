@@ -87,3 +87,10 @@ simulation:
   profile: straight
   paused: false
   reset_counter: 1
+fuel:
+  yellow_gal: 6.0
+  red_gal: 3.0
+  yellow_endurance_hr: 1.0
+  red_endurance_hr: 0.5
+  total_gal: 24.0
+  remaining_gal: 24.0

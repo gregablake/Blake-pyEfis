@@ -3,6 +3,7 @@ from __future__ import annotations
 from PyQt6.QtCore import Qt, QRectF
 from PyQt6.QtGui import QColor, QFont, QPainter, QPen
 
+from pyefis.user.blake_pfd.config_loader import load_config
 from pyefis.user.blake_pfd.engine_data import EngineData
 
 
@@ -32,10 +33,29 @@ class EmsPage:
         self.draw_value(painter, 40, y, "RPM", engine.rpm, "", self.rpm_color(engine.rpm))
         y += 35
 
-        self.draw_value(painter, 40, y, "VOLTS", engine.volts, "V", self.voltage_color(engine.volts), decimals=1)
+        self.draw_value(
+            painter,
+            40,
+            y,
+            "VOLTS",
+            engine.volts,
+            "V",
+            self.voltage_color(engine.volts),
+            decimals=1,
+        )
         y += 35
 
-        self.draw_value(painter, 40, y, "AMPS", engine.amps, "A", QColor(255, 255, 255), decimals=1, signed=True)
+        self.draw_value(
+            painter,
+            40,
+            y,
+            "AMPS",
+            engine.amps,
+            "A",
+            QColor(255, 255, 255),
+            decimals=1,
+            signed=True,
+        )
         y += 35
 
         self.draw_value(
@@ -49,22 +69,89 @@ class EmsPage:
         )
         y += 35
 
-        self.draw_value(painter, 40, y, "OIL TEMP", engine.oil_temp_f, "°F", self.oil_temp_color(engine.oil_temp_f))
+        self.draw_value(
+            painter,
+            40,
+            y,
+            "OIL TEMP",
+            engine.oil_temp_f,
+            "°F",
+            self.oil_temp_color(engine.oil_temp_f),
+        )
         y += 35
 
-        self.draw_value(painter, 40, y, "FUEL PSI", engine.fuel_pressure_psi, "", QColor(255, 255, 255), decimals=1)
+        self.draw_value(
+            painter,
+            40,
+            y,
+            "FUEL PSI",
+            engine.fuel_pressure_psi,
+            "",
+            QColor(255, 255, 255),
+            decimals=1,
+        )
         y += 45
 
-        self.draw_value(painter, 40, y, "FUEL FLOW", engine.fuel_flow_gph, "GPH", QColor(255, 255, 255), decimals=1)
+        fuel_color = self.fuel_color(engine)
+
+        self.draw_value(
+            painter,
+            40,
+            y,
+            "FUEL FLOW",
+            engine.fuel_flow_gph,
+            "GPH",
+            QColor(255, 255, 255),
+            decimals=1,
+        )
         y += 35
 
-        self.draw_value(painter, 40, y, "FUEL REM", engine.fuel_remaining_gal, "GAL", QColor(255, 255, 255), decimals=1)
+        self.draw_value(
+            painter,
+            40,
+            y,
+            "FUEL REM",
+            engine.fuel_remaining_gal,
+            "GAL",
+            fuel_color,
+            decimals=1,
+        )
         y += 35
 
-        self.draw_value(painter, 40, y, "FUEL USED", engine.fuel_used_gal, "GAL", QColor(255, 255, 255), decimals=1)
+        self.draw_value(
+            painter,
+            40,
+            y,
+            "FUEL USED",
+            engine.fuel_used_gal,
+            "GAL",
+            QColor(255, 255, 255),
+            decimals=1,
+        )
         y += 35
 
-        self.draw_value(painter, 40, y, "ENDURANCE", engine.endurance_hr, "HR", QColor(255, 255, 255), decimals=1)
+        self.draw_value(
+            painter,
+            40,
+            y,
+            "ENDURANCE",
+            engine.endurance_hr,
+            "HR",
+            fuel_color,
+            decimals=1,
+        )
+        y += 35
+
+        self.draw_value(
+            painter,
+            40,
+            y,
+            "RANGE",
+            engine.fuel_range_nm,
+            "NM",
+            fuel_color,
+            decimals=0,
+        )
 
         self.draw_cht_column(painter, engine, x=390, y=105)
         self.draw_egt_column(painter, engine, x=620, y=105)
@@ -98,7 +185,44 @@ class EmsPage:
 
         painter.drawText(x + 155, y, f"{text} {unit}")
 
-    def draw_cht_column(self, painter: QPainter, engine: EngineData, x: int, y: int) -> None:
+    def draw_bar(
+        self,
+        painter: QPainter,
+        x: int,
+        y: int,
+        label: str,
+        value: float,
+        min_value: float,
+        max_value: float,
+        color: QColor,
+        unit: str = "°F",
+    ) -> None:
+        bar_w = 130
+        bar_h = 16
+
+        painter.setPen(QColor(255, 255, 255))
+        painter.drawText(x, y, label)
+
+        painter.setPen(QPen(QColor(90, 90, 90), 1))
+        painter.drawRect(x + 65, y - 14, bar_w, bar_h)
+
+        ratio = (value - min_value) / (max_value - min_value)
+        ratio = max(0.0, min(1.0, ratio))
+
+        fill_w = int(bar_w * ratio)
+
+        painter.fillRect(x + 66, y - 13, fill_w, bar_h - 2, color)
+
+        painter.setPen(color)
+        painter.drawText(x + 210, y, f"{value:.0f}{unit}")
+
+    def draw_cht_column(
+        self,
+        painter: QPainter,
+        engine: EngineData,
+        x: int,
+        y: int,
+    ) -> None:
         painter.setFont(QFont("Arial", 16, QFont.Weight.Bold))
         painter.setPen(QColor(0, 180, 255))
         painter.drawText(x, y, "CHT")
@@ -118,7 +242,13 @@ class EmsPage:
             )
             y += 32
 
-    def draw_egt_column(self, painter: QPainter, engine: EngineData, x: int, y: int) -> None:
+    def draw_egt_column(
+        self,
+        painter: QPainter,
+        engine: EngineData,
+        x: int,
+        y: int,
+    ) -> None:
         painter.setFont(QFont("Arial", 16, QFont.Weight.Bold))
         painter.setPen(QColor(0, 180, 255))
         painter.drawText(x, y, "EGT")
@@ -138,7 +268,13 @@ class EmsPage:
             )
             y += 32
 
-    def draw_status_indicators(self, painter: QPainter, engine: EngineData, width: int, height: int) -> None:
+    def draw_status_indicators(
+        self,
+        painter: QPainter,
+        engine: EngineData,
+        width: int,
+        height: int,
+    ) -> None:
         x = width - 220
         y = height - 170
 
@@ -153,15 +289,34 @@ class EmsPage:
         self.draw_status(painter, x, y, "ALT", engine.alternator_online)
         y += 35
 
-        starter_color = QColor(255, 220, 0) if engine.starter_engaged else QColor(255, 255, 255)
+        starter_color = (
+            QColor(255, 220, 0)
+            if engine.starter_engaged
+            else QColor(255, 255, 255)
+        )
         painter.setPen(starter_color)
         painter.drawText(x, y, f"START {'ON' if engine.starter_engaged else 'OFF'}")
 
-    def draw_status(self, painter: QPainter, x: int, y: int, label: str, ok: bool) -> None:
+    def draw_status(
+        self,
+        painter: QPainter,
+        x: int,
+        y: int,
+        label: str,
+        ok: bool,
+    ) -> None:
         painter.setPen(QColor(0, 255, 0) if ok else QColor(255, 0, 0))
         painter.drawText(x, y, f"{label} {'ON' if ok else 'OFF'}")
 
-    def draw_annunciators(self, painter: QPainter, engine: EngineData, width: int) -> None:
+    def draw_annunciators(
+        self,
+        painter: QPainter,
+        engine: EngineData,
+        width: int,
+    ) -> None:
+        config = load_config()
+        fuel = config.fuel
+
         annunciators: list[tuple[str, QColor]] = []
 
         if engine.rpm > 2000 and engine.oil_pressure_psi < 20:
@@ -203,6 +358,16 @@ class EmsPage:
         if engine.starter_engaged:
             annunciators.append(("START", QColor(255, 220, 0)))
 
+        if engine.fuel_remaining_gal <= fuel.red_gal:
+            annunciators.append(("LOW FUEL", QColor(255, 0, 0)))
+        elif engine.fuel_remaining_gal <= fuel.yellow_gal:
+            annunciators.append(("FUEL", QColor(255, 220, 0)))
+
+        if engine.endurance_hr <= fuel.red_endurance_hr:
+            annunciators.append(("LOW ENDURANCE", QColor(255, 0, 0)))
+        elif engine.endurance_hr <= fuel.yellow_endurance_hr:
+            annunciators.append(("ENDURANCE", QColor(255, 220, 0)))
+
         if not annunciators:
             annunciators.append(("ENGINE NORMAL", QColor(0, 255, 0)))
 
@@ -222,37 +387,24 @@ class EmsPage:
                 text,
             )
             x += box_w + 10
-            
-    def draw_bar(
-        self,
-        painter: QPainter,
-        x: int,
-        y: int,
-        label: str,
-        value: float,
-        min_value: float,
-        max_value: float,
-        color: QColor,
-        unit: str = "°F",
-    ) -> None:
-        bar_w = 130
-        bar_h = 16
 
-        painter.setPen(QColor(255, 255, 255))
-        painter.drawText(x, y, label)
+    def fuel_color(self, engine: EngineData) -> QColor:
+        config = load_config()
+        fuel = config.fuel
 
-        painter.setPen(QPen(QColor(90, 90, 90), 1))
-        painter.drawRect(x + 65, y - 14, bar_w, bar_h)
+        if engine.fuel_remaining_gal <= fuel.red_gal:
+            return QColor(255, 0, 0)
 
-        ratio = (value - min_value) / (max_value - min_value)
-        ratio = max(0.0, min(1.0, ratio))
+        if engine.fuel_remaining_gal <= fuel.yellow_gal:
+            return QColor(255, 220, 0)
 
-        fill_w = int(bar_w * ratio)
+        if engine.endurance_hr <= fuel.red_endurance_hr:
+            return QColor(255, 0, 0)
 
-        painter.fillRect(x + 66, y - 13, fill_w, bar_h - 2, color)
+        if engine.endurance_hr <= fuel.yellow_endurance_hr:
+            return QColor(255, 220, 0)
 
-        painter.setPen(color)
-        painter.drawText(x + 210, y, f"{value:.0f}{unit}")
+        return QColor(0, 255, 0)
 
     def rpm_color(self, rpm: float) -> QColor:
         if rpm > 3500:
@@ -307,5 +459,3 @@ class EmsPage:
             return QColor(255, 220, 0)
 
         return QColor(0, 255, 0)
-    
-    

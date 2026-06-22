@@ -4,15 +4,20 @@ from math import sin
 from time import monotonic
 
 from pyefis.user.blake_pfd.engine_data import EngineData
+from pyefis.user.blake_pfd.config_loader import load_config
 
 
 class SimulatedEngineSource:
     def __init__(self) -> None:
         self.start_time_s = monotonic()
-        self.total_fuel_gal = 24.0
+        self.config = load_config()
+        self.total_fuel_gal = self.config.fuel.remaining_gal
 
     def read(self) -> EngineData:
         elapsed_s = monotonic() - self.start_time_s
+
+        self.config = load_config()
+        self.total_fuel_gal = self.config.fuel.remaining_gal
 
         rpm = 2450.0 + sin(elapsed_s * 0.4) * 120.0
 

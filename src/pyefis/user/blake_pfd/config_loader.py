@@ -115,6 +115,7 @@ class BlakePfdConfig:
     declutter: DeclutterConfig
     logging: LoggingConfig
     simulation: SimulationConfig
+    fuel: FuelConfig
 @dataclass
 class RouteConfig:
     auto_sequence: bool = True
@@ -148,6 +149,14 @@ class SimulationConfig:
     profile: str = "straight"
     paused: bool = False
     reset_counter: int = 0
+@dataclass
+class FuelConfig:
+    yellow_gal: float = 6.0
+    red_gal: float = 3.0
+    yellow_endurance_hr: float = 1.0
+    red_endurance_hr: float = 0.5
+    total_gal: float = 24.0
+    remaining_gal: float = 24.0
 
 
 def load_config(path: Path = CONFIG_PATH) -> BlakePfdConfig:
@@ -177,7 +186,8 @@ def load_config(path: Path = CONFIG_PATH) -> BlakePfdConfig:
         obs=ObsConfig(**raw.get("obs", {})),
         declutter=DeclutterConfig(**raw.get("declutter", {})),
         simulation=SimulationConfig(**raw.get("simulation", {})),
-        logging=LoggingConfig(**raw.get("logging", {}))
+        logging=LoggingConfig(**raw.get("logging", {})),
+        fuel=FuelConfig(**raw.get("fuel", {})),
     )
 
 def demo() -> None:
