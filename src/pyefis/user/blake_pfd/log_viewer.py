@@ -56,10 +56,10 @@ def summarize_log(path: Path) -> None:
     egt_values = []
 
     for index in range(1, 7):
-        cht_values.extend(values(f"engine_cht_f_{index}"))
+        cht_values.extend(values(f"engine_cht_{index}"))
 
     for index in range(1, 3):
-        egt_values.extend(values(f"engine_egt_f_{index}"))
+        egt_values.extend(values(f"engine_egt_{index}"))
 
     print()
     print(f"Log: {path.name}")
@@ -90,8 +90,26 @@ def summarize_log(path: Path) -> None:
     if cht_values:
         print(f"CHT max: {max(cht_values):.0f} °F")
 
+        for cylinder in range(1, 7):
+            cyl = values(f"engine_cht_{cylinder}")
+
+            if cyl:
+                print(
+                    f"CHT{cylinder} max: "
+                    f"{max(cyl):.0f} °F"
+                )
+
     if egt_values:
         print(f"EGT max: {max(egt_values):.0f} °F")
+
+        for cylinder in range(1, 3):
+            cyl = values(f"engine_egt_{cylinder}")
+
+            if cyl:
+                print(
+                    f"EGT{cylinder} max: "
+                    f"{max(cyl):.0f} °F"
+                )                   
 
     print()
 

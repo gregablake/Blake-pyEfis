@@ -30,10 +30,20 @@ class FlightLogger:
         row = asdict(pfd)
         row["timestamp_utc"] = datetime.now(timezone.utc).isoformat()
         row["waypoint_id"] = waypoint_id
-        if engine is not None:
-            engine_row = asdict(engine)
+        
+        engine_row = asdict(engine)
 
-            for key, value in engine_row.items():
+        for key, value in engine_row.items():
+
+            if key == "cht_f":
+                for idx, cht in enumerate(value, start=1):
+                    row[f"engine_cht_{idx}"] = cht
+
+            elif key == "egt_f":
+                for idx, egt in enumerate(value, start=1):
+                    row[f"engine_egt_{idx}"] = egt
+
+            else:
                 row[f"engine_{key}"] = value
 
         self.write_row(row)
