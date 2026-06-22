@@ -33,6 +33,7 @@ from pyefis.user.blake_pfd.synthetic_vision import (
 )
 from pyefis.user.blake_pfd.terrain import TerrainComputer
 from pyefis.user.blake_pfd.weather_reader import WeatherReader
+from pyefis.user.blake_pfd.ems_trend_page import EmsTrendPage
 
 
 class BlakePfdDemo(QWidget):
@@ -90,6 +91,7 @@ class BlakePfdDemo(QWidget):
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.update_data)
         self.timer.start(50)
+        self.ems_trend_page = EmsTrendPage()
 
     def update_data(self) -> None:
         if self.replay_source is not None:
@@ -99,6 +101,7 @@ class BlakePfdDemo(QWidget):
             self.pfd = self.flight_computer.update(raw)
 
         self.engine_data = self.engine_source.read()
+        self.ems_trend_page.add_sample(self.engine_data)
 
         if self.config.logging.enabled and self.pfd is not None:
             self.flight_logger.maybe_log(
@@ -155,6 +158,9 @@ class BlakePfdDemo(QWidget):
                 if selection is not None:
                     _distance_nm, airport = selection
                     self.activate_direct_to(airport.ident)
+
+        elif event.key() == Qt.Key.Key_T:
+            self.current_page = "EMS_TREND"
 
         self.update()
 
@@ -326,6 +332,17 @@ class BlakePfdDemo(QWidget):
             self.draw_weather_overlay(painter, self.weather.read(), width, height)
 
         draw_master_warning_strip(painter, self.engine_data, width)
+        
+        if self.current_page == "EMS_TREND":
+            painter = QPainter(self)
+            self.ems_trend_page.draw(
+                painter,
+                self.width(),
+                self.height(),
+            )
+            draw_master_warning_strip(painter, self.engine_data, self.width())
+            painter.end()
+            return
 
         painter.end()
 
