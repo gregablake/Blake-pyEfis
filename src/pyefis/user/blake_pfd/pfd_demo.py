@@ -62,8 +62,10 @@ class BlakePfdDemo(QWidget):
         self.engine_source = SimulatedEngineSource()
         self.engine_data = self.engine_source.read()
 
-        self.flight_logger = FlightLogger(
-            log_interval_s=self.config.logging.interval_s,
+        self.flight_logger.maybe_log(
+            self.pfd,
+            waypoint_id=self.config.navigation.selected_waypoint_id,
+            engine=self.engine_data,
         )
 
         self.stratux = StratuxReader(

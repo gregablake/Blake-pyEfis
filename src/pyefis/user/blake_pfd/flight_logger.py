@@ -19,7 +19,7 @@ class FlightLogger:
 
         LOG_DIR.mkdir(exist_ok=True)
 
-    def maybe_log(self, pfd, waypoint_id: str) -> None:
+    def maybe_log(self, pfd, waypoint_id: str, engine=None) -> None:
         now_s = monotonic()
 
         if now_s - self.last_log_time_s < self.log_interval_s:
@@ -30,6 +30,11 @@ class FlightLogger:
         row = asdict(pfd)
         row["timestamp_utc"] = datetime.now(timezone.utc).isoformat()
         row["waypoint_id"] = waypoint_id
+        if engine is not None:
+            engine_row = asdict(engine)
+
+            for key, value in engine_row.items():
+                row[f"engine_{key}"] = value
 
         self.write_row(row)
 
