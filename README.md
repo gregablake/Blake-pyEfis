@@ -55,7 +55,7 @@
 | src/pyefis/user/blake\_pfd/airdata\_calculations.py     |       10 |        1 |        2 |        1 |     83% |        10 |
 | src/pyefis/user/blake\_pfd/airport\_info\_page.py       |       56 |       56 |        8 |        0 |      0% |      1-98 |
 | src/pyefis/user/blake\_pfd/airport\_lookup.py           |       30 |       30 |        8 |        0 |      0% |      1-53 |
-| src/pyefis/user/blake\_pfd/config\_loader.py            |      150 |       15 |        8 |        1 |     86% |167-173, 194-197, 200-208, 212 |
+| src/pyefis/user/blake\_pfd/config\_loader.py            |      153 |       15 |        8 |        1 |     86% |170-176, 197-200, 203-211, 215 |
 | src/pyefis/user/blake\_pfd/create\_route.py             |       18 |       18 |        4 |        0 |      0% |      1-28 |
 | src/pyefis/user/blake\_pfd/data/\_\_init\_\_.py         |        2 |        0 |        0 |        0 |    100% |           |
 | src/pyefis/user/blake\_pfd/data/csv\_loader.py          |       36 |        7 |        8 |        1 |     73% |18, 26, 51-56 |
@@ -66,7 +66,7 @@
 | src/pyefis/user/blake\_pfd/ems\_page.py                 |      195 |      195 |       78 |        0 |      0% |     1-461 |
 | src/pyefis/user/blake\_pfd/ems\_trend\_page.py          |       97 |       97 |       12 |        0 |      0% |     1-214 |
 | src/pyefis/user/blake\_pfd/engine\_data.py              |       20 |       20 |        0 |        0 |      0% |      1-27 |
-| src/pyefis/user/blake\_pfd/engine\_sim.py               |       32 |       32 |        2 |        0 |      0% |      1-78 |
+| src/pyefis/user/blake\_pfd/engine\_sim.py               |       61 |       61 |       16 |        0 |      0% |     1-125 |
 | src/pyefis/user/blake\_pfd/flight\_computer.py          |      104 |       65 |       18 |        0 |     32% |54-63, 66-131, 134-147, 156-176, 180-188, 192-196, 200 |
 | src/pyefis/user/blake\_pfd/flight\_logger.py            |       44 |       44 |       18 |        0 |      0% |      1-67 |
 | src/pyefis/user/blake\_pfd/fms\_page.py                 |       58 |       58 |       12 |        0 |      0% |      1-96 |
@@ -87,6 +87,7 @@
 | src/pyefis/user/blake\_pfd/sensors\_sim.py              |       70 |       43 |       14 |        0 |     32% |35-37, 40-85, 105, 109-113 |
 | src/pyefis/user/blake\_pfd/set\_cdi\_mode.py            |       22 |       22 |        4 |        0 |      0% |      1-39 |
 | src/pyefis/user/blake\_pfd/set\_declutter.py            |       20 |       20 |        4 |        0 |      0% |      1-35 |
+| src/pyefis/user/blake\_pfd/set\_ems\_test.py            |       17 |        9 |        2 |        1 |     47% | 24-35, 39 |
 | src/pyefis/user/blake\_pfd/set\_fuel\_total.py          |       19 |       19 |        2 |        0 |      0% |      1-34 |
 | src/pyefis/user/blake\_pfd/set\_map\_range.py           |       21 |       21 |        4 |        0 |      0% |      1-37 |
 | src/pyefis/user/blake\_pfd/set\_obs.py                  |       25 |       25 |        2 |        0 |      0% |      1-40 |
@@ -107,7 +108,7 @@
 | src/pyefis/user/hooks/keys.py                           |       19 |       19 |        4 |        0 |      0% |     20-53 |
 | src/pyefis/user/screens/\_\_init\_\_.py                 |        0 |        0 |        0 |        0 |    100% |           |
 | src/pyefis/version.py                                   |        2 |        0 |        0 |        0 |    100% |           |
-| **TOTAL**                                               | **10606** | **6247** | **2782** |  **119** | **38%** |           |
+| **TOTAL**                                               | **10655** | **6285** | **2798** |  **120** | **38%** |           |
 
 
 ## Setup coverage badge
