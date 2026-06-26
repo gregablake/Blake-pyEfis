@@ -35,6 +35,8 @@ from pyefis.user.blake_pfd.terrain import TerrainComputer
 from pyefis.user.blake_pfd.weather_reader import WeatherReader
 from pyefis.user.blake_pfd.ems_trend_page import EmsTrendPage
 from pyefis.user.blake_pfd.ems_alert_history import EmsAlertHistory
+from pathlib import Path
+import yaml
 
 
 class BlakePfdDemo(QWidget):
@@ -175,6 +177,8 @@ class BlakePfdDemo(QWidget):
                 if selection is not None:
                     _distance_nm, airport = selection
                     self.activate_direct_to(airport.ident)
+            elif event.key() == Qt.Key.Key_X:
+                self.cycle_ems_test_mode()
 
         self.update()
 
@@ -184,6 +188,39 @@ class BlakePfdDemo(QWidget):
 
         self.config.navigation.selected_waypoint_id = waypoint_id
         self.flight_computer.config.navigation.selected_waypoint_id = waypoint_id
+
+    def cycle_ems_test_mode(self) -> None:
+        modes = [
+            "normal",
+            "high_cht",
+            "high_egt",
+            "low_oil",
+            "alt_fail",
+            "ign_fail",
+            "low_fuel",
+        ]
+
+        current = getattr(self.config.ems_test, "mode", "normal")
+
+        try:
+            index = modes.index(current)
+        except ValueError:
+            index = 0
+
+        next_mode = modes[(index + 1) % len(modes)]
+
+        config_path = Path(__file__).with_name("pfd_config.yaml")
+        raw = yaml.safe_load(config_path.read_text()) or {}
+
+        raw.setdefault("ems_test", {})
+        raw["ems_test"]["mode"] = next_mode
+
+        config_path.write_text(yaml.safe_dump(raw, sort_keys=False))
+
+        self.config = load_config()
+        self.flight_computer.config = self.config
+
+        print(f"EMS test mode: {next_mode}")
 
     def paintEvent(self, event) -> None:  # noqa: N802
         if self.pfd is None:
