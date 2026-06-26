@@ -73,7 +73,7 @@
 | src/pyefis/user/blake\_pfd/hardware\_readers.py         |      209 |      209 |       18 |        0 |      0% |    19-528 |
 | src/pyefis/user/blake\_pfd/log\_replay.py               |       22 |       22 |        2 |        0 |      0% |      1-31 |
 | src/pyefis/user/blake\_pfd/log\_viewer.py               |       92 |       92 |       44 |        0 |      0% |     1-136 |
-| src/pyefis/user/blake\_pfd/master\_warning.py           |       50 |       50 |       28 |        0 |      0% |      1-81 |
+| src/pyefis/user/blake\_pfd/master\_warning.py           |       62 |       62 |       30 |        0 |      0% |     1-100 |
 | src/pyefis/user/blake\_pfd/moving\_map.py               |       23 |       23 |        2 |        0 |      0% |      1-54 |
 | src/pyefis/user/blake\_pfd/nav\_math.py                 |       67 |       37 |        2 |        0 |     43% |41-80, 98-105, 114-126, 136-152, 160-164, 168, 172, 176 |
 | src/pyefis/user/blake\_pfd/navpoint\_database.py        |       30 |       30 |        8 |        0 |      0% |      1-52 |
@@ -108,7 +108,7 @@
 | src/pyefis/user/hooks/keys.py                           |       19 |       19 |        4 |        0 |      0% |     20-53 |
 | src/pyefis/user/screens/\_\_init\_\_.py                 |        0 |        0 |        0 |        0 |    100% |           |
 | src/pyefis/version.py                                   |        2 |        0 |        0 |        0 |    100% |           |
-| **TOTAL**                                               | **10689** | **6319** | **2802** |  **120** | **38%** |           |
+| **TOTAL**                                               | **10701** | **6331** | **2804** |  **120** | **38%** |           |
 
 
 ## Setup coverage badge
