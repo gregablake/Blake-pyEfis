@@ -157,6 +157,9 @@ class FuelConfig:
     red_endurance_hr: float = 0.5
     total_gal: float = 24.0
     remaining_gal: float = 24.0
+@dataclass
+class EmsTestConfig:
+    mode: str = "normal"
 
 
 def load_config(path: Path = CONFIG_PATH) -> BlakePfdConfig:

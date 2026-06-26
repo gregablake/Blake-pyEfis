@@ -94,3 +94,5 @@ fuel:
   red_endurance_hr: 0.5
   total_gal: 24.0
   remaining_gal: 24.0
+ems_test:
+  mode: normal
