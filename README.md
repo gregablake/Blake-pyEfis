@@ -63,7 +63,7 @@
 | src/pyefis/user/blake\_pfd/direct\_to.py                |       36 |       36 |        4 |        0 |      0% |      1-62 |
 | src/pyefis/user/blake\_pfd/ems\_alert\_history.py       |       75 |       75 |       14 |        0 |      0% |     1-127 |
 | src/pyefis/user/blake\_pfd/ems\_alert\_viewer.py        |       24 |       24 |        6 |        0 |      0% |      1-38 |
-| src/pyefis/user/blake\_pfd/ems\_page.py                 |      195 |      195 |       78 |        0 |      0% |     1-461 |
+| src/pyefis/user/blake\_pfd/ems\_page.py                 |      209 |      209 |       80 |        0 |      0% |     1-481 |
 | src/pyefis/user/blake\_pfd/ems\_trend\_page.py          |       97 |       97 |       12 |        0 |      0% |     1-214 |
 | src/pyefis/user/blake\_pfd/engine\_data.py              |       20 |       20 |        0 |        0 |      0% |      1-27 |
 | src/pyefis/user/blake\_pfd/engine\_sim.py               |       61 |       61 |       16 |        0 |      0% |     1-125 |
@@ -108,7 +108,7 @@
 | src/pyefis/user/hooks/keys.py                           |       19 |       19 |        4 |        0 |      0% |     20-53 |
 | src/pyefis/user/screens/\_\_init\_\_.py                 |        0 |        0 |        0 |        0 |    100% |           |
 | src/pyefis/version.py                                   |        2 |        0 |        0 |        0 |    100% |           |
-| **TOTAL**                                               | **10655** | **6285** | **2798** |  **120** | **38%** |           |
+| **TOTAL**                                               | **10669** | **6299** | **2800** |  **120** | **38%** |           |
 
 
 ## Setup coverage badge
