@@ -6,6 +6,7 @@ from PyQt6.QtCore import Qt, QRectF
 from PyQt6.QtGui import QColor, QFont, QPainter
 
 from pyefis.user.blake_pfd.engine_data import EngineData
+from pyefis.user.blake_pfd.config_loader import load_config
 
 
 @dataclass
@@ -67,6 +68,24 @@ def draw_master_warning_strip(
     y = 5
     box_w = 150
     box_h = 28
+
+    config = load_config()
+    mode = getattr(config.ems_test, "mode", "normal")
+
+    if mode != "normal":
+        test_box_w = 210
+        test_box_h = 28
+        test_x = width - test_box_w - 10
+        test_y = 5
+
+        painter.fillRect(test_x, test_y, test_box_w, test_box_h, QColor(255, 120, 0))
+        painter.setPen(QColor(0, 0, 0))
+        painter.setFont(QFont("Arial", 11, QFont.Weight.Bold))
+        painter.drawText(
+            QRectF(test_x, test_y, test_box_w, test_box_h),
+            Qt.AlignmentFlag.AlignCenter,
+            f"TEST: {mode.upper()}",
+        )
 
     painter.setFont(QFont("Arial", 11, QFont.Weight.Bold))
 
