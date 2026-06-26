@@ -26,6 +26,7 @@ class EmsPage:
         )
 
         self.draw_annunciators(painter, engine, width)
+        self.draw_test_mode_label(painter, width)
 
         y = 105
         painter.setFont(QFont("Arial", 16, QFont.Weight.Bold))
@@ -388,6 +389,8 @@ class EmsPage:
             )
             x += box_w + 10
 
+    
+
     def fuel_color(self, engine: EngineData) -> QColor:
         config = load_config()
         fuel = config.fuel
@@ -459,3 +462,24 @@ class EmsPage:
             return QColor(255, 220, 0)
 
         return QColor(0, 255, 0)
+
+    def draw_test_mode_label(self, painter: QPainter, width: int) -> None:
+        config = load_config()
+        mode = getattr(config.ems_test, "mode", "normal")
+
+        if mode == "normal":
+            return
+
+        box_w = 260
+        box_h = 28
+        box_x = width - box_w - 20
+        box_y = 62
+
+        painter.fillRect(box_x, box_y, box_w, box_h, QColor(255, 120, 0))
+        painter.setPen(QColor(0, 0, 0))
+        painter.setFont(QFont("Arial", 11, QFont.Weight.Bold))
+        painter.drawText(
+            QRectF(box_x, box_y, box_w, box_h),
+            Qt.AlignmentFlag.AlignCenter,
+            f"EMS TEST: {mode.upper()}",
+        )
