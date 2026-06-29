@@ -55,7 +55,7 @@
 | src/pyefis/user/blake\_pfd/airdata\_calculations.py     |       10 |        1 |        2 |        1 |     83% |        10 |
 | src/pyefis/user/blake\_pfd/airport\_info\_page.py       |       56 |       56 |        8 |        0 |      0% |      1-98 |
 | src/pyefis/user/blake\_pfd/airport\_lookup.py           |       30 |       30 |        8 |        0 |      0% |      1-53 |
-| src/pyefis/user/blake\_pfd/audio\_alerts.py             |       25 |       25 |        6 |        0 |      0% |      1-36 |
+| src/pyefis/user/blake\_pfd/audio\_alerts.py             |       28 |       28 |        6 |        0 |      0% |      1-38 |
 | src/pyefis/user/blake\_pfd/config\_loader.py            |      153 |       15 |        8 |        1 |     86% |170-176, 197-200, 203-211, 215 |
 | src/pyefis/user/blake\_pfd/create\_route.py             |       18 |       18 |        4 |        0 |      0% |      1-28 |
 | src/pyefis/user/blake\_pfd/data/\_\_init\_\_.py         |        2 |        0 |        0 |        0 |    100% |           |
@@ -71,6 +71,7 @@
 | src/pyefis/user/blake\_pfd/flight\_computer.py          |      104 |       65 |       18 |        0 |     32% |54-63, 66-131, 134-147, 156-176, 180-188, 192-196, 200 |
 | src/pyefis/user/blake\_pfd/flight\_logger.py            |       44 |       44 |       18 |        0 |      0% |      1-67 |
 | src/pyefis/user/blake\_pfd/fms\_page.py                 |       58 |       58 |       12 |        0 |      0% |      1-96 |
+| src/pyefis/user/blake\_pfd/gpio\_buzzer.py              |       23 |       23 |        4 |        0 |      0% |      1-31 |
 | src/pyefis/user/blake\_pfd/hardware\_readers.py         |      209 |      209 |       18 |        0 |      0% |    19-528 |
 | src/pyefis/user/blake\_pfd/log\_replay.py               |       22 |       22 |        2 |        0 |      0% |      1-31 |
 | src/pyefis/user/blake\_pfd/log\_viewer.py               |       92 |       92 |       44 |        0 |      0% |     1-136 |
@@ -109,7 +110,7 @@
 | src/pyefis/user/hooks/keys.py                           |       19 |       19 |        4 |        0 |      0% |     20-53 |
 | src/pyefis/user/screens/\_\_init\_\_.py                 |        0 |        0 |        0 |        0 |    100% |           |
 | src/pyefis/version.py                                   |        2 |        0 |        0 |        0 |    100% |           |
-| **TOTAL**                                               | **10729** | **6359** | **2810** |  **120** | **38%** |           |
+| **TOTAL**                                               | **10755** | **6385** | **2814** |  **120** | **38%** |           |
 
 
 ## Setup coverage badge
