@@ -96,3 +96,8 @@ fuel:
   remaining_gal: 24.0
 ems_test:
   mode: normal
+audio_alerts:
+  enabled: true
+  buzzer_enabled: true
+  buzzer_pin: 18
+  repeat_interval_s: 10.0

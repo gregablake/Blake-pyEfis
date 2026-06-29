@@ -91,7 +91,12 @@ class BlakePfdDemo(QWidget):
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.update_data)
         self.timer.start(50)
-        self.audio_alerts = AudioAlertManager()
+        self.audio_alerts = AudioAlertManager(
+            enabled=self.config.audio_alerts.enabled,
+            buzzer_enabled=self.config.audio_alerts.buzzer_enabled,
+            buzzer_pin=self.config.audio_alerts.buzzer_pin,
+            repeat_interval_s=self.config.audio_alerts.repeat_interval_s,
+        )
 
     def update_data(self) -> None:
         if self.replay_source is not None:

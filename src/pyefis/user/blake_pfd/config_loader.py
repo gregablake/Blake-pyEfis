@@ -116,6 +116,7 @@ class BlakePfdConfig:
     logging: LoggingConfig
     simulation: SimulationConfig
     fuel: FuelConfig
+    audio_alerts: AudioAlertsConfig
 @dataclass
 class RouteConfig:
     auto_sequence: bool = True
@@ -160,6 +161,12 @@ class FuelConfig:
 @dataclass
 class EmsTestConfig:
     mode: str = "normal"
+@dataclass
+class AudioAlertsConfig:
+    enabled: bool = True
+    buzzer_enabled: bool = True
+    buzzer_pin: int = 18
+    repeat_interval_s: float = 10.0
 
 
 def load_config(path: Path = CONFIG_PATH) -> BlakePfdConfig:
@@ -191,6 +198,7 @@ def load_config(path: Path = CONFIG_PATH) -> BlakePfdConfig:
         simulation=SimulationConfig(**raw.get("simulation", {})),
         logging=LoggingConfig(**raw.get("logging", {})),
         fuel=FuelConfig(**raw.get("fuel", {})),
+        audio_alerts=AudioAlertsConfig(**raw.get("audio_alerts", {})),
     )
 
 def demo() -> None:

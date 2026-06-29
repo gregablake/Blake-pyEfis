@@ -13,11 +13,18 @@ class AudioAlertManager:
         self.last_alert_time_s = 0.0
         self.last_alert_text: str | None = None
         self.buzzer = GpioBuzzer()
-
+    def __init__(self, enabled: bool = True, buzzer_enabled: bool = True, buzzer_pin: int = 18, repeat_interval_s: float = 10.0) -> None:
+        self.enabled = enabled
+        self.buzzer_enabled = buzzer_enabled
+        self.repeat_interval_s = repeat_interval_s
+        self.last_alert_time_s = 0.0
+        self.last_alert_text: str | None = None
+        self.buzzer = GpioBuzzer(pin=buzzer_pin) if buzzer_enabled else None
     def update(self, engine: EngineData, silenced: bool = False) -> None:
         if silenced:
             return
-
+        if not self.enabled:
+            return
         warnings = get_engine_warnings(engine)
         active = [warning.text for warning in warnings if warning.text != "ENGINE NORMAL"]
 
@@ -36,3 +43,7 @@ class AudioAlertManager:
     def play_alert(self, alert_text: str) -> None:
         print(f"AUDIO ALERT: {alert_text}")
         self.buzzer.beep()
+        print(f"AUDIO ALERT: {alert_text}")
+
+        if self.buzzer is not None:
+            self.buzzer.beep()
