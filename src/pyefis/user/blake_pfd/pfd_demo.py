@@ -37,6 +37,7 @@ from pyefis.user.blake_pfd.ems_trend_page import EmsTrendPage
 from pyefis.user.blake_pfd.ems_alert_history import EmsAlertHistory
 from pathlib import Path
 import yaml
+from pyefis.user.blake_pfd.audio_alerts import AudioAlertManager
 
 
 class BlakePfdDemo(QWidget):
@@ -90,6 +91,7 @@ class BlakePfdDemo(QWidget):
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.update_data)
         self.timer.start(50)
+        self.audio_alerts = AudioAlertManager()
 
     def update_data(self) -> None:
         if self.replay_source is not None:
@@ -100,6 +102,10 @@ class BlakePfdDemo(QWidget):
 
         self.engine_data = self.engine_source.read()
         self.ems_alert_history.update(self.engine_data)
+        self.audio_alerts.update(
+            self.engine_data,
+            silenced=self.ems_alert_history.silenced,
+)
         self.ems_trend_page.add_sample(self.engine_data)
 
         if self.config.logging.enabled and self.pfd is not None:
