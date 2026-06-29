@@ -38,6 +38,7 @@ from pyefis.user.blake_pfd.ems_alert_history import EmsAlertHistory
 from pathlib import Path
 import yaml
 from pyefis.user.blake_pfd.audio_alerts import AudioAlertManager
+from pyefis.user.blake_pfd.engine_checklist_page import EngineChecklistPage
 
 
 class BlakePfdDemo(QWidget):
@@ -62,6 +63,7 @@ class BlakePfdDemo(QWidget):
         self.ems_page = EmsPage()
         self.ems_trend_page = EmsTrendPage()
         self.ems_alert_history = EmsAlertHistory()
+        self.engine_checklist_page = EngineChecklistPage()
 
         self.engine_source = SimulatedEngineSource()
         self.engine_data = self.engine_source.read()
@@ -119,7 +121,19 @@ class BlakePfdDemo(QWidget):
                 waypoint_id=self.config.navigation.selected_waypoint_id,
                 engine=self.engine_data,
             )
+        elif self.current_page == "ENGINE_CHECKLIST":
+            if event.key() == Qt.Key.Key_Up:
+                self.engine_checklist_page.move_selection(-1)
 
+            elif event.key() == Qt.Key.Key_Down:
+                self.engine_checklist_page.move_selection(1)
+
+            elif event.key() in (
+                Qt.Key.Key_Return,
+                Qt.Key.Key_Enter,
+                Qt.Key.Key_Space,
+            ):
+                self.engine_checklist_page.toggle_selected()
         self.update()
 
     def keyPressEvent(self, event) -> None:  # noqa: N802
@@ -190,7 +204,8 @@ class BlakePfdDemo(QWidget):
                     self.activate_direct_to(airport.ident)
             elif event.key() == Qt.Key.Key_X:
                 self.cycle_ems_test_mode()
-
+        elif event.key() == Qt.Key.Key_C:
+            self.current_page = "ENGINE_CHECKLIST"
         self.update()
 
     def activate_direct_to(self, waypoint_id: str) -> None:
@@ -409,6 +424,17 @@ class BlakePfdDemo(QWidget):
         if self.current_page == "EMS_TREND":
             painter = QPainter(self)
             self.ems_trend_page.draw(
+                painter,
+                self.width(),
+                self.height(),
+            )
+            draw_master_warning_strip(painter, self.engine_data, self.width())
+            painter.end()
+            return
+
+        if self.current_page == "ENGINE_CHECKLIST":
+            painter = QPainter(self)
+            self.engine_checklist_page.draw(
                 painter,
                 self.width(),
                 self.height(),

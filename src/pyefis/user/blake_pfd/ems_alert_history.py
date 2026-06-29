@@ -11,6 +11,7 @@ from pyefis.user.blake_pfd.engine_data import EngineData
 from pyefis.user.blake_pfd.master_warning import get_engine_warnings
 import csv
 from pathlib import Path
+from pyefis.user.blake_pfd.config_loader import load_config
 
 
 @dataclass
@@ -102,8 +103,17 @@ class EmsAlertHistory:
         painter.drawText(
             40,
             80,
-            f"ACK: {len(self.acknowledged_alerts)}   SILENCED: {'YES' if self.silenced else 'NO'}",
         )
+        config = load_config()
+        audio_status = "ON" if config.audio_alerts.enabled else "OFF"                                                                            
+        buzzer_status = "ON" if config.audio_alerts.buzzer_enabled else "OFF"
+        
+        painter.drawText( 
+            40,
+            80,
+            f"ACK: {len(self.acknowledged_alerts)}   SILENCED: {'YES' if self.silenced else 'NO'}   AUDIO: {audio_status}   BUZZER: {buzzer_status}",
+        )
+        
 
         painter.setFont(QFont("Arial", 15, QFont.Weight.Bold))
         y = 120
