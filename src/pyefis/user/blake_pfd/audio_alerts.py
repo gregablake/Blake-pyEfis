@@ -4,6 +4,7 @@ from time import monotonic
 
 from pyefis.user.blake_pfd.engine_data import EngineData
 from pyefis.user.blake_pfd.master_warning import get_engine_warnings
+from pyefis.user.blake_pfd.gpio_buzzer import GpioBuzzer
 
 
 class AudioAlertManager:
@@ -11,6 +12,7 @@ class AudioAlertManager:
         self.repeat_interval_s = repeat_interval_s
         self.last_alert_time_s = 0.0
         self.last_alert_text: str | None = None
+        self.buzzer = GpioBuzzer()
 
     def update(self, engine: EngineData, silenced: bool = False) -> None:
         if silenced:
@@ -32,5 +34,5 @@ class AudioAlertManager:
             self.play_alert(alert_text)
 
     def play_alert(self, alert_text: str) -> None:
-        # Placeholder for future GPIO/audio output.
         print(f"AUDIO ALERT: {alert_text}")
+        self.buzzer.beep()
