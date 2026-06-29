@@ -70,5 +70,8 @@ class EngineChecklistPage:
         painter.drawText(
             40,
             height - 40,
-            "UP/DOWN = SELECT    SPACE/ENTER = CHECK    P = PFD    E = EMS",
+            "UP/DOWN = SELECT    SPACE/ENTER = CHECK    R = RESET    P = PFD    E = EMS"
         )
+    def reset(self) -> None:
+        self.selected_index = 0
+        self.checked.clear()

@@ -127,6 +127,8 @@ class BlakePfdDemo(QWidget):
 
             elif event.key() == Qt.Key.Key_Down:
                 self.engine_checklist_page.move_selection(1)
+            elif event.key() == Qt.Key.Key_R:
+                self.engine_checklist_page.reset()
 
             elif event.key() in (
                 Qt.Key.Key_Return,
