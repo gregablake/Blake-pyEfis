@@ -127,8 +127,12 @@ class BlakePfdDemo(QWidget):
 
             elif event.key() == Qt.Key.Key_Down:
                 self.engine_checklist_page.move_selection(1)
-            elif event.key() == Qt.Key.Key_R:
-                self.engine_checklist_page.reset()
+
+            elif event.key() == Qt.Key.Key_Left:
+                self.engine_checklist_page.previous_phase()
+
+            elif event.key() == Qt.Key.Key_Right:
+                self.engine_checklist_page.next_phase()
 
             elif event.key() in (
                 Qt.Key.Key_Return,
@@ -136,6 +140,13 @@ class BlakePfdDemo(QWidget):
                 Qt.Key.Key_Space,
             ):
                 self.engine_checklist_page.toggle_selected()
+
+            elif event.key() == Qt.Key.Key_R:
+                if event.modifiers() & Qt.KeyboardModifier.ShiftModifier:
+                    self.engine_checklist_page.reset_all()
+                else:
+                    self.engine_checklist_page.reset_current_phase()
+
         self.update()
 
     def keyPressEvent(self, event) -> None:  # noqa: N802

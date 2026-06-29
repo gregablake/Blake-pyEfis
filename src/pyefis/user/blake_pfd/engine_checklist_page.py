@@ -6,38 +6,139 @@ from PyQt6.QtGui import QColor, QFont, QPainter
 
 class EngineChecklistPage:
     def __init__(self) -> None:
-        self.selected_index = 0
-        self.checked: set[int] = set()
+        self.selected_phase_index = 0
+        self.selected_item_index = 0
+        self.checked: dict[str, set[int]] = {}
 
-        self.items = [
-            "MASTER - ON",
-            "FUEL - CHECK QUANTITY",
-            "FUEL VALVE - ON",
-            "MIXTURE - RICH",
-            "THROTTLE - CRACKED",
-            "IGNITION A - ON",
-            "IGNITION B - ON",
-            "OIL PRESSURE - VERIFY AFTER START",
-            "ALTERNATOR - ON",
-            "CHT/EGT - MONITOR",
-            "CANOPY/DOOR - LATCHED",
-            "CONTROLS - FREE AND CORRECT",
+        self.phases: list[tuple[str, list[str]]] = [
+            (
+                "BEFORE START",
+                [
+                    "MASTER - ON",
+                    "FUEL QUANTITY - CHECK",
+                    "FUEL VALVE - ON",
+                    "MIXTURE - RICH",
+                    "THROTTLE - CRACKED",
+                    "IGNITION A - ON",
+                    "IGNITION B - ON",
+                    "EMS - VERIFY ONLINE",
+                ],
+            ),
+            (
+                "ENGINE START",
+                [
+                    "PROP AREA - CLEAR",
+                    "STARTER - ENGAGE",
+                    "RPM - STABILIZED",
+                    "OIL PRESSURE - VERIFY",
+                    "VOLTS - VERIFY",
+                    "STARTER - DISENGAGED",
+                ],
+            ),
+            (
+                "RUNUP",
+                [
+                    "BRAKES - HOLD",
+                    "RPM - SET RUNUP",
+                    "IGNITION A - CHECK",
+                    "IGNITION B - CHECK",
+                    "OIL TEMP - GREEN",
+                    "OIL PRESSURE - GREEN",
+                    "CHT/EGT - CHECK",
+                    "ALTERNATOR - VERIFY CHARGING",
+                ],
+            ),
+            (
+                "BEFORE TAKEOFF",
+                [
+                    "CONTROLS - FREE AND CORRECT",
+                    "CANOPY/DOOR - LATCHED",
+                    "TRIM - SET",
+                    "FUEL VALVE - ON",
+                    "IGNITION A - ON",
+                    "IGNITION B - ON",
+                    "EMS WARNINGS - NONE",
+                    "TRANSPONDER/ADS-B - ON",
+                ],
+            ),
+            (
+                "CRUISE",
+                [
+                    "RPM - SET",
+                    "FUEL FLOW - MONITOR",
+                    "OIL TEMP/PRESS - MONITOR",
+                    "CHT/EGT - MONITOR",
+                    "VOLTS/AMPS - MONITOR",
+                    "FUEL REMAINING - CHECK",
+                ],
+            ),
+            (
+                "LANDING",
+                [
+                    "FUEL - CHECK",
+                    "MIXTURE - RICH",
+                    "IGNITION A - ON",
+                    "IGNITION B - ON",
+                    "EMS - CHECK",
+                    "SPEED - SET",
+                    "RUNWAY - CONFIRMED",
+                ],
+            ),
         ]
 
+    def current_phase_name(self) -> str:
+        return self.phases[self.selected_phase_index][0]
+
+    def current_items(self) -> list[str]:
+        return self.phases[self.selected_phase_index][1]
+
+    def current_checked(self) -> set[int]:
+        phase = self.current_phase_name()
+        self.checked.setdefault(phase, set())
+        return self.checked[phase]
+
+    def next_phase(self) -> None:
+        self.selected_phase_index = min(
+            len(self.phases) - 1,
+            self.selected_phase_index + 1,
+        )
+        self.selected_item_index = 0
+
+    def previous_phase(self) -> None:
+        self.selected_phase_index = max(0, self.selected_phase_index - 1)
+        self.selected_item_index = 0
+
     def move_selection(self, direction: int) -> None:
-        self.selected_index = max(
+        items = self.current_items()
+
+        self.selected_item_index = max(
             0,
-            min(len(self.items) - 1, self.selected_index + direction),
+            min(len(items) - 1, self.selected_item_index + direction),
         )
 
     def toggle_selected(self) -> None:
-        if self.selected_index in self.checked:
-            self.checked.remove(self.selected_index)
+        checked = self.current_checked()
+
+        if self.selected_item_index in checked:
+            checked.remove(self.selected_item_index)
         else:
-            self.checked.add(self.selected_index)
+            checked.add(self.selected_item_index)
+
+    def reset_current_phase(self) -> None:
+        self.current_checked().clear()
+        self.selected_item_index = 0
+
+    def reset_all(self) -> None:
+        self.checked.clear()
+        self.selected_phase_index = 0
+        self.selected_item_index = 0
 
     def draw(self, painter: QPainter, width: int, height: int) -> None:
         painter.fillRect(0, 0, width, height, QColor(0, 0, 0))
+
+        phase_name = self.current_phase_name()
+        items = self.current_items()
+        checked = self.current_checked()
 
         painter.setPen(QColor(0, 255, 0))
         painter.setFont(QFont("Arial", 24, QFont.Weight.Bold))
@@ -47,31 +148,41 @@ class EngineChecklistPage:
             "ENGINE CHECKLIST",
         )
 
-        y = 95
+        painter.setPen(QColor(0, 180, 255))
+        painter.setFont(QFont("Arial", 18, QFont.Weight.Bold))
+        painter.drawText(
+            QRectF(0, 70, width, 35),
+            Qt.AlignmentFlag.AlignCenter,
+            phase_name,
+        )
+
+        y = 125
         painter.setFont(QFont("Arial", 16, QFont.Weight.Bold))
 
-        for index, item in enumerate(self.items):
-            selected = index == self.selected_index
-            checked = index in self.checked
+        for index, item in enumerate(items):
+            selected = index == self.selected_item_index
+            done = index in checked
 
             if selected:
                 painter.fillRect(35, y - 25, width - 70, 34, QColor(40, 80, 40))
 
-            painter.setPen(QColor(0, 255, 0) if checked else QColor(255, 255, 255))
+            painter.setPen(QColor(0, 255, 0) if done else QColor(255, 255, 255))
 
-            box = "[X]" if checked else "[ ]"
+            box = "[X]" if done else "[ ]"
             cursor = ">" if selected else " "
 
             painter.drawText(55, y, f"{cursor} {box} {item}")
             y += 36
+
+        complete_text = f"{len(checked)}/{len(items)} COMPLETE"
+        painter.setPen(QColor(255, 220, 0))
+        painter.setFont(QFont("Arial", 13, QFont.Weight.Bold))
+        painter.drawText(40, height - 70, complete_text)
 
         painter.setPen(QColor(130, 130, 130))
         painter.setFont(QFont("Arial", 11))
         painter.drawText(
             40,
             height - 40,
-            "UP/DOWN = SELECT    SPACE/ENTER = CHECK    R = RESET    P = PFD    E = EMS"
+            "LEFT/RIGHT = PHASE    UP/DOWN = ITEM    SPACE/ENTER = CHECK    R = RESET PHASE    SHIFT+R = RESET ALL",
         )
-    def reset(self) -> None:
-        self.selected_index = 0
-        self.checked.clear()
