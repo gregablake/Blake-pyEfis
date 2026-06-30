@@ -14,6 +14,7 @@ class EmsPage:
         engine: EngineData,
         width: int,
         height: int,
+        checklist=None,
     ) -> None:
         painter.fillRect(0, 0, width, height, QColor(0, 0, 0))
 
@@ -358,6 +359,9 @@ class EmsPage:
 
         if engine.starter_engaged:
             annunciators.append(("START", QColor(255, 220, 0)))
+        
+        if checklist is not None:
+            self.draw_checklist_status(painter, checklist, width, height)
 
         if engine.fuel_remaining_gal <= fuel.red_gal:
             annunciators.append(("LOW FUEL", QColor(255, 0, 0)))
@@ -482,4 +486,30 @@ class EmsPage:
             QRectF(box_x, box_y, box_w, box_h),
             Qt.AlignmentFlag.AlignCenter,
             f"EMS TEST: {mode.upper()}",
+        )
+    def draw_checklist_status(self, painter: QPainter, checklist, width: int, height: int) -> None:
+        box_x = 40
+        box_y = height - 90
+        box_w = 420
+        box_h = 42
+
+        painter.fillRect(box_x, box_y, box_w, box_h, QColor(0, 0, 0))
+        painter.setPen(QPen(QColor(0, 180, 255), 2))
+        painter.drawRect(box_x, box_y, box_w, box_h)
+
+        painter.setFont(QFont("Arial", 11, QFont.Weight.Bold))
+        painter.setPen(QColor(0, 180, 255))
+        painter.drawText(box_x + 10, box_y + 18, "CHECKLIST")
+
+        painter.setPen(QColor(255, 255, 255))
+        painter.drawText(
+            box_x + 120,
+            box_y + 18,
+            checklist.progress_summary(),
+        )
+
+        painter.drawText(
+            box_x + 120,
+            box_y + 36,
+            checklist.all_phases_summary(),
         )

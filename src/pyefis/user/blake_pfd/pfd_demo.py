@@ -316,6 +316,7 @@ class BlakePfdDemo(QWidget):
                 self.engine_data,
                 self.width(),
                 self.height(),
+                checklist=self.engine_checklist_page,
             )
             draw_master_warning_strip(painter, self.engine_data, self.width())
             painter.end()

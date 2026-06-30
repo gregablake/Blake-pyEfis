@@ -116,6 +116,23 @@ class EngineChecklistPage:
             min(len(items) - 1, self.selected_item_index + direction),
         )
 
+    def progress_summary(self) -> str:
+        phase = self.current_phase_name()
+        items = self.current_items()
+        checked = self.current_checked()
+
+        return f"{phase}: {len(checked)}/{len(items)}"
+
+    def all_phases_summary(self) -> str:
+        total_items = 0
+        total_checked = 0
+
+        for phase, items in self.phases:
+            total_items += len(items)
+            total_checked += len(self.checked.get(phase, set()))
+
+        return f"TOTAL: {total_checked}/{total_items}"
+
     def toggle_selected(self) -> None:
         checked = self.current_checked()
 
