@@ -4,9 +4,8 @@ from dataclasses import dataclass
 
 from PyQt6.QtCore import Qt, QRectF
 from PyQt6.QtGui import QColor, QFont, QPainter
-
-from pyefis.user.blake_pfd.engine_data import EngineData
 from pyefis.user.blake_pfd.config_loader import load_config
+from pyefis.user.blake_pfd.engine_data import EngineData
 
 
 @dataclass
@@ -17,9 +16,14 @@ class WarningItem:
 
 def get_engine_warnings(engine: EngineData) -> list[WarningItem]:
     warnings: list[WarningItem] = []
+    config = load_config()
+    fuel = config.fuel
 
     if engine.rpm > 2000 and engine.oil_pressure_psi < 20:
         warnings.append(WarningItem("LOW OIL PRESS", QColor(255, 0, 0)))
+
+    if engine.oil_pressure_psi <= 15:
+        warnings.append(WarningItem("OIL PRESS", QColor(255, 0, 0)))
 
     if engine.oil_temp_f >= 260:
         warnings.append(WarningItem("HIGH OIL TEMP", QColor(255, 0, 0)))
@@ -33,6 +37,9 @@ def get_engine_warnings(engine: EngineData) -> list[WarningItem]:
 
     if max(engine.egt_f or [0.0]) >= 1600:
         warnings.append(WarningItem("HIGH EGT", QColor(255, 0, 0)))
+
+    if engine.rpm > 3500:
+        warnings.append(WarningItem("RPM", QColor(255, 0, 0)))
 
     if engine.volts < 12.0 or engine.volts > 16.0:
         warnings.append(WarningItem("VOLTS", QColor(255, 0, 0)))
@@ -51,8 +58,30 @@ def get_engine_warnings(engine: EngineData) -> list[WarningItem]:
     if engine.starter_engaged:
         warnings.append(WarningItem("START", QColor(255, 220, 0)))
 
-    if not warnings:
-        warnings.append(WarningItem("ENGINE NORMAL", QColor(0, 255, 0)))
+    if engine.fuel_remaining_gal <= fuel.red_gal:
+        warnings.append(WarningItem("LOW FUEL", QColor(255, 0, 0)))
+    elif engine.fuel_remaining_gal <= fuel.yellow_gal:
+        warnings.append(WarningItem("FUEL", QColor(255, 220, 0)))
+
+    if engine.endurance_hr <= fuel.red_endurance_hr:
+        warnings.append(WarningItem("LOW ENDURANCE", QColor(255, 0, 0)))
+    elif engine.endurance_hr <= fuel.yellow_endurance_hr:
+        warnings.append(WarningItem("ENDURANCE", QColor(255, 220, 0)))
+
+    return warnings
+
+
+def get_checklist_warnings(checklist=None, aircraft_moving: bool = False) -> list[WarningItem]:
+    warnings: list[WarningItem] = []
+
+    if checklist is None:
+        return warnings
+
+    if not aircraft_moving:
+        return warnings
+
+    if not checklist.phase_complete("BEFORE TAKEOFF"):
+        warnings.append(WarningItem("CHECKLIST", QColor(255, 220, 0)))
 
     return warnings
 
@@ -62,14 +91,35 @@ def draw_master_warning_strip(
     engine: EngineData,
     width: int,
     checklist=None,
+    aircraft_moving: bool = False,
 ) -> None:
     warnings = get_engine_warnings(engine)
-    warnings.extend(get_checklist_warnings(checklist))
+    warnings.extend(
+        get_checklist_warnings(
+            checklist=checklist,
+            aircraft_moving=aircraft_moving,
+        )
+    )
+
+    if not warnings:
+        warnings.append(WarningItem("ENGINE NORMAL", QColor(0, 255, 0)))
 
     x = 10
     y = 5
     box_w = 150
     box_h = 28
+
+    painter.setFont(QFont("Arial", 11, QFont.Weight.Bold))
+
+    for warning in warnings[:6]:
+        painter.fillRect(x, y, box_w, box_h, warning.color)
+        painter.setPen(QColor(0, 0, 0))
+        painter.drawText(
+            QRectF(x, y, box_w, box_h),
+            Qt.AlignmentFlag.AlignCenter,
+            warning.text,
+        )
+        x += box_w + 8
 
     config = load_config()
     mode = getattr(config.ems_test, "mode", "normal")
@@ -88,28 +138,3 @@ def draw_master_warning_strip(
             Qt.AlignmentFlag.AlignCenter,
             f"TEST: {mode.upper()}",
         )
-
-    painter.setFont(QFont("Arial", 11, QFont.Weight.Bold))
-
-    for warning in warnings[:6]:
-        painter.fillRect(x, y, box_w, box_h, warning.color)
-        painter.setPen(QColor(0, 0, 0))
-        painter.drawText(
-            QRectF(x, y, box_w, box_h),
-            Qt.AlignmentFlag.AlignCenter,
-            warning.text,
-        )
-        x += box_w + 8
-
-def get_checklist_warnings(checklist) -> list[WarningItem]:
-    warnings: list[WarningItem] = []
-
-    if checklist is None:
-        return warnings
-
-    if not checklist.phase_complete("BEFORE TAKEOFF"):
-        warnings.append(
-            WarningItem("CHECKLIST", QColor(255, 220, 0))
-        )
-
-    return warnings
