@@ -3,15 +3,22 @@ from __future__ import annotations
 import argparse
 import sys
 from math import cos, radians, sin
+from pathlib import Path
 
+import yaml
 from PyQt6.QtCore import Qt, QTimer, QRectF, QPointF
 from PyQt6.QtGui import QColor, QFont, QPainter, QPen, QBrush, QPolygonF
 from PyQt6.QtWidgets import QApplication, QWidget
 
 from pyefis.user.blake_pfd.airport_info_page import AirportInfoPage
+from pyefis.user.blake_pfd.audio_alerts import AudioAlertManager
 from pyefis.user.blake_pfd.config_loader import load_config
-from pyefis.user.blake_pfd.database_importer import AviationDatabasef
+from pyefis.user.blake_pfd.core.page_manager import PageManager
+from pyefis.user.blake_pfd.database_importer import AviationDatabase
+from pyefis.user.blake_pfd.ems_alert_history import EmsAlertHistory
 from pyefis.user.blake_pfd.ems_page import EmsPage
+from pyefis.user.blake_pfd.ems_trend_page import EmsTrendPage
+from pyefis.user.blake_pfd.engine_checklist_page import EngineChecklistPage
 from pyefis.user.blake_pfd.engine_sim import SimulatedEngineSource
 from pyefis.user.blake_pfd.flight_computer import FlightComputer, FlightData
 from pyefis.user.blake_pfd.flight_logger import FlightLogger
@@ -33,12 +40,6 @@ from pyefis.user.blake_pfd.synthetic_vision import (
 )
 from pyefis.user.blake_pfd.terrain import TerrainComputer
 from pyefis.user.blake_pfd.weather_reader import WeatherReader
-from pyefis.user.blake_pfd.ems_trend_page import EmsTrendPage
-from pyefis.user.blake_pfd.ems_alert_history import EmsAlertHistory
-from pathlib import Path
-import yaml
-from pyefis.user.blake_pfd.audio_alerts import AudioAlertManager
-from pyefis.user.blake_pfd.engine_checklist_page import EngineChecklistPage
 
 
 class BlakePfdDemo(QWidget):
@@ -47,8 +48,10 @@ class BlakePfdDemo(QWidget):
 
         self.config = load_config()
         self.startup_status = run_startup_check()
+
         self.database = AviationDatabase()
         self.database.load_all()
+
         self.route_manager = RouteManager()
         self.flight_computer = FlightComputer()
         self.synthetic_vision = SyntheticVisionComputer()
@@ -57,6 +60,7 @@ class BlakePfdDemo(QWidget):
         self.terrain = TerrainComputer()
         self.obstacles = ObstacleComputer()
         self.weather = WeatherReader()
+
         self.fms_page = FmsPage()
         self.airport_info_page = AirportInfoPage()
         self.nearest_page = NearestPage()
@@ -72,6 +76,13 @@ class BlakePfdDemo(QWidget):
             log_interval_s=self.config.logging.interval_s,
         )
 
+        self.audio_alerts = AudioAlertManager(
+            enabled=self.config.audio_alerts.enabled,
+            buzzer_enabled=self.config.audio_alerts.buzzer_enabled,
+            buzzer_pin=self.config.audio_alerts.buzzer_pin,
+            repeat_interval_s=self.config.audio_alerts.repeat_interval_s,
+        )
+
         self.stratux = StratuxReader(
             host=self.config.stratux.host,
             port=self.config.stratux.gdl90_port,
@@ -81,7 +92,9 @@ class BlakePfdDemo(QWidget):
         self.sensors = BlakeHardwareSensorSource() if use_hardware else SimulatedSensorSource()
         self.use_hardware = use_hardware
         self.pfd: FlightData | None = None
-        self.current_page = "PFD"
+
+        self.page_manager = PageManager()
+        self.register_pages()
 
         mode_name = "Replay" if replay_log else ("Hardware" if use_hardware else "Simulator")
         self.setWindowTitle(f"Blake PFD Demo - {mode_name}")
@@ -93,12 +106,16 @@ class BlakePfdDemo(QWidget):
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.update_data)
         self.timer.start(50)
-        self.audio_alerts = AudioAlertManager(
-            enabled=self.config.audio_alerts.enabled,
-            buzzer_enabled=self.config.audio_alerts.buzzer_enabled,
-            buzzer_pin=self.config.audio_alerts.buzzer_pin,
-            repeat_interval_s=self.config.audio_alerts.repeat_interval_s,
-        )
+
+    def register_pages(self) -> None:
+        self.page_manager.register("PFD", "P")
+        self.page_manager.register("FMS", "F")
+        self.page_manager.register("AIRPORT", "A")
+        self.page_manager.register("NEAREST", "N")
+        self.page_manager.register("EMS", "E")
+        self.page_manager.register("EMS_TREND", "T")
+        self.page_manager.register("EMS_ALERTS", "H")
+        self.page_manager.register("ENGINE_CHECKLIST", "C")
 
     def update_data(self) -> None:
         if self.replay_source is not None:
@@ -108,12 +125,18 @@ class BlakePfdDemo(QWidget):
             self.pfd = self.flight_computer.update(raw)
 
         self.engine_data = self.engine_source.read()
+
+        if self.pfd is not None:
+            self.engine_data.fuel_range_nm = (
+                self.engine_data.endurance_hr * self.pfd.ground_speed_kt
+            )
+
         self.ems_alert_history.update(self.engine_data)
+        self.ems_trend_page.add_sample(self.engine_data)
         self.audio_alerts.update(
             self.engine_data,
             silenced=self.ems_alert_history.silenced,
-)
-        self.ems_trend_page.add_sample(self.engine_data)
+        )
 
         if self.config.logging.enabled and self.pfd is not None:
             self.flight_logger.maybe_log(
@@ -121,38 +144,14 @@ class BlakePfdDemo(QWidget):
                 waypoint_id=self.config.navigation.selected_waypoint_id,
                 engine=self.engine_data,
             )
-        elif self.current_page == "ENGINE_CHECKLIST":
-            if event.key() == Qt.Key.Key_Up:
-                self.engine_checklist_page.move_selection(-1)
-
-            elif event.key() == Qt.Key.Key_Down:
-                self.engine_checklist_page.move_selection(1)
-
-            elif event.key() == Qt.Key.Key_Left:
-                self.engine_checklist_page.previous_phase()
-
-            elif event.key() == Qt.Key.Key_Right:
-                self.engine_checklist_page.next_phase()
-
-            elif event.key() in (
-                Qt.Key.Key_Return,
-                Qt.Key.Key_Enter,
-                Qt.Key.Key_Space,
-            ):
-                self.engine_checklist_page.toggle_selected()
-
-            elif event.key() == Qt.Key.Key_R:
-                if event.modifiers() & Qt.KeyboardModifier.ShiftModifier:
-                    self.engine_checklist_page.reset_all()
-                else:
-                    self.engine_checklist_page.reset_current_phase()
 
         self.update()
 
     def keyPressEvent(self, event) -> None:  # noqa: N802
         key = event.key()
+        current_page = self.page_manager.current()
 
-        if self.current_page == "EMS_ALERTS":
+        if current_page == "EMS_ALERTS":
             if key == Qt.Key.Key_A:
                 self.ems_alert_history.acknowledge_active()
                 self.update()
@@ -163,40 +162,59 @@ class BlakePfdDemo(QWidget):
                 self.update()
                 return
 
-        if key == Qt.Key.Key_P:
-            self.current_page = "PFD"
+        if current_page == "ENGINE_CHECKLIST":
+            if key == Qt.Key.Key_Up:
+                self.engine_checklist_page.move_selection(-1)
+                self.update()
+                return
 
-        elif key == Qt.Key.Key_F:
-            self.current_page = "FMS"
+            if key == Qt.Key.Key_Down:
+                self.engine_checklist_page.move_selection(1)
+                self.update()
+                return
 
-        elif key == Qt.Key.Key_A:
-            self.current_page = "AIRPORT"
+            if key == Qt.Key.Key_Left:
+                self.engine_checklist_page.previous_phase()
+                self.update()
+                return
 
-        elif key == Qt.Key.Key_N:
-            self.current_page = "NEAREST"
+            if key == Qt.Key.Key_Right:
+                self.engine_checklist_page.next_phase()
+                self.update()
+                return
 
-        elif key == Qt.Key.Key_E:
-            self.current_page = "EMS"
+            if key in (Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Space):
+                self.engine_checklist_page.toggle_selected()
+                self.update()
+                return
 
-        elif key == Qt.Key.Key_T:
-            self.current_page = "EMS_TREND"
+            if key == Qt.Key.Key_R:
+                if event.modifiers() & Qt.KeyboardModifier.ShiftModifier:
+                    self.engine_checklist_page.reset_all()
+                else:
+                    self.engine_checklist_page.reset_current_phase()
+                self.update()
+                return
 
-        elif key == Qt.Key.Key_H:
-            self.current_page = "EMS_ALERTS"
-
-        elif self.current_page == "FMS":
+        if current_page == "FMS":
             if key == Qt.Key.Key_Up:
                 self.fms_page.move_selection(-1, self.route_manager)
+                self.update()
+                return
 
-            elif key == Qt.Key.Key_Down:
+            if key == Qt.Key.Key_Down:
                 self.fms_page.move_selection(1, self.route_manager)
+                self.update()
+                return
 
-            elif key in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+            if key in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
                 selected = self.fms_page.get_selected_waypoint(self.route_manager)
                 if selected is not None:
                     self.activate_direct_to(selected)
+                self.update()
+                return
 
-        elif self.current_page == "NEAREST":
+        if current_page == "NEAREST":
             nearest = self.database.nearest_airports(
                 39.1031,
                 -84.5120,
@@ -205,21 +223,47 @@ class BlakePfdDemo(QWidget):
 
             if key == Qt.Key.Key_Up:
                 self.nearest_page.move_selection(-1, nearest)
+                self.update()
+                return
 
-            elif key == Qt.Key.Key_Down:
+            if key == Qt.Key.Key_Down:
                 self.nearest_page.move_selection(1, nearest)
+                self.update()
+                return
 
-            elif key in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+            if key in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
                 selection = self.nearest_page.selected_airport(nearest)
-
                 if selection is not None:
                     _distance_nm, airport = selection
                     self.activate_direct_to(airport.ident)
-            elif event.key() == Qt.Key.Key_X:
-                self.cycle_ems_test_mode()
-        elif event.key() == Qt.Key.Key_C:
-            self.current_page = "ENGINE_CHECKLIST"
+                self.update()
+                return
+
+        if key == Qt.Key.Key_X:
+            self.cycle_ems_test_mode()
+            self.update()
+            return
+
+        page_name = self.page_name_from_key(key)
+        if page_name is not None:
+            self.page_manager.set_page(page_name)
+            self.update()
+            return
+
         self.update()
+
+    def page_name_from_key(self, key: Qt.Key) -> str | None:
+        key_map = {
+            Qt.Key.Key_P: "PFD",
+            Qt.Key.Key_F: "FMS",
+            Qt.Key.Key_A: "AIRPORT",
+            Qt.Key.Key_N: "NEAREST",
+            Qt.Key.Key_E: "EMS",
+            Qt.Key.Key_T: "EMS_TREND",
+            Qt.Key.Key_H: "EMS_ALERTS",
+            Qt.Key.Key_C: "ENGINE_CHECKLIST",
+        }
+        return key_map.get(key)
 
     def activate_direct_to(self, waypoint_id: str) -> None:
         waypoint_id = waypoint_id.upper()
@@ -250,10 +294,8 @@ class BlakePfdDemo(QWidget):
 
         config_path = Path(__file__).with_name("pfd_config.yaml")
         raw = yaml.safe_load(config_path.read_text()) or {}
-
         raw.setdefault("ems_test", {})
         raw["ems_test"]["mode"] = next_mode
-
         config_path.write_text(yaml.safe_dump(raw, sort_keys=False))
 
         self.config = load_config()
@@ -261,11 +303,27 @@ class BlakePfdDemo(QWidget):
 
         print(f"EMS test mode: {next_mode}")
 
+    def draw_warning_strip(self, painter: QPainter, width: int) -> None:
+        aircraft_moving = False
+
+        if self.pfd is not None:
+            aircraft_moving = self.pfd.ground_speed_kt >= 35.0
+
+        draw_master_warning_strip(
+            painter,
+            self.engine_data,
+            width,
+            checklist=self.engine_checklist_page,
+            aircraft_moving=aircraft_moving,
+        )
+
     def paintEvent(self, event) -> None:  # noqa: N802
         if self.pfd is None:
             return
 
-        if self.current_page == "FMS":
+        current_page = self.page_manager.current()
+
+        if current_page == "FMS":
             painter = QPainter(self)
             self.fms_page.draw(
                 painter,
@@ -274,16 +332,11 @@ class BlakePfdDemo(QWidget):
                 self.width(),
                 self.height(),
             )
-            draw_master_warning_strip(
-                painter,
-                self.engine_data,
-                self.width(),
-                checklist=self.engine_checklist_page,
-            )
+            self.draw_warning_strip(painter, self.width())
             painter.end()
             return
 
-        if self.current_page == "AIRPORT":
+        if current_page == "AIRPORT":
             painter = QPainter(self)
             self.airport_info_page.draw(
                 painter,
@@ -292,16 +345,11 @@ class BlakePfdDemo(QWidget):
                 self.width(),
                 self.height(),
             )
-            draw_master_warning_strip(
-                painter,
-                self.engine_data,
-                self.width(),
-                checklist=self.engine_checklist_page,
-            )
+            self.draw_warning_strip(painter, self.width())
             painter.end()
             return
 
-        if self.current_page == "NEAREST":
+        if current_page == "NEAREST":
             nearest = self.database.nearest_airports(
                 39.1031,
                 -84.5120,
@@ -315,16 +363,11 @@ class BlakePfdDemo(QWidget):
                 self.width(),
                 self.height(),
             )
-            draw_master_warning_strip(
-                painter,
-                self.engine_data,
-                self.width(),
-                checklist=self.engine_checklist_page,
-            )
+            self.draw_warning_strip(painter, self.width())
             painter.end()
             return
 
-        if self.current_page == "EMS":
+        if current_page == "EMS":
             painter = QPainter(self)
             self.ems_page.draw(
                 painter,
@@ -333,31 +376,43 @@ class BlakePfdDemo(QWidget):
                 self.height(),
                 checklist=self.engine_checklist_page,
             )
-            draw_master_warning_strip(
-                painter,
-                self.engine_data,
-                self.width(),
-                checklist=self.engine_checklist_page,
-            )
+            self.draw_warning_strip(painter, self.width())
             painter.end()
             return
-        
-        if self.current_page == "EMS_ALERTS":
+
+        if current_page == "EMS_TREND":
+            painter = QPainter(self)
+            self.ems_trend_page.draw(
+                painter,
+                self.width(),
+                self.height(),
+            )
+            self.draw_warning_strip(painter, self.width())
+            painter.end()
+            return
+
+        if current_page == "EMS_ALERTS":
             painter = QPainter(self)
             self.ems_alert_history.draw(
                 painter,
                 self.width(),
                 self.height(),
             )
-            draw_master_warning_strip(
-                painter,
-                self.engine_data,
-                self.width(),
-                checklist=self.engine_checklist_page,
-            )
+            self.draw_warning_strip(painter, self.width())
             painter.end()
             return
-        
+
+        if current_page == "ENGINE_CHECKLIST":
+            painter = QPainter(self)
+            self.engine_checklist_page.draw(
+                painter,
+                self.width(),
+                self.height(),
+            )
+            self.draw_warning_strip(painter, self.width())
+            painter.end()
+            return
+
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
@@ -371,12 +426,7 @@ class BlakePfdDemo(QWidget):
         taxi_state = self.safe_taxi.update(self.pfd)
         if features.show_safe_taxi and taxi_state.active:
             self.draw_safe_taxi_map(painter, taxi_state, width, height)
-            draw_master_warning_strip(
-                painter,
-                self.engine_data,
-                width,
-                checklist=self.engine_checklist_page,
-            )
+            self.draw_warning_strip(painter, width)
             painter.end()
             return
 
@@ -463,45 +513,7 @@ class BlakePfdDemo(QWidget):
         if features.show_weather:
             self.draw_weather_overlay(painter, self.weather.read(), width, height)
 
-        draw_master_warning_strip(
-            painter,
-            self.engine_data,
-            width,
-            checklist=self.engine_checklist_page,
-        )
-        
-        if self.current_page == "EMS_TREND":
-            painter = QPainter(self)
-            self.ems_trend_page.draw(
-                painter,
-                self.width(),
-                self.height(),
-            )
-            draw_master_warning_strip(
-                painter,
-                self.engine_data,
-                self.width(),
-                checklist=self.engine_checklist_page,
-            )
-            painter.end()
-            return
-
-        if self.current_page == "ENGINE_CHECKLIST":
-            painter = QPainter(self)
-            self.engine_checklist_page.draw(
-                painter,
-                self.width(),
-                self.height(),
-            )
-            draw_master_warning_strip(
-                painter,
-                self.engine_data,
-                self.width(),
-                checklist=self.engine_checklist_page,
-            )
-            painter.end()
-            return
-
+        self.draw_warning_strip(painter, width)
         painter.end()
 
     def draw_background(self, painter: QPainter, width: int, height: int) -> None:
