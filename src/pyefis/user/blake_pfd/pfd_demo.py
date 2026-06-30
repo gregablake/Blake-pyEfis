@@ -40,6 +40,7 @@ from pyefis.user.blake_pfd.synthetic_vision import (
 )
 from pyefis.user.blake_pfd.terrain import TerrainComputer
 from pyefis.user.blake_pfd.weather_reader import WeatherReader
+from pyefis.user.blake_pfd.core.event_manager import EventManager
 
 
 class BlakePfdDemo(QWidget):
@@ -60,6 +61,7 @@ class BlakePfdDemo(QWidget):
         self.terrain = TerrainComputer()
         self.obstacles = ObstacleComputer()
         self.weather = WeatherReader()
+        self.event_manager = EventManager(self)
 
         self.fms_page = FmsPage()
         self.airport_info_page = AirportInfoPage()
@@ -92,8 +94,8 @@ class BlakePfdDemo(QWidget):
         self.sensors = BlakeHardwareSensorSource() if use_hardware else SimulatedSensorSource()
         self.use_hardware = use_hardware
         self.pfd: FlightData | None = None
+        
 
-        self.page_manager = PageManager()
         self.register_pages()
 
         mode_name = "Replay" if replay_log else ("Hardware" if use_hardware else "Simulator")
@@ -116,6 +118,7 @@ class BlakePfdDemo(QWidget):
         self.page_manager.register("EMS_TREND", "T")
         self.page_manager.register("EMS_ALERTS", "H")
         self.page_manager.register("ENGINE_CHECKLIST", "C")
+        self.event_manager = EventManager(self)
 
     def update_data(self) -> None:
         if self.replay_source is not None:
@@ -148,108 +151,7 @@ class BlakePfdDemo(QWidget):
         self.update()
 
     def keyPressEvent(self, event) -> None:  # noqa: N802
-        key = event.key()
-        current_page = self.page_manager.current()
-
-        if current_page == "EMS_ALERTS":
-            if key == Qt.Key.Key_A:
-                self.ems_alert_history.acknowledge_active()
-                self.update()
-                return
-
-            if key == Qt.Key.Key_S:
-                self.ems_alert_history.toggle_silence()
-                self.update()
-                return
-
-        if current_page == "ENGINE_CHECKLIST":
-            if key == Qt.Key.Key_Up:
-                self.engine_checklist_page.move_selection(-1)
-                self.update()
-                return
-
-            if key == Qt.Key.Key_Down:
-                self.engine_checklist_page.move_selection(1)
-                self.update()
-                return
-
-            if key == Qt.Key.Key_Left:
-                self.engine_checklist_page.previous_phase()
-                self.update()
-                return
-
-            if key == Qt.Key.Key_Right:
-                self.engine_checklist_page.next_phase()
-                self.update()
-                return
-
-            if key in (Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Space):
-                self.engine_checklist_page.toggle_selected()
-                self.update()
-                return
-
-            if key == Qt.Key.Key_R:
-                if event.modifiers() & Qt.KeyboardModifier.ShiftModifier:
-                    self.engine_checklist_page.reset_all()
-                else:
-                    self.engine_checklist_page.reset_current_phase()
-                self.update()
-                return
-
-        if current_page == "FMS":
-            if key == Qt.Key.Key_Up:
-                self.fms_page.move_selection(-1, self.route_manager)
-                self.update()
-                return
-
-            if key == Qt.Key.Key_Down:
-                self.fms_page.move_selection(1, self.route_manager)
-                self.update()
-                return
-
-            if key in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
-                selected = self.fms_page.get_selected_waypoint(self.route_manager)
-                if selected is not None:
-                    self.activate_direct_to(selected)
-                self.update()
-                return
-
-        if current_page == "NEAREST":
-            nearest = self.database.nearest_airports(
-                39.1031,
-                -84.5120,
-                max_results=10,
-            )
-
-            if key == Qt.Key.Key_Up:
-                self.nearest_page.move_selection(-1, nearest)
-                self.update()
-                return
-
-            if key == Qt.Key.Key_Down:
-                self.nearest_page.move_selection(1, nearest)
-                self.update()
-                return
-
-            if key in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
-                selection = self.nearest_page.selected_airport(nearest)
-                if selection is not None:
-                    _distance_nm, airport = selection
-                    self.activate_direct_to(airport.ident)
-                self.update()
-                return
-
-        if key == Qt.Key.Key_X:
-            self.cycle_ems_test_mode()
-            self.update()
-            return
-
-        page_name = self.page_name_from_key(key)
-        if page_name is not None:
-            self.page_manager.set_page(page_name)
-            self.update()
-            return
-
+        self.event_manager.handle_key(event)
         self.update()
 
     def page_name_from_key(self, key: Qt.Key) -> str | None:
