@@ -61,8 +61,10 @@ def draw_master_warning_strip(
     painter: QPainter,
     engine: EngineData,
     width: int,
+    checklist=None,
 ) -> None:
     warnings = get_engine_warnings(engine)
+    warnings.extend(get_checklist_warnings(checklist))
 
     x = 10
     y = 5
@@ -98,3 +100,16 @@ def draw_master_warning_strip(
             warning.text,
         )
         x += box_w + 8
+
+def get_checklist_warnings(checklist) -> list[WarningItem]:
+    warnings: list[WarningItem] = []
+
+    if checklist is None:
+        return warnings
+
+    if not checklist.phase_complete("BEFORE TAKEOFF"):
+        warnings.append(
+            WarningItem("CHECKLIST", QColor(255, 220, 0))
+        )
+
+    return warnings

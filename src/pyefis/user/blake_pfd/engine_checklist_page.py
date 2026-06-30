@@ -203,3 +203,10 @@ class EngineChecklistPage:
             height - 40,
             "LEFT/RIGHT = PHASE    UP/DOWN = ITEM    SPACE/ENTER = CHECK    R = RESET PHASE    SHIFT+R = RESET ALL",
         )
+    def phase_complete(self, phase_name: str) -> bool:
+        for phase, items in self.phases:
+            if phase == phase_name:
+                checked = self.checked.get(phase, set())
+                return len(checked) == len(items)
+
+        return False

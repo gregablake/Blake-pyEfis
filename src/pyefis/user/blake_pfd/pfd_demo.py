@@ -10,7 +10,7 @@ from PyQt6.QtWidgets import QApplication, QWidget
 
 from pyefis.user.blake_pfd.airport_info_page import AirportInfoPage
 from pyefis.user.blake_pfd.config_loader import load_config
-from pyefis.user.blake_pfd.database_importer import AviationDatabase
+from pyefis.user.blake_pfd.database_importer import AviationDatabasef
 from pyefis.user.blake_pfd.ems_page import EmsPage
 from pyefis.user.blake_pfd.engine_sim import SimulatedEngineSource
 from pyefis.user.blake_pfd.flight_computer import FlightComputer, FlightData
@@ -274,7 +274,12 @@ class BlakePfdDemo(QWidget):
                 self.width(),
                 self.height(),
             )
-            draw_master_warning_strip(painter, self.engine_data, self.width())
+            draw_master_warning_strip(
+                painter,
+                self.engine_data,
+                self.width(),
+                checklist=self.engine_checklist_page,
+            )
             painter.end()
             return
 
@@ -287,7 +292,12 @@ class BlakePfdDemo(QWidget):
                 self.width(),
                 self.height(),
             )
-            draw_master_warning_strip(painter, self.engine_data, self.width())
+            draw_master_warning_strip(
+                painter,
+                self.engine_data,
+                self.width(),
+                checklist=self.engine_checklist_page,
+            )
             painter.end()
             return
 
@@ -305,7 +315,12 @@ class BlakePfdDemo(QWidget):
                 self.width(),
                 self.height(),
             )
-            draw_master_warning_strip(painter, self.engine_data, self.width())
+            draw_master_warning_strip(
+                painter,
+                self.engine_data,
+                self.width(),
+                checklist=self.engine_checklist_page,
+            )
             painter.end()
             return
 
@@ -318,7 +333,12 @@ class BlakePfdDemo(QWidget):
                 self.height(),
                 checklist=self.engine_checklist_page,
             )
-            draw_master_warning_strip(painter, self.engine_data, self.width())
+            draw_master_warning_strip(
+                painter,
+                self.engine_data,
+                self.width(),
+                checklist=self.engine_checklist_page,
+            )
             painter.end()
             return
         
@@ -329,7 +349,12 @@ class BlakePfdDemo(QWidget):
                 self.width(),
                 self.height(),
             )
-            draw_master_warning_strip(painter, self.engine_data, self.width())
+            draw_master_warning_strip(
+                painter,
+                self.engine_data,
+                self.width(),
+                checklist=self.engine_checklist_page,
+            )
             painter.end()
             return
         
@@ -346,7 +371,12 @@ class BlakePfdDemo(QWidget):
         taxi_state = self.safe_taxi.update(self.pfd)
         if features.show_safe_taxi and taxi_state.active:
             self.draw_safe_taxi_map(painter, taxi_state, width, height)
-            draw_master_warning_strip(painter, self.engine_data, width)
+            draw_master_warning_strip(
+                painter,
+                self.engine_data,
+                width,
+                checklist=self.engine_checklist_page,
+            )
             painter.end()
             return
 
@@ -433,7 +463,12 @@ class BlakePfdDemo(QWidget):
         if features.show_weather:
             self.draw_weather_overlay(painter, self.weather.read(), width, height)
 
-        draw_master_warning_strip(painter, self.engine_data, width)
+        draw_master_warning_strip(
+            painter,
+            self.engine_data,
+            width,
+            checklist=self.engine_checklist_page,
+        )
         
         if self.current_page == "EMS_TREND":
             painter = QPainter(self)
@@ -442,7 +477,12 @@ class BlakePfdDemo(QWidget):
                 self.width(),
                 self.height(),
             )
-            draw_master_warning_strip(painter, self.engine_data, self.width())
+            draw_master_warning_strip(
+                painter,
+                self.engine_data,
+                self.width(),
+                checklist=self.engine_checklist_page,
+            )
             painter.end()
             return
 
@@ -453,7 +493,12 @@ class BlakePfdDemo(QWidget):
                 self.width(),
                 self.height(),
             )
-            draw_master_warning_strip(painter, self.engine_data, self.width())
+            draw_master_warning_strip(
+                painter,
+                self.engine_data,
+                self.width(),
+                checklist=self.engine_checklist_page,
+            )
             painter.end()
             return
 
