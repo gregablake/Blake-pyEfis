@@ -74,7 +74,8 @@ class SimulatedEngineSource:
         return engine
 
     def apply_test_mode(self, engine: EngineData) -> None:
-        mode = getattr(self.config.ems_test, "mode", "normal")
+        ems_test = getattr(self.config, "ems_test", None)
+        mode = getattr(ems_test, "mode", "normal")
 
         if mode == "normal":
             return

@@ -47,7 +47,8 @@ class EmsAlertHistory:
                     acknowledged=False,
                 )
             )
-        self.write_alert_to_csv(text)
+            self.write_alert_to_csv(text)
+
         cleared_alerts = self.active_alerts - current
 
         for text in cleared_alerts:

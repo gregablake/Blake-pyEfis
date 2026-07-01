@@ -14,6 +14,8 @@ from pyefis.user.blake_pfd.airport_info_page import AirportInfoPage
 from pyefis.user.blake_pfd.audio_alerts import AudioAlertManager
 from pyefis.user.blake_pfd.config_loader import load_config
 from pyefis.user.blake_pfd.core.page_manager import PageManager
+from pyefis.user.blake_pfd.core.page_renderer import PageRenderer
+from pyefis.user.blake_pfd.core.warning_manager import WarningManager
 from pyefis.user.blake_pfd.database_importer import AviationDatabase
 from pyefis.user.blake_pfd.ems_alert_history import EmsAlertHistory
 from pyefis.user.blake_pfd.ems_page import EmsPage
@@ -65,6 +67,9 @@ class BlakePfdDemo(QWidget):
         self.event_manager = EventManager(self)
         self.flight_state_manager = FlightStateManager()
         self.flight_state = self.flight_state_manager.state
+        self.page_manager = PageManager()
+        self.page_renderer = PageRenderer(self)
+        self.warning_manager = WarningManager(self)
 
         self.fms_page = FmsPage()
         self.airport_info_page = AirportInfoPage()
@@ -210,24 +215,7 @@ class BlakePfdDemo(QWidget):
         print(f"EMS test mode: {next_mode}")
 
     def draw_warning_strip(self, painter: QPainter, width: int) -> None:
-        aircraft_moving = False
-
-        if self.pfd is not None:
-            aircraft_moving = self.pfd.ground_speed_kt >= 35.0
-
-        draw_master_warning_strip(
-            painter,
-            self.engine_data,
-            width,
-            checklist=self.engine_checklist_page,
-            aircraft_moving=aircraft_moving,
-        )
-
-    def _draw_page_with_warning_strip(self, draw_func, *args) -> None:
-        painter = QPainter(self)
-        draw_func(painter, *args)
-        self.draw_warning_strip(painter, self.width())
-        painter.end()
+        self.warning_manager.draw(painter, width)
 
     def paintEvent(self, event) -> None:  # noqa: N802, ARG002
         # event parameter required by Qt but unused in this implementation
@@ -236,75 +224,7 @@ class BlakePfdDemo(QWidget):
         if self.pfd is None:
             return
 
-        current_page = self.page_manager.current()
-
-        if current_page == "FMS":
-            self._draw_page_with_warning_strip(
-                self.fms_page.draw,
-                self.route_manager,
-                self.pfd,
-                self.width(),
-                self.height(),
-            )
-            return
-
-        if current_page == "AIRPORT":
-            self._draw_page_with_warning_strip(
-                self.airport_info_page.draw,
-                self.database,
-                self.config.navigation.selected_waypoint_id,
-                self.width(),
-                self.height(),
-            )
-            return
-
-        if current_page == "NEAREST":
-            nearest = self.database.nearest_airports(
-                39.1031,
-                -84.5120,
-                max_results=10,
-            )
-
-            self._draw_page_with_warning_strip(
-                self.nearest_page.draw,
-                nearest,
-                self.width(),
-                self.height(),
-            )
-            return
-
-        if current_page == "EMS":
-            self._draw_page_with_warning_strip(
-                self.ems_page.draw,
-                self.engine_data,
-                self.width(),
-                self.height(),
-                checklist=self.engine_checklist_page,
-            )
-            return
-
-        if current_page == "EMS_TREND":
-            self._draw_page_with_warning_strip(
-                self.ems_trend_page.draw,
-                self.width(),
-                self.height(),
-            )
-            return
-
-        if current_page == "EMS_ALERTS":
-            self._draw_page_with_warning_strip(
-                self.ems_alert_history.draw,
-                self.width(),
-                self.height(),
-            )
-            return
-
-        if current_page == "ENGINE_CHECKLIST":
-            self._draw_page_with_warning_strip(
-                self.engine_checklist_page.draw,
-                self.width(),
-                self.height(),
-            )
+        if self.page_renderer.draw_page():
             return
 
         painter = QPainter(self)
