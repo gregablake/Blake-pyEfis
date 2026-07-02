@@ -335,7 +335,7 @@ class BlakePfdDemo(QWidget):
 
         if features.show_weather:
             self.draw_weather_overlay(painter, self.weather.read(), width, height)
-
+        self.draw_aircraft_state_label(painter, width, height)
         self.draw_warning_strip(painter, width)
         painter.end()
 
@@ -1165,6 +1165,35 @@ class BlakePfdDemo(QWidget):
         painter.setFont(QFont("Arial", 12, QFont.Weight.Bold))
         painter.setPen(QColor(0, 255, 0) if weather_state.ok else QColor(255, 180, 0))
         painter.drawText(width - 230, 105, "WX ONLINE" if weather_state.ok else "WX WAITING")
+    
+    def draw_aircraft_state_label(
+        self,
+        painter: QPainter,
+        width: int,
+        height: int,
+    ) -> None:
+        if not hasattr(self, "aircraft"):
+            return
+
+        phase = getattr(self.aircraft, "phase", "UNKNOWN")
+        moving = "MOVING" if getattr(self.aircraft, "aircraft_moving", False) else "STOPPED"
+        airborne = "AIRBORNE" if getattr(self.aircraft, "airborne", False) else "GROUND"
+
+        box_w = 250
+        box_h = 54
+        box_x = width - box_w - 30
+        box_y = 58
+
+        painter.fillRect(box_x, box_y, box_w, box_h, QColor(0, 0, 0))
+        painter.setPen(QPen(QColor(0, 180, 255), 2))
+        painter.drawRect(box_x, box_y, box_w, box_h)
+
+        painter.setFont(QFont("Arial", 11, QFont.Weight.Bold))
+        painter.setPen(QColor(0, 180, 255))
+        painter.drawText(box_x + 10, box_y + 22, f"PHASE: {phase}")
+
+        painter.setPen(QColor(255, 255, 255))
+        painter.drawText(box_x + 10, box_y + 43, f"{moving} / {airborne}")
 
 
 def point(x: float, y: float) -> QPointF:
