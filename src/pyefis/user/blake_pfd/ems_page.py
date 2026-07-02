@@ -15,6 +15,7 @@ class EmsPage:
         width: int,
         height: int,
         checklist=None,
+        aircraft=None,
     ) -> None:
         painter.fillRect(0, 0, width, height, QColor(0, 0, 0))
 
@@ -154,11 +155,17 @@ class EmsPage:
             fuel_color,
             decimals=0,
         )
-
         self.draw_cht_column(painter, engine, x=390, y=105)
         self.draw_egt_column(painter, engine, x=620, y=105)
         self.draw_status_indicators(painter, engine, width, height)
-
+        
+        if aircraft is not None:
+            self.draw_aircraft_state_label(
+            painter,
+            aircraft,
+            width,
+            height,
+        )
         painter.setPen(QColor(130, 130, 130))
         painter.setFont(QFont("Arial", 11))
         painter.drawText(40, height - 20, "P = PFD    E = EMS")
@@ -513,3 +520,24 @@ class EmsPage:
             box_y + 36,
             checklist.all_phases_summary(),
         )
+        
+    def draw_aircraft_state_label(self, painter: QPainter, aircraft, width: int, height: int) -> None:
+        phase = getattr(aircraft, "phase", "UNKNOWN")
+        moving = "MOVING" if getattr(aircraft, "aircraft_moving", False) else "STOPPED"
+        airborne = "AIRBORNE" if getattr(aircraft, "airborne", False) else "GROUND"
+
+        box_x = width - 280
+        box_y = height - 90
+        box_w = 240
+        box_h = 42
+
+        painter.fillRect(box_x, box_y, box_w, box_h, QColor(0, 0, 0))
+        painter.setPen(QPen(QColor(0, 180, 255), 2))
+        painter.drawRect(box_x, box_y, box_w, box_h)
+
+        painter.setFont(QFont("Arial", 10, QFont.Weight.Bold))
+        painter.setPen(QColor(0, 180, 255))
+        painter.drawText(box_x + 10, box_y + 17, f"PHASE: {phase}")
+
+        painter.setPen(QColor(255, 255, 255))
+        painter.drawText(box_x + 10, box_y + 35, f"{moving} / {airborne}")

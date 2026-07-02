@@ -64,7 +64,14 @@ class PageRenderer:
 
         if current_page == "EMS":
             if painter is not None:
-                self.app.ems_page.draw(painter, self.app.engine_data, self.app.width(), self.app.height(), checklist=self.app.engine_checklist_page)
+                self.app.ems_page.draw(
+                    painter,
+                    self.app.engine_data,
+                    width,
+                    height,
+                    checklist=self.app.engine_checklist_page,
+                    aircraft=self.app.aircraft,
+                )
                 self.app.warning_manager.draw(painter, self.app.width())
             else:
                 self._draw_page_with_warning_strip(
