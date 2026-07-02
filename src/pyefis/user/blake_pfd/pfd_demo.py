@@ -142,7 +142,10 @@ class BlakePfdDemo(QWidget):
             self.engine_data.fuel_range_nm = (
                 self.engine_data.endurance_hr * self.pfd.ground_speed_kt
             )
-            self.flight_state = self.flight_state_manager.update(self.pfd)
+            self.flight_state = self.flight_state_manager.update(
+                self.pfd,
+                engine=self.engine_data,
+            )
         self.aircraft = self.aircraft_state_manager.update(
             pfd=self.pfd,
             engine=self.engine_data,
