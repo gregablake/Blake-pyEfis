@@ -45,6 +45,7 @@ from pyefis.user.blake_pfd.weather_reader import WeatherReader
 from pyefis.user.blake_pfd.core.event_manager import EventManager
 from pyefis.user.blake_pfd.core.flight_state_manager import FlightStateManager
 from pyefis.user.blake_pfd.core.sensor_manager import SensorManager
+from pyefis.user.blake_pfd.core.aircraft_state_manager import AircraftStateManager
 
 
 class BlakePfdDemo(QWidget):
@@ -79,6 +80,8 @@ class BlakePfdDemo(QWidget):
         self.ems_trend_page = EmsTrendPage()
         self.ems_alert_history = EmsAlertHistory()
         self.engine_checklist_page = EngineChecklistPage()
+        self.aircraft_state_manager = AircraftStateManager()
+        self.aircraft = self.aircraft_state_manager.state
 
         self.sensor_manager = SensorManager(
             flight_computer=self.flight_computer,
@@ -140,6 +143,14 @@ class BlakePfdDemo(QWidget):
                 self.engine_data.endurance_hr * self.pfd.ground_speed_kt
             )
             self.flight_state = self.flight_state_manager.update(self.pfd)
+        self.aircraft = self.aircraft_state_manager.update(
+            pfd=self.pfd,
+            engine=self.engine_data,
+            phase=self.flight_state.phase,
+            aircraft_moving=self.flight_state.aircraft_moving,
+            airborne=self.flight_state.airborne,
+            selected_waypoint_id=self.config.navigation.selected_waypoint_id,
+)
 
         self.ems_alert_history.update(self.engine_data)
         self.ems_trend_page.add_sample(self.engine_data)
