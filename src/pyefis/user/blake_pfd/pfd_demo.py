@@ -44,6 +44,7 @@ from pyefis.user.blake_pfd.terrain import TerrainComputer
 from pyefis.user.blake_pfd.weather_reader import WeatherReader
 from pyefis.user.blake_pfd.core.event_manager import EventManager
 from pyefis.user.blake_pfd.core.flight_state_manager import FlightStateManager
+from pyefis.user.blake_pfd.core.sensor_manager import SensorManager
 
 
 class BlakePfdDemo(QWidget):
@@ -79,8 +80,14 @@ class BlakePfdDemo(QWidget):
         self.ems_alert_history = EmsAlertHistory()
         self.engine_checklist_page = EngineChecklistPage()
 
-        self.engine_source = SimulatedEngineSource()
-        self.engine_data = self.engine_source.read()
+        self.sensor_manager = SensorManager(
+            flight_computer=self.flight_computer,
+            use_hardware=use_hardware,
+            replay_log=replay_log,
+        )
+
+        self.engine_data = self.sensor_manager.read_engine()
+        self.use_hardware = use_hardware
 
         self.flight_logger = FlightLogger(
             log_interval_s=self.config.logging.interval_s,
@@ -97,10 +104,6 @@ class BlakePfdDemo(QWidget):
             host=self.config.stratux.host,
             port=self.config.stratux.gdl90_port,
         )
-
-        self.replay_source = LogReplaySource(replay_log) if replay_log else None
-        self.sensors = BlakeHardwareSensorSource() if use_hardware else SimulatedSensorSource()
-        self.use_hardware = use_hardware
         self.pfd: FlightData | None = None
         
 
@@ -129,13 +132,8 @@ class BlakePfdDemo(QWidget):
 
 
     def update_data(self) -> None:
-        if self.replay_source is not None:
-            self.pfd = self.replay_source.read()
-        else:
-            raw = self.sensors.read()
-            self.pfd = self.flight_computer.update(raw)
-
-        self.engine_data = self.engine_source.read()
+        self.pfd = self.sensor_manager.read_flight()
+        self.engine_data = self.sensor_manager.read_engine()
 
         if self.pfd is not None:
             self.engine_data.fuel_range_nm = (
