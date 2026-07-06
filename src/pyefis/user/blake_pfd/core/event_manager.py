@@ -96,6 +96,11 @@ class EventManager:
         if event.key() == Qt.Key.Key_X:
             self.cycle_ems_test_mode()
             return
+        
+        if event.key() == Qt.Key.Key_U:
+            self.app.checklist_manager.clear_suppression()
+            print("Checklist popup suppression cleared")
+            return
 
         key_text = event.text().upper()
         page = self.app.page_manager.from_hotkey(key_text)

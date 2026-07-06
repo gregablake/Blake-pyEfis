@@ -1225,7 +1225,7 @@ class BlakePfdDemo(QWidget):
         painter.drawText(
             box_x + 10,
             box_y + 84,
-            f"CHECKLIST MODE: {checklist_mode}",
+            f"CHECKLIST MODE: {checklist_mode}  U=CLR",
         )
 
 def point(x: float, y: float) -> QPointF:
