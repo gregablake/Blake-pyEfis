@@ -71,16 +71,31 @@ def get_engine_warnings(engine: EngineData) -> list[WarningItem]:
     return warnings
 
 
-def get_checklist_warnings(checklist=None, aircraft_moving: bool = False) -> list[WarningItem]:
+def get_checklist_warnings(
+    checklist=None,
+    aircraft_moving: bool = False,
+    flight_phase: str = "PARKED",
+) -> list[WarningItem]:
     warnings: list[WarningItem] = []
 
     if checklist is None:
         return warnings
 
-    if not aircraft_moving:
+    warning_phases = {
+        "RUNUP",
+        "TAKEOFF",
+        "CLIMB",
+        "DESCENT",
+        "LANDING",
+    }
+
+    if flight_phase not in warning_phases:
         return warnings
 
-    if not checklist.phase_complete("BEFORE TAKEOFF"):
+    if not aircraft_moving and flight_phase != "RUNUP":
+        return warnings
+
+    if not checklist.active_phase_complete():
         warnings.append(WarningItem("CHECKLIST", QColor(255, 220, 0)))
 
     return warnings
@@ -98,6 +113,7 @@ def draw_master_warning_strip(
         get_checklist_warnings(
             checklist=checklist,
             aircraft_moving=aircraft_moving,
+            flight_phase=getattr(checklist, "current_phase_name", lambda: "PARKED")(),
         )
     )
 

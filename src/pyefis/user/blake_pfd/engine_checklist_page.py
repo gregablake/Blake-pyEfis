@@ -235,3 +235,9 @@ class EngineChecklistPage:
                     self.selected_phase_index = index
                     self.selected_item_index = 0
                 return
+            
+    def active_phase_complete(self) -> bool:
+        items = self.current_items()
+        checked = self.current_checked()
+
+        return len(checked) == len(items)
