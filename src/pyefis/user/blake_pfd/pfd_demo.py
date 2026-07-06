@@ -1195,7 +1195,7 @@ class BlakePfdDemo(QWidget):
         airborne = "AIRBORNE" if getattr(self.aircraft, "airborne", False) else "GROUND"
 
         box_w = 250
-        box_h = 74
+        box_h = 94
         box_x = width - box_w - 30
         box_y = 58
 
@@ -1214,6 +1214,18 @@ class BlakePfdDemo(QWidget):
             box_x + 10,
             box_y + 64,
             f"CHECKLIST: {self.checklist_state.active}",
+        )
+        checklist_mode = (
+            "SUPPRESSED"
+            if getattr(self.checklist_state, "popup_suppressed", False)
+            else "AUTO"
+        )
+
+        painter.setPen(QColor(255, 180, 0) if checklist_mode == "SUPPRESSED" else QColor(0, 255, 0))
+        painter.drawText(
+            box_x + 10,
+            box_y + 84,
+            f"CHECKLIST MODE: {checklist_mode}",
         )
 
 def point(x: float, y: float) -> QPointF:
