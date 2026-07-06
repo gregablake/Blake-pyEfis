@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
+from pyefis.user.blake_pfd.core.event_log import EventLog
 
 
 class FlightPhase(str, Enum):
@@ -27,6 +28,8 @@ class FlightState:
 class FlightStateManager:
     def __init__(self) -> None:
         self.state = FlightState()
+        self.event_log = EventLog()
+        self.previous_phase = self.state.phase
 
     def update(self, pfd, engine=None) -> FlightState:
         gs = getattr(pfd, "ground_speed_kt", 0.0)
@@ -65,5 +68,12 @@ class FlightStateManager:
             takeoff_roll=takeoff_roll,
             landing_roll=landing_roll,
         )
+        
+        if self.state.phase != self.previous_phase:
+            self.event_log.write(
+                "FLIGHT_PHASE",
+                f"{self.previous_phase} -> {self.state.phase}",
+            )
+            self.previous_phase = self.state.phase
 
         return self.state
