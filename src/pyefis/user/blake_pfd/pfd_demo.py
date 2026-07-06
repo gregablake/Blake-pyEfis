@@ -152,6 +152,10 @@ class BlakePfdDemo(QWidget):
             self.checklist_state = self.checklist_manager.update(
                 self.flight_state.phase
             )
+            self.engine_checklist_page.set_phase_by_name(
+                self.flight_state.phase
+            )
+            
         self.aircraft = self.aircraft_state_manager.update(
             pfd=self.pfd,
             engine=self.engine_data,

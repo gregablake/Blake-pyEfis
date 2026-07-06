@@ -210,3 +210,28 @@ class EngineChecklistPage:
                 return len(checked) == len(items)
 
         return False
+    def set_phase_by_name(self, phase_name: str) -> None:
+        phase_name = phase_name.upper()
+
+        phase_map = {
+            "PARKED": "BEFORE START",
+            "RUNUP": "RUNUP",
+            "TAXI": "BEFORE TAKEOFF",
+            "TAKEOFF": "BEFORE TAKEOFF",
+            "CLIMB": "CRUISE",
+            "CRUISE": "CRUISE",
+            "DESCENT": "LANDING",
+            "LANDING": "LANDING",
+        }
+
+        checklist_name = phase_map.get(phase_name)
+
+        if checklist_name is None:
+            return
+
+        for index, phase in enumerate(self.phases):
+            if phase[0] == checklist_name:
+                if self.selected_phase_index != index:
+                    self.selected_phase_index = index
+                    self.selected_item_index = 0
+                return
