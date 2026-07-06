@@ -16,6 +16,7 @@ class EmsPage:
         height: int,
         checklist=None,
         aircraft=None,
+        engine_health=None,
     ) -> None:
         painter.fillRect(0, 0, width, height, QColor(0, 0, 0))
 
@@ -166,6 +167,9 @@ class EmsPage:
             width,
             height,
         )
+            
+        if engine_health is not None:
+            self.draw_engine_health_box(painter, engine_health, width, height)
         painter.setPen(QColor(130, 130, 130))
         painter.setFont(QFont("Arial", 11))
         painter.drawText(40, height - 20, "P = PFD    E = EMS")
@@ -541,3 +545,30 @@ class EmsPage:
 
         painter.setPen(QColor(255, 255, 255))
         painter.drawText(box_x + 10, box_y + 35, f"{moving} / {airborne}")
+        
+    def draw_engine_health_box(self, painter: QPainter, engine_health, width: int, height: int) -> None:
+        box_x = width - 280
+        box_y = height - 145
+        box_w = 240
+        box_h = 48
+
+        score = getattr(engine_health, "health_score", 100)
+        status = getattr(engine_health, "status", "NORMAL")
+
+        if score >= 85:
+            color = QColor(0, 255, 0)
+        elif score >= 60:
+            color = QColor(255, 220, 0)
+        else:
+            color = QColor(255, 0, 0)
+
+        painter.fillRect(box_x, box_y, box_w, box_h, QColor(0, 0, 0))
+        painter.setPen(QPen(color, 2))
+        painter.drawRect(box_x, box_y, box_w, box_h)
+
+        painter.setFont(QFont("Arial", 11, QFont.Weight.Bold))
+        painter.setPen(color)
+        painter.drawText(box_x + 10, box_y + 20, f"ENGINE HEALTH: {score}%")
+
+        painter.setPen(QColor(255, 255, 255))
+        painter.drawText(box_x + 10, box_y + 40, f"STATUS: {status}")
