@@ -46,6 +46,7 @@ from pyefis.user.blake_pfd.core.event_manager import EventManager
 from pyefis.user.blake_pfd.core.flight_state_manager import FlightStateManager
 from pyefis.user.blake_pfd.core.sensor_manager import SensorManager
 from pyefis.user.blake_pfd.core.aircraft_state_manager import AircraftStateManager
+from pyefis.user.blake_pfd.core.checklist_manager import ChecklistManager
 
 
 class BlakePfdDemo(QWidget):
@@ -82,6 +83,8 @@ class BlakePfdDemo(QWidget):
         self.engine_checklist_page = EngineChecklistPage()
         self.aircraft_state_manager = AircraftStateManager()
         self.aircraft = self.aircraft_state_manager.state
+        self.checklist_manager = ChecklistManager()
+        self.checklist_state = self.checklist_manager.state
 
         self.sensor_manager = SensorManager(
             flight_computer=self.flight_computer,
@@ -145,6 +148,9 @@ class BlakePfdDemo(QWidget):
             self.flight_state = self.flight_state_manager.update(
                 self.pfd,
                 engine=self.engine_data,
+            )
+            self.checklist_state = self.checklist_manager.update(
+                self.flight_state.phase
             )
         self.aircraft = self.aircraft_state_manager.update(
             pfd=self.pfd,
@@ -1183,7 +1189,7 @@ class BlakePfdDemo(QWidget):
         airborne = "AIRBORNE" if getattr(self.aircraft, "airborne", False) else "GROUND"
 
         box_w = 250
-        box_h = 54
+        box_h = 74
         box_x = width - box_w - 30
         box_y = 58
 
@@ -1197,7 +1203,12 @@ class BlakePfdDemo(QWidget):
 
         painter.setPen(QColor(255, 255, 255))
         painter.drawText(box_x + 10, box_y + 43, f"{moving} / {airborne}")
-
+        painter.setPen(QColor(255, 255, 0))
+        painter.drawText(
+            box_x + 10,
+            box_y + 64,
+            f"CHECKLIST: {self.checklist_state.active}",
+        )
 
 def point(x: float, y: float) -> QPointF:
     return QPointF(float(x), float(y))
