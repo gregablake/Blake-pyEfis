@@ -101,6 +101,14 @@ class EventManager:
         page = self.app.page_manager.from_hotkey(key_text)
 
         if page is not None:
+            current_phase = getattr(self.app.flight_state, "phase", "PARKED")
+
+            if (
+                self.app.page_manager.current() == "ENGINE_CHECKLIST"
+                and page != "ENGINE_CHECKLIST"
+            ):
+                self.app.checklist_manager.suppress_for_phase(current_phase)
+
             self.app.page_manager.set_page(page)
 
     def cycle_ems_test_mode(self) -> None:
