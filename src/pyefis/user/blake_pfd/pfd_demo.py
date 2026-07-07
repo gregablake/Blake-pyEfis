@@ -49,6 +49,7 @@ from pyefis.user.blake_pfd.core.aircraft_state_manager import AircraftStateManag
 from pyefis.user.blake_pfd.core.checklist_manager import ChecklistManager
 from pyefis.user.blake_pfd.core.engine_manager import EngineManager
 from pyefis.user.blake_pfd.core.engine_analyzer import EngineAnalyzer
+from pyefis.user.blake_pfd.core.engine_trend_manager import EngineTrendManager
 
 
 class BlakePfdDemo(QWidget):
@@ -94,6 +95,8 @@ class BlakePfdDemo(QWidget):
             self.engine_data,
             self.engine_health,
         )
+        self.engine_trend_manager = EngineTrendManager()
+        self.engine_trend = self.engine_trend_manager.update(self.engine_data)
 
         self.sensor_manager = SensorManager(
             flight_computer=self.flight_computer,
@@ -178,7 +181,10 @@ class BlakePfdDemo(QWidget):
             aircraft_moving=self.flight_state.aircraft_moving,
             airborne=self.flight_state.airborne,
             selected_waypoint_id=self.config.navigation.selected_waypoint_id,
-)
+        )
+        self.engine_trend = self.engine_trend_manager.update(
+            self.engine_data
+        )
 
         self.ems_alert_history.update(self.engine_data)
         self.ems_trend_page.add_sample(self.engine_data)
