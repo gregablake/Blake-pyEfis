@@ -80,3 +80,4 @@ docs/_build/
 
 # Makefile markers
 *.marker
+src/pyefis/user/blake_pfd/logs/
