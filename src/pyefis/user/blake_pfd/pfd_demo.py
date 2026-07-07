@@ -88,42 +88,37 @@ class BlakePfdDemo(QWidget):
         self.aircraft = self.aircraft_state_manager.state
         self.checklist_manager = ChecklistManager()
         self.checklist_state = self.checklist_manager.state
-        self.engine_manager = EngineManager()
-        self.engine_health = self.engine_manager.health
-        self.engine_analyzer = EngineAnalyzer()
-        self.engine_analysis = self.engine_analyzer.analyze(
-            self.engine_data,
-            self.engine_health,
-        )
-        self.engine_trend_manager = EngineTrendManager()
-        self.engine_trend = self.engine_trend_manager.update(self.engine_data)
-
         self.sensor_manager = SensorManager(
             flight_computer=self.flight_computer,
             use_hardware=use_hardware,
             replay_log=replay_log,
         )
-
         self.engine_data = self.sensor_manager.read_engine()
         self.use_hardware = use_hardware
-
+        self.engine_manager = EngineManager()
+        self.engine_health = self.engine_manager.update(self.engine_data)
+        self.engine_trend_manager = EngineTrendManager()
+        self.engine_trend = self.engine_trend_manager.update(self.engine_data)
         self.flight_logger = FlightLogger(
             log_interval_s=self.config.logging.interval_s,
         )
-
+        self.engine_analyzer = EngineAnalyzer()
+        self.engine_analysis = self.engine_analyzer.analyze(
+            self.engine_data,
+            self.engine_health,
+            self.engine_trend,
+        )
         self.audio_alerts = AudioAlertManager(
             enabled=self.config.audio_alerts.enabled,
             buzzer_enabled=self.config.audio_alerts.buzzer_enabled,
             buzzer_pin=self.config.audio_alerts.buzzer_pin,
             repeat_interval_s=self.config.audio_alerts.repeat_interval_s,
         )
-
         self.stratux = StratuxReader(
             host=self.config.stratux.host,
             port=self.config.stratux.gdl90_port,
         )
         self.pfd: FlightData | None = None
-        
 
         self.register_pages()
 
@@ -155,6 +150,7 @@ class BlakePfdDemo(QWidget):
         self.engine_analysis = self.engine_analyzer.analyze(
             self.engine_data,
             self.engine_health,
+            self.engine_trend,
         )
         
         if self.pfd is not None:

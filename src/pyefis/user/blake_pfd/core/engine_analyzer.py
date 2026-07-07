@@ -17,7 +17,7 @@ class EngineAnalysis:
 
 
 class EngineAnalyzer:
-    def analyze(self, engine: EngineData, health=None) -> EngineAnalysis:
+    def analyze(self, engine: EngineData, health=None, trend=None) -> EngineAnalysis:
         cht_values = engine.cht_f or []
         egt_values = engine.egt_f or []
 
@@ -93,6 +93,21 @@ class EngineAnalyzer:
             )
 
         score = getattr(health, "health_score", 100) if health is not None else 100
+        
+        if trend is not None:
+            trend_warning = getattr(trend, "warning", "")
+
+            if trend_warning:
+                return EngineAnalysis(
+                summary=trend_warning,
+                recommendation="Adjust power, airspeed, or climb rate before limits are reached.",
+                severity="CAUTION",
+                hottest_cylinder=hottest_cylinder,
+                hottest_cht_f=hottest_cht,
+                cht_spread_f=cht_spread,
+                egt_spread_f=egt_spread,
+            )
+
 
         return EngineAnalysis(
             summary=f"Engine operating normally. Health {score}%.",
