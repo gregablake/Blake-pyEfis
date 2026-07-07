@@ -1199,7 +1199,7 @@ class BlakePfdDemo(QWidget):
         airborne = "AIRBORNE" if getattr(self.aircraft, "airborne", False) else "GROUND"
 
         box_w = 250
-        box_h = 94
+        box_h = 114
         box_x = width - box_w - 30
         box_y = 58
 
@@ -1230,6 +1230,22 @@ class BlakePfdDemo(QWidget):
             box_x + 10,
             box_y + 84,
             f"CHECKLIST MODE: {checklist_mode}  U=CLR",
+        )
+        engine_score = getattr(self.engine_health, "health_score", 100)
+        engine_status = getattr(self.engine_health, "status", "NORMAL")
+
+        if engine_score >= 85:
+            engine_color = QColor(0, 255, 0)
+        elif engine_score >= 60:
+            engine_color = QColor(255, 220, 0)
+        else:
+            engine_color = QColor(255, 0, 0)
+
+        painter.setPen(engine_color)
+        painter.drawText(
+            box_x + 10,
+            box_y + 104,
+            f"ENGINE: {engine_score}% {engine_status}",
         )
 
 def point(x: float, y: float) -> QPointF:
