@@ -50,6 +50,7 @@ from pyefis.user.blake_pfd.core.checklist_manager import ChecklistManager
 from pyefis.user.blake_pfd.core.engine_manager import EngineManager
 from pyefis.user.blake_pfd.core.engine_analyzer import EngineAnalyzer
 from pyefis.user.blake_pfd.core.engine_trend_manager import EngineTrendManager
+from pyefis.user.blake_pfd.core.engine_state import EngineState
 
 
 class BlakePfdDemo(QWidget):
@@ -108,6 +109,12 @@ class BlakePfdDemo(QWidget):
             self.engine_health,
             self.engine_trend,
         )
+        self.engine_state = EngineState(
+            data=self.engine_data,
+            health=self.engine_health,
+            trend=self.engine_trend,
+            analysis=self.engine_analysis,
+        )
         self.audio_alerts = AudioAlertManager(
             enabled=self.config.audio_alerts.enabled,
             buzzer_enabled=self.config.audio_alerts.buzzer_enabled,
@@ -157,6 +164,12 @@ class BlakePfdDemo(QWidget):
             self.engine_data,
             self.engine_health,
             self.engine_trend,
+        )
+        self.engine_state = EngineState(
+            data=self.engine_data,
+            health=self.engine_health,
+            trend=self.engine_trend,
+            analysis=self.engine_analysis,
         )
 
         if self.pfd is not None:
