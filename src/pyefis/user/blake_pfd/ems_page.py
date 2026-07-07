@@ -16,9 +16,7 @@ class EmsPage:
         height: int,
         checklist=None,
         aircraft=None,
-        engine_health=None,
-        engine_analysis=None,
-        engine_trend=None,
+        engine_state=None,
     ) -> None:
         painter.fillRect(0, 0, width, height, QColor(0, 0, 0))
 
@@ -170,18 +168,10 @@ class EmsPage:
             height,
         )
             
-        if engine_trend is not None:
-            self.draw_engine_trend_box(painter, engine_trend, width, height)
-            
-        if engine_health is not None:
-            self.draw_engine_health_box(painter, engine_health, width, height)
-        painter.setPen(QColor(130, 130, 130))
-        painter.setFont(QFont("Arial", 11))
-        painter.drawText(40, height - 20, "P = PFD    E = EMS")
-        
-        if engine_analysis is not None:
-            self.draw_engine_analysis_box(painter, engine_analysis, width, height)
-            
+        if engine_state is not None:
+            self.draw_engine_health_box(painter, engine_state.health, width, height)
+            self.draw_engine_analysis_box(painter, engine_state.analysis, width, height)
+            self.draw_engine_trend_box(painter, engine_state.trend, width, height)
     def draw_value(
         self,
         painter: QPainter,
