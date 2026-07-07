@@ -18,6 +18,7 @@ class EmsPage:
         aircraft=None,
         engine_health=None,
         engine_analysis=None,
+        engine_trend=None,
     ) -> None:
         painter.fillRect(0, 0, width, height, QColor(0, 0, 0))
 
@@ -168,6 +169,9 @@ class EmsPage:
             width,
             height,
         )
+            
+        if engine_trend is not None:
+            self.draw_engine_trend_box(painter, engine_trend, width, height)
             
         if engine_health is not None:
             self.draw_engine_health_box(painter, engine_health, width, height)
@@ -603,3 +607,32 @@ class EmsPage:
 
         painter.setPen(QColor(255, 255, 255))
         painter.drawText(box_x + 10, box_y + 35, summary[:55])
+        
+    def draw_engine_trend_box(self, painter: QPainter, engine_trend, width: int, height: int) -> None:
+        box_x = 580
+        box_y = height - 145
+        box_w = 300
+        box_h = 48
+
+        predicted_cht = getattr(engine_trend, "predicted_cht", 0.0)
+        predicted_oil_temp = getattr(engine_trend, "predicted_oil_temp", 0.0)
+        warning = getattr(engine_trend, "warning", "")
+
+        color = QColor(0, 255, 0)
+        if warning:
+            color = QColor(255, 220, 0)
+
+        painter.fillRect(box_x, box_y, box_w, box_h, QColor(0, 0, 0))
+        painter.setPen(QPen(color, 2))
+        painter.drawRect(box_x, box_y, box_w, box_h)
+
+        painter.setFont(QFont("Arial", 10, QFont.Weight.Bold))
+        painter.setPen(color)
+        painter.drawText(box_x + 10, box_y + 18, "ENGINE TREND")
+
+        painter.setPen(QColor(255, 255, 255))
+        painter.drawText(
+            box_x + 10,
+            box_y + 35,
+            f"30s CHT {predicted_cht:.0f}F  OIL {predicted_oil_temp:.0f}F",
+        )

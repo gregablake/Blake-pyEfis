@@ -58,6 +58,7 @@ class PageRenderer:
                 aircraft=self.app.aircraft,
                 engine_health=self.app.engine_health,
                 engine_analysis=self.app.engine_analysis,
+                engine_trend=self.app.engine_trend,
             )
             self.app.draw_warning_strip(painter, width)
             return True
