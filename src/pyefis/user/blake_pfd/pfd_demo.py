@@ -48,6 +48,7 @@ from pyefis.user.blake_pfd.core.sensor_manager import SensorManager
 from pyefis.user.blake_pfd.core.aircraft_state_manager import AircraftStateManager
 from pyefis.user.blake_pfd.core.checklist_manager import ChecklistManager
 from pyefis.user.blake_pfd.core.engine_manager import EngineManager
+from pyefis.user.blake_pfd.core.engine_analyzer import EngineAnalyzer
 
 
 class BlakePfdDemo(QWidget):
@@ -88,6 +89,11 @@ class BlakePfdDemo(QWidget):
         self.checklist_state = self.checklist_manager.state
         self.engine_manager = EngineManager()
         self.engine_health = self.engine_manager.health
+        self.engine_analyzer = EngineAnalyzer()
+        self.engine_analysis = self.engine_analyzer.analyze(
+            self.engine_data,
+            self.engine_health,
+        )
 
         self.sensor_manager = SensorManager(
             flight_computer=self.flight_computer,
@@ -143,7 +149,10 @@ class BlakePfdDemo(QWidget):
     def update_data(self) -> None:
         self.pfd = self.sensor_manager.read_flight()
         self.engine_data = self.sensor_manager.read_engine()
-        self.engine_health = self.engine_manager.update(self.engine_data)
+        self.engine_analysis = self.engine_analyzer.analyze(
+            self.engine_data,
+            self.engine_health,
+        )
         
         if self.pfd is not None:
             self.engine_data.fuel_range_nm = (
