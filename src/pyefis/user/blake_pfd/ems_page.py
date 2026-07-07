@@ -17,6 +17,7 @@ class EmsPage:
         checklist=None,
         aircraft=None,
         engine_health=None,
+        engine_analysis=None,
     ) -> None:
         painter.fillRect(0, 0, width, height, QColor(0, 0, 0))
 
@@ -173,7 +174,10 @@ class EmsPage:
         painter.setPen(QColor(130, 130, 130))
         painter.setFont(QFont("Arial", 11))
         painter.drawText(40, height - 20, "P = PFD    E = EMS")
-
+        
+        if engine_analysis is not None:
+            self.draw_engine_analysis_box(painter, engine_analysis, width, height)
+            
     def draw_value(
         self,
         painter: QPainter,
@@ -572,3 +576,30 @@ class EmsPage:
 
         painter.setPen(QColor(255, 255, 255))
         painter.drawText(box_x + 10, box_y + 40, f"STATUS: {status}")
+    
+    def draw_engine_analysis_box(self, painter: QPainter, engine_analysis, width: int, height: int) -> None:
+        box_x = 40
+        box_y = height - 145
+        box_w = 520
+        box_h = 48
+
+        severity = getattr(engine_analysis, "severity", "NORMAL")
+        summary = getattr(engine_analysis, "summary", "")
+        recommendation = getattr(engine_analysis, "recommendation", "")
+
+        color = QColor(0, 255, 0)
+        if severity == "CAUTION":
+            color = QColor(255, 220, 0)
+        elif severity in {"WARNING", "CRITICAL"}:
+            color = QColor(255, 0, 0)
+
+        painter.fillRect(box_x, box_y, box_w, box_h, QColor(0, 0, 0))
+        painter.setPen(QPen(color, 2))
+        painter.drawRect(box_x, box_y, box_w, box_h)
+
+        painter.setFont(QFont("Arial", 10, QFont.Weight.Bold))
+        painter.setPen(color)
+        painter.drawText(box_x + 10, box_y + 18, f"ENGINE ANALYSIS: {severity}")
+
+        painter.setPen(QColor(255, 255, 255))
+        painter.drawText(box_x + 10, box_y + 35, summary[:55])

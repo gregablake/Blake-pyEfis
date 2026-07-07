@@ -57,6 +57,7 @@ class PageRenderer:
                 checklist=self.app.engine_checklist_page,
                 aircraft=self.app.aircraft,
                 engine_health=self.app.engine_health,
+                engine_analysis=self.app.engine_analysis,
             )
             self.app.draw_warning_strip(painter, width)
             return True
