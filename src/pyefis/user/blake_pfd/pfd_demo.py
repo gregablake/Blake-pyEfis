@@ -143,47 +143,55 @@ class BlakePfdDemo(QWidget):
         self.page_manager.register("EMS_ALERTS", "H")
         self.page_manager.register("ENGINE_CHECKLIST", "C")
 
-
     def update_data(self) -> None:
         self.pfd = self.sensor_manager.read_flight()
         self.engine_data = self.sensor_manager.read_engine()
+
+        self.engine_health = self.engine_manager.update(self.engine_data)
+
+        self.engine_trend = self.engine_trend_manager.update(
+        self.engine_data
+        )
+
         self.engine_analysis = self.engine_analyzer.analyze(
             self.engine_data,
             self.engine_health,
             self.engine_trend,
         )
-        
+
         if self.pfd is not None:
             self.engine_data.fuel_range_nm = (
                 self.engine_data.endurance_hr * self.pfd.ground_speed_kt
             )
+
             self.flight_state = self.flight_state_manager.update(
                 self.pfd,
                 engine=self.engine_data,
             )
+
             self.checklist_state = self.checklist_manager.update(
                 self.flight_state.phase
             )
+
             self.engine_checklist_page.set_phase_by_name(
                 self.flight_state.phase
             )
-        if self.checklist_state.should_popup:
-            self.page_manager.set_page("ENGINE_CHECKLIST")    
-            
-        self.aircraft = self.aircraft_state_manager.update(
-            pfd=self.pfd,
-            engine=self.engine_data,
-            phase=self.flight_state.phase,
-            aircraft_moving=self.flight_state.aircraft_moving,
-            airborne=self.flight_state.airborne,
-            selected_waypoint_id=self.config.navigation.selected_waypoint_id,
-        )
-        self.engine_trend = self.engine_trend_manager.update(
-            self.engine_data
-        )
+
+            if self.checklist_state.should_popup:
+                self.page_manager.set_page("ENGINE_CHECKLIST")
+
+            self.aircraft = self.aircraft_state_manager.update(
+                pfd=self.pfd,
+                engine=self.engine_data,
+                phase=self.flight_state.phase,
+                aircraft_moving=self.flight_state.aircraft_moving,
+                airborne=self.flight_state.airborne,
+                selected_waypoint_id=self.config.navigation.selected_waypoint_id,
+            )
 
         self.ems_alert_history.update(self.engine_data)
         self.ems_trend_page.add_sample(self.engine_data)
+
         self.audio_alerts.update(
             self.engine_data,
             silenced=self.ems_alert_history.silenced,
@@ -197,7 +205,6 @@ class BlakePfdDemo(QWidget):
             )
 
         self.update()
-
     def keyPressEvent(self, event) -> None:  # noqa: N802
         self.event_manager.handle_key(event)
         self.update()
