@@ -171,15 +171,17 @@ class BlakePfdDemo(QWidget):
             trend=self.engine_trend,
             analysis=self.engine_analysis,
         )
-
+        
+        engine = self.engine_state.data
+        
         if self.pfd is not None:
-            self.engine_data.fuel_range_nm = (
-                self.engine_data.endurance_hr * self.pfd.ground_speed_kt
+            engine.fuel_range_nm = (
+                engine.endurance_hr * self.pfd.ground_speed_kt
             )
 
             self.flight_state = self.flight_state_manager.update(
                 self.pfd,
-                engine=self.engine_data,
+                engine=engine,
             )
 
             self.checklist_state = self.checklist_manager.update(
@@ -203,11 +205,11 @@ class BlakePfdDemo(QWidget):
                 selected_waypoint_id=self.config.navigation.selected_waypoint_id,
             )
 
-        self.ems_alert_history.update(self.engine_data)
-        self.ems_trend_page.add_sample(self.engine_data)
+        self.ems_alert_history.update(engine)
+        self.ems_trend_page.add_sample(engine)
 
         self.audio_alerts.update(
-            self.engine_data,
+            engine,
             silenced=self.ems_alert_history.silenced,
         )
 
@@ -392,6 +394,32 @@ class BlakePfdDemo(QWidget):
 
     def draw_background(self, painter: QPainter, width: int, height: int) -> None:
         painter.fillRect(0, 0, width, height, QColor(5, 5, 8))
+
+    def draw_declutter_level_0_overlays(self, painter: QPainter, width: int, height: int, features) -> None:
+        # Draw overlays that are shown only when declutter level is 0
+        if features.show_nearest_airports:
+            self.draw_nearest_airports_overlay(painter, self.pfd, width, height)
+
+        if features.show_moving_map:
+            map_state = self.moving_map.update(
+                database=self.database,
+                aircraft_lat=39.1031,
+                aircraft_lon=-84.5120,
+                range_nm=self.config.moving_map.range_nm,
+            )
+            self.draw_moving_map_overlay(painter, map_state, width, height)
+
+        if features.show_route:
+            self.draw_route_overlay(painter, width, height)
+
+        if features.show_airport_info:
+            self.draw_selected_airport_info(painter, width, height)
+
+        # Always draw these when declutter level is 0
+        self.draw_waypoint_info_box(painter, self.pfd, width, height)
+        self.draw_startup_status_box(painter, width, height)
+        self.draw_sensor_status_panel(painter, width, height)
+        self.draw_sim_profile_box(painter, width, height)
 
     def draw_synthetic_vision(self, painter: QPainter, pfd: FlightData, width: int, height: int) -> None:
         scene = self.synthetic_vision.update(pfd)
@@ -1225,6 +1253,12 @@ class BlakePfdDemo(QWidget):
     ) -> None:
         if not hasattr(self, "aircraft"):
             return
+        
+        engine_state = self.aircraft.engine_state
+        engine = engine_state.data
+        engine_health = engine_state.health
+        engine_analysis = engine_state.analysis
+        engine_trend = engine_state.trend
 
         phase = self.aircraft.phase
         moving = "MOVING" if self.aircraft.aircraft_moving else "STOPPED"
