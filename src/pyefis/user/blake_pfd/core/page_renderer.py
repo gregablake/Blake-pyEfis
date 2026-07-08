@@ -51,13 +51,11 @@ class PageRenderer:
         if current_page == "EMS":
             self.app.ems_page.draw(
                 painter,
-                self.app.engine_data,
+                self.app.aircraft,
                 width,
                 height,
                 checklist=self.app.engine_checklist_page,
-                aircraft=self.app.aircraft,
-                engine_state=self.app.engine_state,
-            )
+            )   
             self.app.draw_warning_strip(painter, width)
             return True
 

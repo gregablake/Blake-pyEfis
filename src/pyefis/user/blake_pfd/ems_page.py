@@ -11,13 +11,17 @@ class EmsPage:
     def draw(
         self,
         painter: QPainter,
-        engine: EngineData,
+        aircraft,
         width: int,
         height: int,
         checklist=None,
-        aircraft=None,
-        engine_state=None,
     ) -> None:
+        engine_state = aircraft.engine_state
+        engine = engine_state.data
+        engine_health = engine_state.health
+        engine_analysis = engine_state.analysis
+        engine_trend = engine_state.trend
+
         painter.fillRect(0, 0, width, height, QColor(0, 0, 0))
 
         painter.setPen(QColor(0, 255, 0))
