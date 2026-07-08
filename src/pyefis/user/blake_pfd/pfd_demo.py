@@ -1262,8 +1262,9 @@ class BlakePfdDemo(QWidget):
             box_y + 84,
             f"CHECKLIST MODE: {checklist_mode}  U=CLR",
         )
-        engine_score = getattr(self.engine_health, "health_score", 100)
-        engine_status = getattr(self.engine_health, "status", "NORMAL")
+        engine_health = getattr(self.engine_state, "health", None)
+        engine_score = getattr(engine_health, "health_score", 100)
+        engine_status = getattr(engine_health, "status", "NORMAL")
 
         if engine_score >= 85:
             engine_color = QColor(0, 255, 0)
