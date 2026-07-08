@@ -1253,6 +1253,8 @@ class BlakePfdDemo(QWidget):
     ) -> None:
         if not hasattr(self, "aircraft"):
             return
+        engine_state = self.aircraft.engine_state
+        engine_health = engine_state.health
         
         engine_state = self.aircraft.engine_state
         engine = engine_state.data
