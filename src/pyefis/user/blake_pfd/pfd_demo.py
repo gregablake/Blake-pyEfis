@@ -1226,9 +1226,9 @@ class BlakePfdDemo(QWidget):
         if not hasattr(self, "aircraft"):
             return
 
-        phase = getattr(self.aircraft, "phase", "UNKNOWN")
-        moving = "MOVING" if getattr(self.aircraft, "aircraft_moving", False) else "STOPPED"
-        airborne = "AIRBORNE" if getattr(self.aircraft, "airborne", False) else "GROUND"
+        phase = self.aircraft.phase
+        moving = "MOVING" if self.aircraft.aircraft_moving else "STOPPED"
+        airborne = "AIRBORNE" if self.aircraft.airborne else "GROUND"
 
         box_w = 250
         box_h = 114
@@ -1263,9 +1263,9 @@ class BlakePfdDemo(QWidget):
             box_y + 84,
             f"CHECKLIST MODE: {checklist_mode}  U=CLR",
         )
-        engine_health = getattr(self.engine_state, "health", None)
-        engine_score = getattr(engine_health, "health_score", 100)
-        engine_status = getattr(engine_health, "status", "NORMAL")
+        engine_health = self.aircraft.engine_state.health
+        engine_score = engine_health.health_score
+        engine_status = engine_health.status
 
         if engine_score >= 85:
             engine_color = QColor(0, 255, 0)
