@@ -8,6 +8,7 @@ from pyefis.user.blake_pfd.core.aircraft_state import (
 )
 from pyefis.user.blake_pfd.flight_computer import FlightData
 from pyefis.user.blake_pfd.engine_data import EngineData
+from pyefis.user.blake_pfd.core.engine_state import EngineState
 
 
 class AircraftStateManager:
@@ -22,12 +23,14 @@ class AircraftStateManager:
         aircraft_moving: bool,
         airborne: bool,
         selected_waypoint_id: str,
+        engine_state: EngineState | None = None,
     ) -> AircraftState:
         self.state = AircraftState(
             phase=phase,
             aircraft_moving=aircraft_moving,
             airborne=airborne,
             engine=engine,
+            engine_state=engine_state,
             fuel=FuelState(
                 remaining_gal=engine.fuel_remaining_gal,
                 used_gal=engine.fuel_used_gal,

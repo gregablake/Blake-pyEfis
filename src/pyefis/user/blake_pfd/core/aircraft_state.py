@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from pyefis.user.blake_pfd.engine_data import EngineData
+from pyefis.user.blake_pfd.core.engine_state import EngineState
 
 
 @dataclass
@@ -35,7 +36,7 @@ class AircraftState:
     phase: str = "PARKED"
     aircraft_moving: bool = False
     airborne: bool = False
-
+    engine_state: EngineState | None = None
     engine: EngineData | None = None
     fuel: FuelState = field(default_factory=FuelState)
     electrical: ElectricalState = field(default_factory=ElectricalState)

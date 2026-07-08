@@ -196,6 +196,7 @@ class BlakePfdDemo(QWidget):
             self.aircraft = self.aircraft_state_manager.update(
                 pfd=self.pfd,
                 engine=self.engine_data,
+                engine_state=self.engine_state,
                 phase=self.flight_state.phase,
                 aircraft_moving=self.flight_state.aircraft_moving,
                 airborne=self.flight_state.airborne,
