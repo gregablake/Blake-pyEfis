@@ -107,15 +107,25 @@ def draw_master_warning_strip(
     width: int,
     checklist=None,
     aircraft_moving: bool = False,
+    aircraft_recommendation=None,
 ) -> None:
     warnings = get_engine_warnings(engine)
     warnings.extend(
-        get_checklist_warnings(
-            checklist=checklist,
-            aircraft_moving=aircraft_moving,
-            flight_phase=getattr(checklist, "current_phase_name", lambda: "PARKED")(),
-        )
+    get_checklist_warnings(
+        checklist=checklist,
+        aircraft_moving=aircraft_moving,
+        flight_phase=getattr(checklist, "current_phase_name", lambda: "PARKED")(),
     )
+)
+
+    if aircraft_recommendation is not None:
+        severity = getattr(aircraft_recommendation, "severity", "NORMAL")
+        title = getattr(aircraft_recommendation, "title", "")
+
+        if severity in {"WARNING", "CRITICAL"}:
+            warnings.append(WarningItem(f"AI {title.upper()}", QColor(255, 0, 0)))
+        elif severity == "CAUTION":
+            warnings.append(WarningItem(f"AI {title.upper()}", QColor(255, 220, 0)))
 
     if not warnings:
         warnings.append(WarningItem("ENGINE NORMAL", QColor(0, 255, 0)))
