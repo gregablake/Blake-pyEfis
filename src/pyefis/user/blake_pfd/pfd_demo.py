@@ -51,6 +51,7 @@ from pyefis.user.blake_pfd.core.engine_manager import EngineManager
 from pyefis.user.blake_pfd.core.engine_analyzer import EngineAnalyzer
 from pyefis.user.blake_pfd.core.engine_trend_manager import EngineTrendManager
 from pyefis.user.blake_pfd.core.engine_state import EngineState
+from pyefis.user.blake_pfd.core.cylinder_analyzer import CylinderAnalyzer
 
 
 class BlakePfdDemo(QWidget):
@@ -97,6 +98,7 @@ class BlakePfdDemo(QWidget):
         self.engine_manager = EngineManager()
         self.engine_trend_manager = EngineTrendManager()
         self.engine_analyzer = EngineAnalyzer()
+        self.cylinder_analyzer = CylinderAnalyzer()
         self.update_engine_state()
         self.use_hardware = use_hardware
         self.engine_manager = EngineManager()
@@ -156,12 +158,16 @@ class BlakePfdDemo(QWidget):
             self.engine_health,
             self.engine_trend,
         )
+        self.cylinder_analysis = self.cylinder_analyzer.analyze(
+            self.engine_data
+        )
 
         self.engine_state = EngineState(
             data=self.engine_data,
             health=self.engine_health,
             trend=self.engine_trend,
             analysis=self.engine_analysis,
+            cylinders=self.cylinder_analysis,
         )
 
     def update_data(self) -> None:

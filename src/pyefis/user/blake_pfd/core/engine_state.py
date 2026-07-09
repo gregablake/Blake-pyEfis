@@ -6,6 +6,7 @@ from pyefis.user.blake_pfd.engine_data import EngineData
 from pyefis.user.blake_pfd.core.engine_manager import EngineHealth
 from pyefis.user.blake_pfd.core.engine_trend_manager import EngineTrend
 from pyefis.user.blake_pfd.core.engine_analyzer import EngineAnalysis
+from pyefis.user.blake_pfd.core.cylinder_analyzer import CylinderAnalysis
 
 
 @dataclass
@@ -14,3 +15,4 @@ class EngineState:
     health: EngineHealth
     trend: EngineTrend
     analysis: EngineAnalysis
+    cylinders: CylinderAnalysis
