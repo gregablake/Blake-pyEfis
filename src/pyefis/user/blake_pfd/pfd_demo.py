@@ -52,6 +52,7 @@ from pyefis.user.blake_pfd.core.engine_analyzer import EngineAnalyzer
 from pyefis.user.blake_pfd.core.engine_trend_manager import EngineTrendManager
 from pyefis.user.blake_pfd.core.engine_state import EngineState
 from pyefis.user.blake_pfd.core.cylinder_analyzer import CylinderAnalyzer
+from pyefis.user.blake_pfd.core.aircraft_intelligence import AircraftIntelligence
 
 
 class BlakePfdDemo(QWidget):
@@ -99,6 +100,8 @@ class BlakePfdDemo(QWidget):
         self.engine_trend_manager = EngineTrendManager()
         self.engine_analyzer = EngineAnalyzer()
         self.cylinder_analyzer = CylinderAnalyzer()
+        self.aircraft_intelligence = AircraftIntelligence()
+        self.aircraft_recommendation = self.aircraft_intelligence.analyze(self.aircraft)
         self.update_engine_state()
         self.use_hardware = use_hardware
         self.engine_manager = EngineManager()
@@ -204,7 +207,10 @@ class BlakePfdDemo(QWidget):
                 engine_state=self.engine_state,
                 selected_waypoint_id=self.config.navigation.selected_waypoint_id,
             )
-
+            
+        self.aircraft_recommendation = self.aircraft_intelligence.analyze(
+            self.aircraft
+        )
         self.ems_alert_history.update(engine)
         self.ems_trend_page.add_sample(engine)
 
