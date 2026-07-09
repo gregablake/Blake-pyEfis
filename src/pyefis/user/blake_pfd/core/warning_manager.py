@@ -17,5 +17,6 @@ class WarningManager:
             self.app.engine_data,
             width,
             checklist=self.app.engine_checklist_page,
-            aircraft_moving=aircraft_moving,
+            aircraft_moving=self.aircraft_moving(),
+            aircraft_recommendation=self.app.aircraft_recommendation,
         )
