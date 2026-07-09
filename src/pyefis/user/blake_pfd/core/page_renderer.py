@@ -6,6 +6,16 @@ from PyQt6.QtGui import QPainter
 class PageRenderer:
     def __init__(self, app) -> None:
         self.app = app
+        
+    def draw_page(self, painter: QPainter | None = None) -> bool:
+        if painter is None:
+            painter = QPainter(self.app)
+
+        return self.draw(
+            painter,
+            self.app.width(),
+            self.app.height(),
+        )
 
     def draw(self, painter: QPainter, width: int, height: int) -> bool:
         current_page = self.app.page_manager.current()
@@ -18,7 +28,7 @@ class PageRenderer:
                 width,
                 height,
             )
-            self.app.draw_warning_strip(painter, width)
+            self.app.warning_manager.draw(painter, width)
             return True
 
         if current_page == "AIRPORT":
@@ -29,7 +39,7 @@ class PageRenderer:
                 width,
                 height,
             )
-            self.app.draw_warning_strip(painter, width)
+            self.app.warning_manager.draw(painter, width)
             return True
 
         if current_page == "NEAREST":
@@ -45,7 +55,7 @@ class PageRenderer:
                 width,
                 height,
             )
-            self.app.draw_warning_strip(painter, width)
+            self.app.warning_manager.draw(painter, width)
             return True
 
         if current_page == "EMS":
@@ -57,7 +67,7 @@ class PageRenderer:
                 checklist=self.app.engine_checklist_page,
                 aircraft_recommendation=self.app.aircraft_recommendation,
             )   
-            self.app.draw_warning_strip(painter, width)
+            self.app.warning_manager.draw(painter, width)
             return True
 
         if current_page == "EMS_TREND":
@@ -66,7 +76,7 @@ class PageRenderer:
                 width,
                 height,
             )
-            self.app.draw_warning_strip(painter, width)
+            self.app.warning_manager.draw(painter, width)
             return True
 
         if current_page == "EMS_ALERTS":
@@ -75,7 +85,7 @@ class PageRenderer:
                 width,
                 height,
             )
-            self.app.draw_warning_strip(painter, width)
+            self.app.warning_manager.draw(painter, width)
             return True
 
         if current_page == "ENGINE_CHECKLIST":
@@ -84,7 +94,7 @@ class PageRenderer:
                 width,
                 height,
             )
-            self.app.draw_warning_strip(painter, width)
+            self.app.warning_manager.draw(painter, width)
             return True
 
         return False
