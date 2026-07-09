@@ -94,27 +94,18 @@ class BlakePfdDemo(QWidget):
             use_hardware=use_hardware,
             replay_log=replay_log,
         )
-        self.engine_data = self.sensor_manager.read_engine()
+        self.engine_manager = EngineManager()
+        self.engine_trend_manager = EngineTrendManager()
+        self.engine_analyzer = EngineAnalyzer()
+        self.update_engine_state()
         self.use_hardware = use_hardware
         self.engine_manager = EngineManager()
-        self.engine_health = self.engine_manager.update(self.engine_data)
         self.engine_trend_manager = EngineTrendManager()
-        self.engine_trend = self.engine_trend_manager.update(self.engine_data)
         self.flight_logger = FlightLogger(
             log_interval_s=self.config.logging.interval_s,
         )
         self.engine_analyzer = EngineAnalyzer()
-        self.engine_analysis = self.engine_analyzer.analyze(
-            self.engine_data,
-            self.engine_health,
-            self.engine_trend,
-        )
-        self.engine_state = EngineState(
-            data=self.engine_data,
-            health=self.engine_health,
-            trend=self.engine_trend,
-            analysis=self.engine_analysis,
-        )
+        
         self.audio_alerts = AudioAlertManager(
             enabled=self.config.audio_alerts.enabled,
             buzzer_enabled=self.config.audio_alerts.buzzer_enabled,
