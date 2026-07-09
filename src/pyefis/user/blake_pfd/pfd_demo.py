@@ -100,7 +100,6 @@ class BlakePfdDemo(QWidget):
         self.update_engine_state()
         self.use_hardware = use_hardware
         self.engine_manager = EngineManager()
-        self.engine_trend_manager = EngineTrendManager()
         self.flight_logger = FlightLogger(
             log_interval_s=self.config.logging.interval_s,
         )
