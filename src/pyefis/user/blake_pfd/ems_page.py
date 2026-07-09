@@ -15,6 +15,7 @@ class EmsPage:
         width: int,
         height: int,
         checklist=None,
+        aircraft_recommendation=None,
     ) -> None:
         engine_state = aircraft.engine_state
         engine = engine_state.data
@@ -171,6 +172,14 @@ class EmsPage:
             self.draw_aircraft_state_label(
             painter,
             aircraft,
+            width,
+            height,
+        )
+            
+        if aircraft_recommendation is not None:
+            self.draw_aircraft_recommendation_box(
+            painter,
+            aircraft_recommendation,
             width,
             height,
         )
@@ -655,3 +664,38 @@ class EmsPage:
 
         painter.setPen(QColor(255, 255, 255))
         painter.drawText(box_x + 10, box_y + 35, message[:38])
+        
+    def draw_aircraft_recommendation_box(
+        self,
+        painter: QPainter,
+        recommendation,
+        width: int,
+        height: int,
+    ) -> None:
+        box_x = 40
+        box_y = height - 205
+        box_w = width - 80
+        box_h = 50
+
+        severity = getattr(recommendation, "severity", "NORMAL")
+        title = getattr(recommendation, "title", "Normal")
+        message = getattr(recommendation, "message", "Aircraft systems normal.")
+        action = getattr(recommendation, "recommendation", "Continue normal operation.")
+
+        color = QColor(0, 255, 0)
+        if severity == "CAUTION":
+            color = QColor(255, 220, 0)
+        elif severity in {"WARNING", "CRITICAL"}:
+            color = QColor(255, 0, 0)
+
+        painter.fillRect(box_x, box_y, box_w, box_h, QColor(0, 0, 0))
+        painter.setPen(QPen(color, 2))
+        painter.drawRect(box_x, box_y, box_w, box_h)
+
+        painter.setFont(QFont("Arial", 11, QFont.Weight.Bold))
+        painter.setPen(color)
+        painter.drawText(box_x + 10, box_y + 20, f"AI RECOMMENDATION: {title} [{severity}]")
+
+        painter.setFont(QFont("Arial", 10, QFont.Weight.Bold))
+        painter.setPen(QColor(255, 255, 255))
+        painter.drawText(box_x + 10, box_y + 40, f"{message[:55]}  ACTION: {action[:55]}")

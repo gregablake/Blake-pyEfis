@@ -55,6 +55,7 @@ class PageRenderer:
                 width,
                 height,
                 checklist=self.app.engine_checklist_page,
+                aircraft_recommendation=self.app.aircraft_recommendation,
             )   
             self.app.draw_warning_strip(painter, width)
             return True
