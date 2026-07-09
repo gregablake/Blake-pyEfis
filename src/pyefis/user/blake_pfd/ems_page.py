@@ -21,6 +21,7 @@ class EmsPage:
         engine_health = engine_state.health
         engine_analysis = engine_state.analysis
         engine_trend = engine_state.trend
+        cylinders = engine_state.cylinders
 
         painter.fillRect(0, 0, width, height, QColor(0, 0, 0))
 
@@ -163,6 +164,8 @@ class EmsPage:
         self.draw_cht_column(painter, engine, x=390, y=105)
         self.draw_egt_column(painter, engine, x=620, y=105)
         self.draw_status_indicators(painter, engine, width, height)
+        
+        self.draw_cylinder_analysis_box(painter, cylinders, width, height)
         
         if aircraft is not None:
             self.draw_aircraft_state_label(
@@ -630,3 +633,25 @@ class EmsPage:
             box_y + 35,
             f"30s CHT {predicted_cht:.0f}F  OIL {predicted_oil_temp:.0f}F",
         )
+        
+    def draw_cylinder_analysis_box(self, painter: QPainter, cylinders, width: int, height: int) -> None:
+        box_x = 900
+        box_y = height - 145
+        box_w = 300
+        box_h = 48
+
+        imbalance = getattr(cylinders, "imbalance_detected", False)
+        message = getattr(cylinders, "message", "Cylinders balanced.")
+
+        color = QColor(255, 220, 0) if imbalance else QColor(0, 255, 0)
+
+        painter.fillRect(box_x, box_y, box_w, box_h, QColor(0, 0, 0))
+        painter.setPen(QPen(color, 2))
+        painter.drawRect(box_x, box_y, box_w, box_h)
+
+        painter.setFont(QFont("Arial", 10, QFont.Weight.Bold))
+        painter.setPen(color)
+        painter.drawText(box_x + 10, box_y + 18, "CYLINDER BALANCE")
+
+        painter.setPen(QColor(255, 255, 255))
+        painter.drawText(box_x + 10, box_y + 35, message[:38])
