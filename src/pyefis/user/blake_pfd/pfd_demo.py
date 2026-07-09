@@ -102,6 +102,10 @@ class BlakePfdDemo(QWidget):
         self.cylinder_analyzer = CylinderAnalyzer()
         self.aircraft_intelligence = AircraftIntelligence()
         self.aircraft_recommendation = self.aircraft_intelligence.analyze(self.aircraft)
+        self.last_aircraft_recommendation_key = (
+            self.aircraft_recommendation.severity,
+            self.aircraft_recommendation.title,
+        )
         self.update_engine_state()
         self.use_hardware = use_hardware
         self.engine_manager = EngineManager()
@@ -211,6 +215,21 @@ class BlakePfdDemo(QWidget):
         self.aircraft_recommendation = self.aircraft_intelligence.analyze(
             self.aircraft
         )
+        recommendation_key = (
+            self.aircraft_recommendation.severity,
+            self.aircraft_recommendation.title,
+        )
+
+        if recommendation_key != self.last_aircraft_recommendation_key:
+            self.flight_state_manager.event_log.write(
+                "AI_RECOMMENDATION",
+                f"{self.aircraft_recommendation.severity}: "
+                f"{self.aircraft_recommendation.title} - "
+                f"{self.aircraft_recommendation.message}",
+            )
+
+            self.last_aircraft_recommendation_key = recommendation_key
+            
         self.ems_alert_history.update(engine)
         self.ems_trend_page.add_sample(engine)
 
