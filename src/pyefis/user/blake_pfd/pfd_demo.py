@@ -1256,9 +1256,11 @@ class BlakePfdDemo(QWidget):
         engine_analysis = engine_state.analysis
         engine_trend = engine_state.trend
 
-        phase = self.aircraft.phase
-        moving = "MOVING" if self.aircraft.aircraft_moving else "STOPPED"
-        airborne = "AIRBORNE" if self.aircraft.airborne else "GROUND"
+        flight_state = self.aircraft.flight_state
+
+        phase = flight_state.phase
+        moving = "MOVING" if flight_state.aircraft_moving else "STOPPED"
+        airborne = "AIRBORNE" if flight_state.airborne else "GROUND"
 
         box_w = 250
         box_h = 114
