@@ -149,15 +149,16 @@ class BlakePfdDemo(QWidget):
         self.page_manager.register("EMS_TREND", "T")
         self.page_manager.register("EMS_ALERTS", "H")
         self.page_manager.register("ENGINE_CHECKLIST", "C")
-
-    def update_data(self) -> None:
-        self.pfd = self.sensor_manager.read_flight()
+        
+    def update_engine_state(self) -> None:
         self.engine_data = self.sensor_manager.read_engine()
 
-        self.engine_health = self.engine_manager.update(self.engine_data)
+        self.engine_health = self.engine_manager.update(
+            self.engine_data
+        )
 
         self.engine_trend = self.engine_trend_manager.update(
-        self.engine_data
+            self.engine_data
         )
 
         self.engine_analysis = self.engine_analyzer.analyze(
@@ -165,12 +166,17 @@ class BlakePfdDemo(QWidget):
             self.engine_health,
             self.engine_trend,
         )
+
         self.engine_state = EngineState(
             data=self.engine_data,
             health=self.engine_health,
             trend=self.engine_trend,
             analysis=self.engine_analysis,
         )
+
+    def update_data(self) -> None:
+        self.pfd = self.sensor_manager.read_flight()
+        self.update_engine_state()
         
         engine = self.engine_state.data
         
