@@ -1274,7 +1274,7 @@ class BlakePfdDemo(QWidget):
         airborne = "AIRBORNE" if flight_state.airborne else "GROUND"
 
         box_w = 250
-        box_h = 114
+        box_h = 154
         box_x = width - box_w - 30
         box_y = 58
 
@@ -1322,6 +1322,33 @@ class BlakePfdDemo(QWidget):
             box_x + 10,
             box_y + 104,
             f"ENGINE: {engine_score}% {engine_status}",
+        )
+        recommendation = getattr(self, "aircraft_recommendation", None)
+
+        if recommendation is not None:
+            severity = getattr(recommendation, "severity", "NORMAL")
+            title = getattr(recommendation, "title", "Normal")
+            action = getattr(recommendation, "recommendation", "")
+
+        if severity == "CAUTION":
+            rec_color = QColor(255, 220, 0)
+        elif severity in {"WARNING", "CRITICAL"}:
+            rec_color = QColor(255, 0, 0)
+        else:
+            rec_color = QColor(0, 255, 0)
+
+        painter.setPen(rec_color)
+        painter.drawText(
+            box_x + 10,
+            box_y + 124,
+            f"AI: {title} [{severity}]",
+        )
+
+        painter.setPen(QColor(255, 255, 255))
+        painter.drawText(
+            box_x + 10,
+            box_y + 144,
+            action[:28],
         )
 
 def point(x: float, y: float) -> QPointF:
