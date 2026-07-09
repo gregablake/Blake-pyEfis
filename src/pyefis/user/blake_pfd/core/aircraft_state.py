@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from pyefis.user.blake_pfd.core.flight_state_manager import FlightState
 from pyefis.user.blake_pfd.engine_data import EngineData
 from pyefis.user.blake_pfd.core.engine_state import EngineState
 
@@ -33,15 +34,18 @@ class ElectricalState:
 
 @dataclass
 class AircraftState:
-    phase: str = "PARKED"
-    aircraft_moving: bool = False
-    airborne: bool = False
+    # Major state objects
+    flight_state: FlightState | None = None
     engine_state: EngineState | None = None
-    engine: EngineData | None = None
+
     fuel: FuelState = field(default_factory=FuelState)
     electrical: ElectricalState = field(default_factory=ElectricalState)
     navigation: NavigationState = field(default_factory=NavigationState)
 
+    # Legacy compatibility (remove after migration)
+    engine: EngineData | None = None
+
+    # Frequently used values
     ground_speed_kt: float = 0.0
     altitude_ft: float = 0.0
     vsi_fpm: float = 0.0
