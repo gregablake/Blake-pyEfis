@@ -1250,7 +1250,6 @@ class BlakePfdDemo(QWidget):
         engine_state = self.aircraft.engine_state
         engine_health = engine_state.health
         
-        engine_state = self.aircraft.engine_state
         engine = engine_state.data
         engine_health = engine_state.health
         engine_analysis = engine_state.analysis
