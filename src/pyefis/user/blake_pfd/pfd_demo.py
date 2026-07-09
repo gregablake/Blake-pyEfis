@@ -53,7 +53,7 @@ from pyefis.user.blake_pfd.core.engine_trend_manager import EngineTrendManager
 from pyefis.user.blake_pfd.core.engine_state import EngineState
 from pyefis.user.blake_pfd.core.cylinder_analyzer import CylinderAnalyzer
 from pyefis.user.blake_pfd.core.aircraft_intelligence import AircraftIntelligence
-
+from pyefis.user.blake_pfd.core.engine_prediction import EnginePredictor
 
 class BlakePfdDemo(QWidget):
     def __init__(self, use_hardware: bool = False, replay_log: str | None = None) -> None:
@@ -101,6 +101,7 @@ class BlakePfdDemo(QWidget):
         self.engine_analyzer = EngineAnalyzer()
         self.cylinder_analyzer = CylinderAnalyzer()
         self.aircraft_intelligence = AircraftIntelligence()
+        self.engine_predictor = EnginePredictor()
         self.aircraft_recommendation = self.aircraft_intelligence.analyze(self.aircraft)
         self.last_aircraft_recommendation_key = (
             self.aircraft_recommendation.severity,
@@ -168,6 +169,10 @@ class BlakePfdDemo(QWidget):
         self.cylinder_analysis = self.cylinder_analyzer.analyze(
             self.engine_data
         )
+        
+        self.engine_prediction = self.engine_predictor.predict(
+            self.engine_trend
+        )
 
         self.engine_state = EngineState(
             data=self.engine_data,
@@ -175,6 +180,7 @@ class BlakePfdDemo(QWidget):
             trend=self.engine_trend,
             analysis=self.engine_analysis,
             cylinders=self.cylinder_analysis,
+            prediction=self.engine_prediction
         )
 
     def update_data(self) -> None:
