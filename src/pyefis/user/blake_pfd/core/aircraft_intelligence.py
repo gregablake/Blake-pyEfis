@@ -57,6 +57,30 @@ class AircraftIntelligence:
                     message=getattr(cylinders, "message", "Cylinder imbalance detected."),
                     recommendation="Monitor CHT/EGT spread and consider mixture or cooling adjustment.",
                 )
+                
+            prediction = getattr(engine_state, "prediction", None)
+
+            if prediction is not None:
+                prediction_severity = getattr(
+                    prediction,
+                    "severity",
+                    "NORMAL",
+                )
+
+                if prediction_severity != "NORMAL":
+                    return AircraftRecommendation(
+                    severity=prediction_severity,
+                    title="Predicted Engine Limit",
+                    message=getattr(
+                        prediction,
+                        "message",
+                        "Engine limit exceedance predicted.",
+                    ),
+                    recommendation=(
+                        "Adjust power, mixture, airspeed, or climb rate "
+                        "before the limit is reached."
+                    ),
+                )
 
             trend = getattr(engine_state, "trend", None)
 
