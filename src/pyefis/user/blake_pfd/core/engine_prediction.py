@@ -17,19 +17,44 @@ class EnginePrediction:
 
 class EnginePredictor:
     def predict(self, trend) -> EnginePrediction:
-        cht_rate = getattr(trend, "cht_rate", 0.0)
-        oil_rate = getattr(trend, "oil_temp_rate", 0.0)
-        predicted_cht = getattr(trend, "predicted_cht", 0.0)
-        predicted_oil = getattr(trend, "predicted_oil_temp", 0.0)
+        cht_rate = max(getattr(trend, "cht_rate", 0.0), 0.0)
+        oil_rate = max(getattr(trend, "oil_temp_rate", 0.0), 0.0)
+
+        current_cht = getattr(trend, "current_cht", 0.0)
+        current_oil = getattr(trend, "current_oil_temp", 0.0)
 
         prediction = EnginePrediction()
 
-        if predicted_cht >= prediction.cht_limit_f:
-            prediction.severity = "CAUTION"
-            prediction.message = "CHT projected to exceed limit soon."
+        if cht_rate > 0:
+            delta = prediction.cht_limit_f - current_cht
 
-        if predicted_oil >= prediction.oil_temp_limit_f:
+            if delta > 0:
+                prediction.time_to_cht_limit_s = delta / cht_rate
+
+        if oil_rate > 0:
+            delta = prediction.oil_temp_limit_f - current_oil
+
+            if delta > 0:
+                prediction.time_to_oil_temp_limit_s = delta / oil_rate
+
+        if (
+            prediction.time_to_cht_limit_s is not None
+            and prediction.time_to_cht_limit_s < 60
+        ):
             prediction.severity = "CAUTION"
-            prediction.message = "Oil temperature projected to exceed limit soon."
+            prediction.message = (
+                f"CHT predicted to reach limit in "
+                f"{prediction.time_to_cht_limit_s:.0f}s."
+            )
+
+        if (
+            prediction.time_to_oil_temp_limit_s is not None
+            and prediction.time_to_oil_temp_limit_s < 60
+        ):
+            prediction.severity = "CAUTION"
+            prediction.message = (
+                f"Oil temperature predicted to reach limit in "
+                f"{prediction.time_to_oil_temp_limit_s:.0f}s."
+            )
 
         return prediction
