@@ -7,10 +7,10 @@ def test_normal_trend_has_no_predicted_exceedance() -> None:
     predictor = EnginePredictor()
 
     trend = SimpleNamespace(
+        current_cht=390.0,
+        current_oil_temp=220.0,
         cht_rate=0.1,
         oil_temp_rate=0.1,
-        predicted_cht=400.0,
-        predicted_oil_temp=220.0,
     )
 
     result = predictor.predict(trend)
@@ -27,29 +27,27 @@ def test_predicted_cht_limit_creates_caution() -> None:
         current_oil_temp=220.0,
         cht_rate=1.0,
         oil_temp_rate=0.1,
-        predicted_cht=430.0,
-        predicted_oil_temp=220.0,
     )
 
     result = predictor.predict(trend)
 
     assert result.severity == "CAUTION"
     assert "CHT" in result.message
+    assert result.time_to_cht_limit_s == 40.0
 
 
 def test_predicted_oil_temp_limit_creates_caution() -> None:
     predictor = EnginePredictor()
 
     trend = SimpleNamespace(
-        current_cht=390.0,
-        current_oil_temp=220.0,
+        current_cht=400.0,
+        current_oil_temp=230.0,
         cht_rate=0.1,
         oil_temp_rate=1.0,
-        predicted_cht=410.0,
-        predicted_oil_temp=255.0,
     )
 
     result = predictor.predict(trend)
 
     assert result.severity == "CAUTION"
     assert "Oil" in result.message
+    assert result.time_to_oil_temp_limit_s == 20.0
