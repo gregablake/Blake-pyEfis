@@ -6,6 +6,9 @@ from dataclasses import dataclass
 
 @dataclass
 class EngineTrend:
+    current_cht: float = 0.0
+    current_oil_temp: float = 0.0
+
     oil_temp_rate: float = 0.0
     cht_rate: float = 0.0
     oil_pressure_rate: float = 0.0
@@ -31,7 +34,10 @@ class EngineTrendManager:
 
         self.oil_pressure.append(engine.oil_pressure_psi)
 
-        trend = EngineTrend()
+        trend = EngineTrend(
+            current_cht=hottest,
+            current_oil_temp=engine.oil_temp_f,
+        )
 
         if len(self.oil_temp) >= 10:
 

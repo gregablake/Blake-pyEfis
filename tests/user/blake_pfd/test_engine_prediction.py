@@ -23,10 +23,12 @@ def test_predicted_cht_limit_creates_caution() -> None:
     predictor = EnginePredictor()
 
     trend = SimpleNamespace(
+        current_cht=390.0,
+        current_oil_temp=220.0,
         cht_rate=1.0,
         oil_temp_rate=0.1,
-        predicted_cht=435.0,
-        predicted_oil_temp=225.0,
+        predicted_cht=430.0,
+        predicted_oil_temp=220.0,
     )
 
     result = predictor.predict(trend)
@@ -39,6 +41,8 @@ def test_predicted_oil_temp_limit_creates_caution() -> None:
     predictor = EnginePredictor()
 
     trend = SimpleNamespace(
+        current_cht=390.0,
+        current_oil_temp=220.0,
         cht_rate=0.1,
         oil_temp_rate=1.0,
         predicted_cht=410.0,
