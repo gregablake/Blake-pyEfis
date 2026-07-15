@@ -9,6 +9,7 @@ class WarningManager:
 
     def draw(self, painter, width: int) -> None:
         aircraft_moving = False
+
         if self.app.pfd is not None:
             aircraft_moving = self.app.pfd.ground_speed_kt >= 35.0
 
@@ -17,6 +18,6 @@ class WarningManager:
             self.app.engine_data,
             width,
             checklist=self.app.engine_checklist_page,
-            aircraft_moving=self.aircraft_moving(),
+            aircraft_moving=aircraft_moving,
             aircraft_recommendation=self.app.aircraft_recommendation,
         )
