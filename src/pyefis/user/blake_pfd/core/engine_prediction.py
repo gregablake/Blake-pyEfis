@@ -17,6 +17,14 @@ class EnginePrediction:
 
 class EnginePredictor:
     def predict(self, trend) -> EnginePrediction:
+        sample_count = getattr(trend, "sample_count", 0)
+
+        if sample_count < 5:  # Ensure we have enough samples
+            return EnginePrediction(
+                message="Collecting trend data.",
+                severity="NORMAL",
+            )
+            
         cht_rate = max(getattr(trend, "cht_rate", 0.0), 0.0)
         oil_rate = max(getattr(trend, "oil_temp_rate", 0.0), 0.0)
 
