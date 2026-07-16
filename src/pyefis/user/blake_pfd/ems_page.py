@@ -681,6 +681,12 @@ class EmsPage:
         title = getattr(recommendation, "title", "Normal")
         message = getattr(recommendation, "message", "Aircraft systems normal.")
         action = getattr(recommendation, "recommendation", "Continue normal operation.")
+        
+        urgency_s = getattr(recommendation, "urgency_s", None)
+
+        urgency_text = ""
+        if urgency_s is not None:
+            urgency_text = f"  LIMIT IN {urgency_s:.0f}s"
 
         color = QColor(0, 255, 0)
         if severity == "CAUTION":
@@ -694,7 +700,11 @@ class EmsPage:
 
         painter.setFont(QFont("Arial", 11, QFont.Weight.Bold))
         painter.setPen(color)
-        painter.drawText(box_x + 10, box_y + 20, f"AI RECOMMENDATION: {title} [{severity}]")
+        painter.drawText(
+            box_x + 10,
+            box_y + 20,
+            f"AI RECOMMENDATION: {title} [{severity}]{urgency_text}",
+        )
 
         painter.setFont(QFont("Arial", 10, QFont.Weight.Bold))
         painter.setPen(QColor(255, 255, 255))
