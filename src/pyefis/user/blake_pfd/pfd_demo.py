@@ -1354,6 +1354,12 @@ class BlakePfdDemo(QWidget):
             severity = getattr(recommendation, "severity", "NORMAL")
             title = getattr(recommendation, "title", "Normal")
             action = getattr(recommendation, "recommendation", "")
+            
+        urgency_s = getattr(recommendation, "urgency_s", None)
+
+        urgency_text = ""
+        if urgency_s is not None:
+            urgency_text = f" {urgency_s:.0f}s"
 
         if severity == "CAUTION":
             rec_color = QColor(255, 220, 0)
@@ -1366,7 +1372,7 @@ class BlakePfdDemo(QWidget):
         painter.drawText(
             box_x + 10,
             box_y + 124,
-            f"AI: {title} [{severity}]",
+            f"AI: {title} [{severity}]{urgency_text}",
         )
 
         painter.setPen(QColor(255, 255, 255))
