@@ -1,10 +1,12 @@
 from types import SimpleNamespace
 
+import pyefis.user.blake_pfd.master_warning as warning_module
+
 from pyefis.user.blake_pfd.master_warning import (
+    draw_master_warning_strip,
     get_checklist_warnings,
     get_engine_warnings,
 )
-
 
 def engine(**overrides):
     values = {
@@ -79,3 +81,58 @@ def test_complete_checklist_has_no_warning() -> None:
     )
 
     assert warnings == []
+    
+class FakePainter:
+    def __init__(self) -> None:
+        self.texts: list[str] = []
+
+    def setFont(self, *args, **kwargs) -> None:
+        pass
+
+    def fillRect(self, *args, **kwargs) -> None:
+        pass
+
+    def setPen(self, *args, **kwargs) -> None:
+        pass
+
+    def drawText(self, *args, **kwargs) -> None:
+        if args and isinstance(args[-1], str):
+            self.texts.append(args[-1])
+
+
+def test_ai_warning_includes_urgency(monkeypatch) -> None:
+    monkeypatch.setattr(
+        warning_module,
+        "load_config",
+        lambda: SimpleNamespace(
+            fuel=SimpleNamespace(
+                red_gal=3.0,
+                yellow_gal=6.0,
+                red_endurance_hr=0.3,
+                yellow_endurance_hr=0.6,
+            ),
+            ems_test=SimpleNamespace(mode="normal"),
+        ),
+    )
+
+    recommendation = SimpleNamespace(
+        severity="CAUTION",
+        title="Predicted Engine Limit",
+        urgency_s=28.0,
+    )
+
+    painter = FakePainter()
+
+    draw_master_warning_strip(
+        painter=painter,
+        engine=engine(),
+        width=1000,
+        checklist=None,
+        aircraft_moving=False,
+        aircraft_recommendation=recommendation,
+    )
+
+    assert any(
+        "AI PREDICTED ENGINE LIMIT 28s" in text
+        for text in painter.texts
+    )
