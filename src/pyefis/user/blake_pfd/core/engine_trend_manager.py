@@ -19,7 +19,7 @@ class EngineTrend:
 
     warning: str = ""
     sample_count: int = 0
-
+    history_duration_s: float = 0.0
 
 class EngineTrendManager:
     def __init__(self, history_seconds: float = 10.0) -> None:
@@ -68,6 +68,10 @@ class EngineTrendManager:
 
         if predicted_oil_temp >= 250.0:
             warning = "Oil temperature rising."
+            
+        history_duration_s = self._history_duration(self.cht_history)
+
+        # Calculate the duration of the history
 
         return EngineTrend(
             current_cht=hottest_cht,
@@ -79,6 +83,7 @@ class EngineTrendManager:
             predicted_cht=predicted_cht,
             warning=warning,
             sample_count=len(self.cht_history),
+            history_duration_s=history_duration_s,
         )
 
     def _trim_history(
@@ -107,3 +112,12 @@ class EngineTrendManager:
             return 0.0
 
         return (last_value - first_value) / elapsed
+    
+    @staticmethod
+    def _history_duration(
+        history: deque[tuple[float, float]],
+    ) -> float:
+        if len(history) < 2:
+            return 0.0
+
+        return max(0.0, history[-1][0] - history[0][0])
