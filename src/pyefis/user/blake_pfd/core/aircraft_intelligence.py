@@ -9,87 +9,188 @@ class AircraftRecommendation:
     title: str = "Normal"
     message: str = "Aircraft systems normal."
     recommendation: str = "Continue normal operation."
+    urgency_s: float | None = None
 
 
 class AircraftIntelligence:
+    _SEVERITY_ORDER = {
+        "NORMAL": 0,
+        "CAUTION": 1,
+        "WARNING": 2,
+        "CRITICAL": 3,
+    }
+
     def analyze(self, aircraft) -> AircraftRecommendation:
         if aircraft is None:
             return AircraftRecommendation()
 
         engine_state = getattr(aircraft, "engine_state", None)
 
-        if engine_state is not None:
-            engine_analysis = getattr(engine_state, "analysis", None)
+        if engine_state is None:
+            return AircraftRecommendation()
 
-            if engine_analysis is not None:
-                severity = getattr(engine_analysis, "severity", "NORMAL")
+        recommendations: list[AircraftRecommendation] = []
 
-                if severity in {"WARNING", "CRITICAL"}:
-                    return AircraftRecommendation(
-                        severity=severity,
-                        title="Engine",
-                        message=getattr(engine_analysis, "summary", "Engine issue detected."),
-                        recommendation=getattr(
-                            engine_analysis,
-                            "recommendation",
-                            "Monitor engine instruments.",
-                        ),
-                    )
+        self._add_engine_analysis(recommendations, engine_state)
+        self._add_cylinder_analysis(recommendations, engine_state)
+        self._add_engine_prediction(recommendations, engine_state)
+        self._add_engine_trend(recommendations, engine_state)
 
-                if severity == "CAUTION":
-                    return AircraftRecommendation(
-                        severity="CAUTION",
-                        title="Engine Caution",
-                        message=getattr(engine_analysis, "summary", "Engine caution detected."),
-                        recommendation=getattr(
-                            engine_analysis,
-                            "recommendation",
-                            "Monitor engine instruments.",
-                        ),
-                    )
+        if not recommendations:
+            return AircraftRecommendation()
 
-            cylinders = getattr(engine_state, "cylinders", None)
+        return max(recommendations, key=self._priority_key)
 
-            if cylinders is not None and getattr(cylinders, "imbalance_detected", False):
-                return AircraftRecommendation(
-                    severity="CAUTION",
-                    title="Cylinder Balance",
-                    message=getattr(cylinders, "message", "Cylinder imbalance detected."),
-                    recommendation="Monitor CHT/EGT spread and consider mixture or cooling adjustment.",
-                )
-                
-            prediction = getattr(engine_state, "prediction", None)
+    def _add_engine_analysis(
+        self,
+        recommendations: list[AircraftRecommendation],
+        engine_state,
+    ) -> None:
+        engine_analysis = getattr(engine_state, "analysis", None)
 
-            if prediction is not None:
-                prediction_severity = getattr(
+        if engine_analysis is None:
+            return
+
+        severity = getattr(engine_analysis, "severity", "NORMAL")
+
+        if severity == "NORMAL":
+            return
+
+        title = (
+            "Engine"
+            if severity in {"WARNING", "CRITICAL"}
+            else "Engine Caution"
+        )
+
+        recommendations.append(
+            AircraftRecommendation(
+                severity=severity,
+                title=title,
+                message=getattr(
+                    engine_analysis,
+                    "summary",
+                    "Engine issue detected.",
+                ),
+                recommendation=getattr(
+                    engine_analysis,
+                    "recommendation",
+                    "Monitor engine instruments.",
+                ),
+            )
+        )
+
+    def _add_cylinder_analysis(
+        self,
+        recommendations: list[AircraftRecommendation],
+        engine_state,
+    ) -> None:
+        cylinders = getattr(engine_state, "cylinders", None)
+
+        if cylinders is None:
+            return
+
+        if not getattr(cylinders, "imbalance_detected", False):
+            return
+
+        recommendations.append(
+            AircraftRecommendation(
+                severity="CAUTION",
+                title="Cylinder Balance",
+                message=getattr(
+                    cylinders,
+                    "message",
+                    "Cylinder imbalance detected.",
+                ),
+                recommendation=(
+                    "Monitor CHT and EGT spread and consider mixture "
+                    "or cooling adjustment."
+                ),
+            )
+        )
+
+    def _add_engine_prediction(
+        self,
+        recommendations: list[AircraftRecommendation],
+        engine_state,
+    ) -> None:
+        prediction = getattr(engine_state, "prediction", None)
+
+        if prediction is None:
+            return
+
+        severity = getattr(prediction, "severity", "NORMAL")
+
+        if severity == "NORMAL":
+            return
+
+        times = [
+            value
+            for value in (
+                getattr(prediction, "time_to_cht_limit_s", None),
+                getattr(prediction, "time_to_oil_temp_limit_s", None),
+            )
+            if value is not None
+        ]
+
+        urgency_s = min(times) if times else None
+
+        recommendations.append(
+            AircraftRecommendation(
+                severity=severity,
+                title="Predicted Engine Limit",
+                message=getattr(
                     prediction,
-                    "severity",
-                    "NORMAL",
-                )
+                    "message",
+                    "Engine limit exceedance predicted.",
+                ),
+                recommendation=(
+                    "Adjust power, mixture, airspeed, or climb rate "
+                    "before the limit is reached."
+                ),
+                urgency_s=urgency_s,
+            )
+        )
 
-                if prediction_severity != "NORMAL":
-                    return AircraftRecommendation(
-                    severity=prediction_severity,
-                    title="Predicted Engine Limit",
-                    message=getattr(
-                        prediction,
-                        "message",
-                        "Engine limit exceedance predicted.",
-                    ),
-                    recommendation=(
-                        "Adjust power, mixture, airspeed, or climb rate "
-                        "before the limit is reached."
-                    ),
-                )
+    def _add_engine_trend(
+        self,
+        recommendations: list[AircraftRecommendation],
+        engine_state,
+    ) -> None:
+        trend = getattr(engine_state, "trend", None)
 
-            trend = getattr(engine_state, "trend", None)
+        if trend is None:
+            return
 
-            if trend is not None and getattr(trend, "warning", ""):
-                return AircraftRecommendation(
-                    severity="CAUTION",
-                    title="Engine Trend",
-                    message=getattr(trend, "warning", "Engine trend warning."),
-                    recommendation="Adjust power, mixture, airspeed, or climb rate before limits are reached.",
-                )
+        warning = getattr(trend, "warning", "")
 
-        return AircraftRecommendation()
+        if not warning:
+            return
+
+        recommendations.append(
+            AircraftRecommendation(
+                severity="CAUTION",
+                title="Engine Trend",
+                message=warning,
+                recommendation=(
+                    "Adjust power, mixture, airspeed, or climb rate "
+                    "before limits are reached."
+                ),
+            )
+        )
+
+    def _priority_key(
+        self,
+        recommendation: AircraftRecommendation,
+    ) -> tuple[int, float]:
+        severity_rank = self._SEVERITY_ORDER.get(
+            recommendation.severity,
+            0,
+        )
+
+        urgency_rank = (
+            -recommendation.urgency_s
+            if recommendation.urgency_s is not None
+            else float("-inf")
+        )
+
+        return severity_rank, urgency_rank
