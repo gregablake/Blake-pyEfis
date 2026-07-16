@@ -687,6 +687,11 @@ class EmsPage:
         urgency_text = ""
         if urgency_s is not None:
             urgency_text = f"  LIMIT IN {urgency_s:.0f}s"
+            
+        confidence = getattr(recommendation, "confidence", None)
+        confidence_text = ""
+        if confidence is not None:
+            confidence_text = f"  CONF {confidence * 100:.0f}%"
 
         color = QColor(0, 255, 0)
         if severity == "CAUTION":
@@ -703,7 +708,7 @@ class EmsPage:
         painter.drawText(
             box_x + 10,
             box_y + 20,
-            f"AI RECOMMENDATION: {title} [{severity}]{urgency_text}",
+            f"AI RECOMMENDATION: {title} [{severity}]{urgency_text}{confidence_text}",
         )
 
         painter.setFont(QFont("Arial", 10, QFont.Weight.Bold))

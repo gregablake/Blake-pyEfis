@@ -10,6 +10,7 @@ class AircraftRecommendation:
     message: str = "Aircraft systems normal."
     recommendation: str = "Continue normal operation."
     urgency_s: float | None = None
+    confidence: float | None = None
 
 
 class AircraftIntelligence:
@@ -133,6 +134,7 @@ class AircraftIntelligence:
         ]
 
         urgency_s = min(times) if times else None
+        confidence = getattr(prediction, "confidence", None)
 
         recommendations.append(
             AircraftRecommendation(
@@ -148,9 +150,9 @@ class AircraftIntelligence:
                     "before the limit is reached."
                 ),
                 urgency_s=urgency_s,
+                confidence=confidence,
             )
         )
-
     def _add_engine_trend(
         self,
         recommendations: list[AircraftRecommendation],
