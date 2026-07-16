@@ -121,11 +121,20 @@ def draw_master_warning_strip(
     if aircraft_recommendation is not None:
         severity = getattr(aircraft_recommendation, "severity", "NORMAL")
         title = getattr(aircraft_recommendation, "title", "")
+        urgency_s = getattr(
+            aircraft_recommendation,
+            "urgency_s",
+            None,
+        )
+
+        urgency_text = ""
+        if urgency_s is not None:
+            urgency_text = f" {urgency_s:.0f}s"
 
         if severity in {"WARNING", "CRITICAL"}:
-            warnings.append(WarningItem(f"AI {title.upper()}", QColor(255, 0, 0)))
+            warnings.append(WarningItem(f"AI {title.upper()}{urgency_text}", QColor(255, 0, 0)))
         elif severity == "CAUTION":
-            warnings.append(WarningItem(f"AI {title.upper()}", QColor(255, 220, 0)))
+            warnings.append(WarningItem(f"AI {title.upper()}{urgency_text}", QColor(255, 220, 0)))
 
     if not warnings:
         warnings.append(WarningItem("ENGINE NORMAL", QColor(0, 255, 0)))
