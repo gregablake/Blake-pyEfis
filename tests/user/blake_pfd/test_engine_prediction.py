@@ -51,3 +51,20 @@ def test_predicted_oil_temp_limit_creates_caution() -> None:
     assert result.severity == "CAUTION"
     assert "Oil" in result.message
     assert result.time_to_oil_temp_limit_s == 20.0
+    
+def test_most_urgent_predicted_limit_is_reported() -> None:
+    predictor = EnginePredictor()
+
+    trend = SimpleNamespace(
+        current_cht=400.0,
+        current_oil_temp=230.0,
+        cht_rate=1.0,
+        oil_temp_rate=2.0,
+    )
+
+    result = predictor.predict(trend)
+
+    assert result.time_to_cht_limit_s == 30.0
+    assert result.time_to_oil_temp_limit_s == 10.0
+    assert result.severity == "CAUTION"
+    assert "Oil" in result.message
