@@ -18,8 +18,21 @@ class EngineHealth:
 
 
 class EngineManager:
+    _SEVERITY_ORDER = {
+        "NORMAL": 0,
+        "CAUTION": 1,
+        "CRITICAL": 2,
+    }
+
     def __init__(self) -> None:
         self.health = EngineHealth()
+
+    @classmethod
+    def _raise_status(cls, current: str, new: str) -> str:
+        if cls._SEVERITY_ORDER[new] > cls._SEVERITY_ORDER[current]:
+            return new
+
+        return current
 
     def update(self, engine: EngineData) -> EngineHealth:
         cht_values = engine.cht_f or []
@@ -35,29 +48,29 @@ class EngineManager:
 
         if engine.oil_pressure_psi <= 15:
             score -= 40
-            status = "CRITICAL"
+            status = self._raise_status(status, "CRITICAL")
 
         if engine.oil_temp_f >= 260:
             score -= 35
-            status = "CRITICAL"
+            status = self._raise_status(status, "CRITICAL")
         elif engine.oil_temp_f >= 235:
             score -= 15
-            status = "CAUTION"
+            status = self._raise_status(status, "CAUTION")
 
         if cht_max >= 450:
             score -= 35
-            status = "CRITICAL"
+            status = self._raise_status(status, "CRITICAL")
         elif cht_max >= 425:
             score -= 15
-            status = "CAUTION"
+            status = self._raise_status(status, "CAUTION")
 
         if egt_max >= 1600:
             score -= 20
-            status = "CAUTION"
+            status = self._raise_status(status, "CAUTION")
 
         if not engine.alternator_online:
             score -= 15
-            status = "CAUTION"
+            status = self._raise_status(status, "CAUTION")
 
         score = max(0, min(100, score))
 
