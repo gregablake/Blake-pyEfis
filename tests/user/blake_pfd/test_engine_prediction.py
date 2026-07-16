@@ -110,3 +110,19 @@ def test_prediction_waits_for_minimum_history_duration() -> None:
 
     assert result.severity == "NORMAL"
     assert result.message == "Collecting trend history."
+    
+def test_prediction_reports_full_confidence() -> None:
+    predictor = EnginePredictor()
+
+    trend = SimpleNamespace(
+        current_cht=400.0,
+        current_oil_temp=230.0,
+        cht_rate=1.0,
+        oil_temp_rate=2.0,
+        sample_count=20,
+        history_duration_s=10.0,
+    )
+
+    result = predictor.predict(trend)
+
+    assert result.confidence == 1.0

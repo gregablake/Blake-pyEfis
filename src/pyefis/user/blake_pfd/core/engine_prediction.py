@@ -14,6 +14,8 @@ class EnginePrediction:
     message: str = "No predicted exceedance."
     severity: str = "NORMAL"
 
+    confidence: float = 0.0
+
 
 class EnginePredictor:
     def predict(self, trend) -> EnginePrediction:
@@ -23,6 +25,7 @@ class EnginePredictor:
             return EnginePrediction(
                 message="Collecting trend data.",
                 severity="NORMAL",
+                confidence=0.0,
             )
 
         history_duration_s = getattr(
@@ -35,23 +38,44 @@ class EnginePredictor:
             return EnginePrediction(
                 message="Collecting trend history.",
                 severity="NORMAL",
+                confidence=0.0,
             )
 
-        cht_rate = max(getattr(trend, "cht_rate", 0.0), 0.0)
-        oil_rate = max(getattr(trend, "oil_temp_rate", 0.0), 0.0)
+        confidence = min(
+            1.0,
+            sample_count / 20.0,
+        )
 
-        current_cht = getattr(trend, "current_cht", 0.0)
-        current_oil = getattr(trend, "current_oil_temp", 0.0)
-        
-        sample_count = getattr(trend, "sample_count", 0)
+        confidence *= min(
+            1.0,
+            history_duration_s / 10.0,
+        )
 
-        if sample_count < 5:
-            return EnginePrediction(
-            message="Collecting trend data.",
-            severity="NORMAL",
-            )
+        cht_rate = max(
+            getattr(trend, "cht_rate", 0.0),
+            0.0,
+        )
 
-        prediction = EnginePrediction()
+        oil_rate = max(
+            getattr(trend, "oil_temp_rate", 0.0),
+            0.0,
+        )
+
+        current_cht = getattr(
+            trend,
+            "current_cht",
+            0.0,
+        )
+
+        current_oil = getattr(
+            trend,
+            "current_oil_temp",
+            0.0,
+        )
+
+        prediction = EnginePrediction(
+            confidence=confidence,
+        )
 
         if cht_rate > 0:
             delta = prediction.cht_limit_f - current_cht
