@@ -136,3 +136,40 @@ def test_ai_warning_includes_urgency(monkeypatch) -> None:
         "AI PREDICTED ENGINE LIMIT 28s" in text
         for text in painter.texts
     )
+    
+def test_critical_ai_warning_includes_urgency(monkeypatch) -> None:
+    monkeypatch.setattr(
+        warning_module,
+        "load_config",
+        lambda: SimpleNamespace(
+            fuel=SimpleNamespace(
+                red_gal=3.0,
+                yellow_gal=6.0,
+                red_endurance_hr=0.3,
+                yellow_endurance_hr=0.6,
+            ),
+            ems_test=SimpleNamespace(mode="normal"),
+        ),
+    )
+
+    recommendation = SimpleNamespace(
+        severity="CRITICAL",
+        title="Predicted Engine Limit",
+        urgency_s=12.0,
+    )
+
+    painter = FakePainter()
+
+    draw_master_warning_strip(
+        painter=painter,
+        engine=engine(),
+        width=1000,
+        checklist=None,
+        aircraft_moving=False,
+        aircraft_recommendation=recommendation,
+    )
+
+    assert any(
+        "AI PREDICTED ENGINE LIMIT 12s" in text
+        for text in painter.texts
+    )
