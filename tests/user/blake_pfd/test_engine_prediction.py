@@ -11,6 +11,7 @@ def test_normal_trend_has_no_predicted_exceedance() -> None:
         current_oil_temp=220.0,
         cht_rate=0.1,
         oil_temp_rate=0.1,
+        sample_count=5,
     )
 
     result = predictor.predict(trend)
@@ -27,6 +28,7 @@ def test_predicted_cht_limit_creates_caution() -> None:
         current_oil_temp=220.0,
         cht_rate=1.0,
         oil_temp_rate=0.1,
+        sample_count=5,
     )
 
     result = predictor.predict(trend)
@@ -44,6 +46,7 @@ def test_predicted_oil_temp_limit_creates_caution() -> None:
         current_oil_temp=230.0,
         cht_rate=0.1,
         oil_temp_rate=1.0,
+        sample_count=5,
     )
 
     result = predictor.predict(trend)
@@ -60,6 +63,7 @@ def test_most_urgent_predicted_limit_is_reported() -> None:
         current_oil_temp=230.0,
         cht_rate=1.0,
         oil_temp_rate=2.0,
+        sample_count=5,
     )
 
     result = predictor.predict(trend)
@@ -68,3 +72,19 @@ def test_most_urgent_predicted_limit_is_reported() -> None:
     assert result.time_to_oil_temp_limit_s == 10.0
     assert result.severity == "CAUTION"
     assert "Oil" in result.message
+    
+def test_prediction_waits_for_minimum_samples() -> None:
+    predictor = EnginePredictor()
+
+    trend = SimpleNamespace(
+        current_cht=420.0,
+        current_oil_temp=240.0,
+        cht_rate=2.0,
+        oil_temp_rate=2.0,
+        sample_count=2,
+    )
+
+    result = predictor.predict(trend)
+
+    assert result.severity == "NORMAL"
+    assert result.message == "Collecting trend data."

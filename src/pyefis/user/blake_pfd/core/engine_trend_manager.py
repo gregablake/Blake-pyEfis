@@ -18,6 +18,7 @@ class EngineTrend:
     predicted_cht: float = 0.0
 
     warning: str = ""
+    sample_count: int = 0
 
 
 class EngineTrendManager:
@@ -35,7 +36,9 @@ class EngineTrendManager:
         hottest_cht = max(cht_values) if cht_values else 0.0
 
         oil_temp = float(getattr(engine, "oil_temp_f", 0.0))
-        oil_pressure = float(getattr(engine, "oil_pressure_psi", 0.0))
+        oil_pressure = float(
+            getattr(engine, "oil_pressure_psi", 0.0)
+        )
 
         self.cht_history.append((now, hottest_cht))
         self.oil_temp_history.append((now, oil_temp))
@@ -46,11 +49,17 @@ class EngineTrendManager:
         self._trim_history(self.oil_pressure_history, now)
 
         cht_rate = self._rate_per_second(self.cht_history)
-        oil_temp_rate = self._rate_per_second(self.oil_temp_history)
-        oil_pressure_rate = self._rate_per_second(self.oil_pressure_history)
+        oil_temp_rate = self._rate_per_second(
+            self.oil_temp_history
+        )
+        oil_pressure_rate = self._rate_per_second(
+            self.oil_pressure_history
+        )
 
-        predicted_cht = hottest_cht + cht_rate * 30.0
-        predicted_oil_temp = oil_temp + oil_temp_rate * 30.0
+        predicted_cht = hottest_cht + (cht_rate * 30.0)
+        predicted_oil_temp = oil_temp + (
+            oil_temp_rate * 30.0
+        )
 
         warning = ""
 
@@ -69,6 +78,7 @@ class EngineTrendManager:
             predicted_oil_temp=predicted_oil_temp,
             predicted_cht=predicted_cht,
             warning=warning,
+            sample_count=len(self.cht_history),
         )
 
     def _trim_history(

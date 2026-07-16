@@ -22,6 +22,14 @@ class EnginePredictor:
 
         current_cht = getattr(trend, "current_cht", 0.0)
         current_oil = getattr(trend, "current_oil_temp", 0.0)
+        
+        sample_count = getattr(trend, "sample_count", 0)
+
+        if sample_count < 5:
+            return EnginePrediction(
+            message="Collecting trend data.",
+            severity="NORMAL",
+            )
 
         prediction = EnginePrediction()
 
