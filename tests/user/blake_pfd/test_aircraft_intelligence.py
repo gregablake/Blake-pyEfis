@@ -92,3 +92,37 @@ def test_engine_prediction_becomes_recommendation():
     assert result.severity == "CAUTION"
     assert result.title == "Predicted Engine Limit"
     assert "CHT" in result.message
+    
+def test_engine_prediction_confidence_is_preserved() -> None:
+    ai = AircraftIntelligence()
+
+    aircraft = SimpleNamespace(
+        engine_state=SimpleNamespace(
+            analysis=SimpleNamespace(
+                severity="NORMAL",
+                summary="Engine normal.",
+                recommendation="Continue.",
+            ),
+            cylinders=SimpleNamespace(
+                imbalance_detected=False,
+                message="Balanced.",
+            ),
+            prediction=SimpleNamespace(
+                severity="CAUTION",
+                message="CHT projected to exceed limit soon.",
+                time_to_cht_limit_s=30.0,
+                time_to_oil_temp_limit_s=None,
+                confidence=0.75,
+            ),
+            trend=SimpleNamespace(
+                warning="",
+            ),
+        )
+    )
+
+    result = ai.analyze(aircraft)
+
+    assert result.severity == "CAUTION"
+    assert result.title == "Predicted Engine Limit"
+    assert result.urgency_s == 30.0
+    assert result.confidence == 0.75
