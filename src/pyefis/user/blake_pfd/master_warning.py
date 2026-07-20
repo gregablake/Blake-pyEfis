@@ -111,12 +111,12 @@ def draw_master_warning_strip(
 ) -> None:
     warnings = get_engine_warnings(engine)
     warnings.extend(
-    get_checklist_warnings(
-        checklist=checklist,
-        aircraft_moving=aircraft_moving,
-        flight_phase=getattr(checklist, "current_phase_name", lambda: "PARKED")(),
+        get_checklist_warnings(
+            checklist=checklist,
+            aircraft_moving=aircraft_moving,
+            flight_phase=getattr(checklist, "current_phase_name", lambda: "PARKED")(),
+        )
     )
-)
 
     if aircraft_recommendation is not None:
         severity = getattr(aircraft_recommendation, "severity", "NORMAL")
@@ -130,11 +130,31 @@ def draw_master_warning_strip(
         urgency_text = ""
         if urgency_s is not None:
             urgency_text = f" {urgency_s:.0f}s"
+            
+        confidence = getattr(
+            aircraft_recommendation,
+            "confidence",
+            None,
+        )
+
+        confidence_text = ""
+        if confidence is not None:
+            confidence_text = f" {confidence * 100:.0f}%"
 
         if severity in {"WARNING", "CRITICAL"}:
-            warnings.append(WarningItem(f"AI {title.upper()}{urgency_text}", QColor(255, 0, 0)))
+            warnings.append(
+                WarningItem(
+                    f"AI {title.upper()}{urgency_text}{confidence_text}",
+                    QColor(255, 0, 0),
+                )
+            )
         elif severity == "CAUTION":
-            warnings.append(WarningItem(f"AI {title.upper()}{urgency_text}", QColor(255, 220, 0)))
+            warnings.append(
+                WarningItem(
+                    f"AI {title.upper()}{urgency_text}{confidence_text}",
+                    QColor(255, 220, 0),
+                )
+            )
 
     if not warnings:
         warnings.append(WarningItem("ENGINE NORMAL", QColor(0, 255, 0)))
