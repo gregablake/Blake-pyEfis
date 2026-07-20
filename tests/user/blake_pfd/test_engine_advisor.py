@@ -215,3 +215,32 @@ def test_cylinder_imbalance_generates_balance_advice() -> None:
     assert "egt spread 180f" in advice.reason.lower()
     assert "mixture balance" in advice.action.lower()
     assert advice.confidence == 0.8
+    
+def test_noncritical_engine_health_generates_general_advice() -> None:
+    advisor = EngineAdvisor()
+
+    engine_state = SimpleNamespace(
+        prediction=SimpleNamespace(
+            severity="NORMAL",
+            message="No predicted exceedance.",
+            confidence=0.0,
+        ),
+        cylinders=SimpleNamespace(
+            imbalance_detected=False,
+        ),
+        health=SimpleNamespace(
+            status="CAUTION",
+            health_score=72,
+        ),
+        data=SimpleNamespace(
+            oil_pressure_psi=45.0,
+        ),
+    )
+
+    advice = advisor.advise(engine_state)
+
+    assert advice.severity == "CAUTION"
+    assert advice.title == "Engine Health Advisor"
+    assert "health score: 72%" in advice.reason.lower()
+    assert "review engine instruments" in advice.action.lower()
+    assert advice.confidence == 0.9
