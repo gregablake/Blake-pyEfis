@@ -11,6 +11,7 @@ class AircraftRecommendation:
     recommendation: str = "Continue normal operation."
     urgency_s: float | None = None
     confidence: float | None = None
+    source_priority: int = 0
 
 
 class AircraftIntelligence:
@@ -35,12 +36,21 @@ class AircraftIntelligence:
         self._add_engine_analysis(recommendations, engine_state)
         self._add_cylinder_analysis(recommendations, engine_state)
         self._add_engine_prediction(recommendations, engine_state)
+        self._add_engine_advice(recommendations, engine_state)
         self._add_engine_trend(recommendations, engine_state)
 
         if not recommendations:
             return AircraftRecommendation()
 
         return max(recommendations, key=self._priority_key)
+
+    def _priority_key(self, rec: AircraftRecommendation) -> tuple[int, float]:
+        return (
+            self._SEVERITY_ORDER.get(rec.severity, 0),
+            rec.urgency_s if rec.urgency_s is not None else float('inf'),
+            rec.confidence if rec.confidence is not None else 0.0,
+            -rec.source_priority,
+        )
 
     def _add_engine_analysis(
         self,
@@ -151,8 +161,93 @@ class AircraftIntelligence:
                 ),
                 urgency_s=urgency_s,
                 confidence=confidence,
+                source_priority=1,
             )
         )
+
+    def _add_engine_advice(
+        self,
+        recommendations: list[AircraftRecommendation],
+        engine_state,
+    ) -> None:
+        advice = getattr(engine_state, "advice", None)
+
+        if advice is None:
+            return
+
+        severity = getattr(advice, "severity", "NORMAL")
+
+        if severity == "NORMAL":
+            return
+
+        recommendations.append(
+            AircraftRecommendation(
+                severity=severity,
+                title=getattr(
+                    advice,
+                    "title",
+                    "Engine Advisor",
+                ),
+                message=getattr(
+                    advice,
+                    "reason",
+                    "Engine advisory condition detected.",
+                ),
+                recommendation=getattr(
+                    advice,
+                    "action",
+                    "Monitor engine instruments.",
+                ),
+                confidence=getattr(
+                    advice,
+                    "confidence",
+                    None,
+                ),
+                source_priority=2,
+            )
+        )
+        
+    def _add_engine_advice(
+        self,
+        recommendations: list[AircraftRecommendation],
+        engine_state,
+    ) -> None:
+        advice = getattr(engine_state, "advice", None)
+
+        if advice is None:
+            return
+
+        severity = getattr(advice, "severity", "NORMAL")
+
+        if severity == "NORMAL":
+            return
+        recommendations.append(
+            AircraftRecommendation(
+                severity=severity,
+                title=getattr(
+                    advice,
+                    "title",
+                    "Engine Advisor",
+                ),
+                message=getattr(
+                    advice,
+                    "reason",
+                    "Engine advisory condition detected.",
+                ),
+                recommendation=getattr(
+                    advice,
+                    "action",
+                    "Monitor engine instruments.",
+                ),
+                confidence=getattr(
+                    advice,
+                    "confidence",
+                    None,
+                ),
+                source_priority=2,
+            )
+        )
+        
     def _add_engine_trend(
         self,
         recommendations: list[AircraftRecommendation],
@@ -183,11 +278,13 @@ class AircraftIntelligence:
     def _priority_key(
         self,
         recommendation: AircraftRecommendation,
-    ) -> tuple[int, float]:
+    ) -> tuple[int, int, float]:
         severity_rank = self._SEVERITY_ORDER.get(
             recommendation.severity,
             0,
         )
+
+        source_rank = recommendation.source_priority
 
         urgency_rank = (
             -recommendation.urgency_s
@@ -195,4 +292,4 @@ class AircraftIntelligence:
             else float("-inf")
         )
 
-        return severity_rank, urgency_rank
+        return severity_rank, source_rank, urgency_rank
