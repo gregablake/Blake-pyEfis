@@ -147,3 +147,71 @@ def test_cht_prediction_during_cruise_recommends_reducing_power() -> None:
     assert "reduce power" in advice.action.lower()
     assert "cooling airflow" in advice.action.lower()
     assert advice.confidence == 0.75
+    
+def test_oil_temperature_prediction_recommends_cooling_action() -> None:
+    advisor = EngineAdvisor()
+
+    engine_state = SimpleNamespace(
+        prediction=SimpleNamespace(
+            severity="CAUTION",
+            message="Oil temperature predicted to reach limit in 20s.",
+            confidence=0.90,
+        ),
+        cylinders=SimpleNamespace(
+            imbalance_detected=False,
+        ),
+        health=SimpleNamespace(
+            status="NORMAL",
+        ),
+        data=SimpleNamespace(
+            oil_pressure_psi=45.0,
+        ),
+    )
+
+    advice = advisor.advise(
+        engine_state,
+        flight_state=SimpleNamespace(
+            phase="CLIMB",
+        ),
+    )
+
+    assert advice.severity == "CAUTION"
+    assert advice.title == "Oil Temperature Advisor"
+    assert "reduce power" in advice.action.lower()
+    assert "increase cooling airflow" in advice.action.lower()
+    assert "leveling temporarily" in advice.action.lower()
+    assert advice.confidence == 0.90
+
+
+def test_cylinder_imbalance_generates_balance_advice() -> None:
+    advisor = EngineAdvisor()
+
+    engine_state = SimpleNamespace(
+        prediction=SimpleNamespace(
+            severity="NORMAL",
+            message="No predicted exceedance.",
+            confidence=0.0,
+        ),
+        cylinders=SimpleNamespace(
+            imbalance_detected=True,
+            hottest_cylinder=3,
+            cht_spread_f=72.0,
+            egt_spread_f=180.0,
+        ),
+        health=SimpleNamespace(
+            status="NORMAL",
+        ),
+        data=SimpleNamespace(
+            oil_pressure_psi=45.0,
+        ),
+    )
+
+    advice = advisor.advise(engine_state)
+
+    assert advice.severity == "CAUTION"
+    assert advice.title == "Cylinder Balance Advisor"
+    assert "cylinder 3" in advice.reason.lower()
+    assert "cht spread 72f" in advice.reason.lower()
+    assert "egt spread 180f" in advice.reason.lower()
+    assert "mixture balance" in advice.action.lower()
+    assert advice.confidence == 0.8
