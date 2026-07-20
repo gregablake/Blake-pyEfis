@@ -2,7 +2,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-
+from pyefis.user.blake_pfd.core.engine_knowledge import (
+    ENGINE_SCENARIOS,
+    EngineScenario,
+)
 
 
 @dataclass
@@ -24,6 +27,7 @@ class EngineAdvisor:
         health = getattr(engine_state, "health", None)
         data = getattr(engine_state, "data", None)
 
+        # A current critical condition must always beat a future prediction.
         health_advice = self._health_advice(health, data)
         if (
             health_advice is not None
@@ -56,6 +60,7 @@ class EngineAdvisor:
             return None
 
         severity = getattr(prediction, "severity", "NORMAL")
+
         if severity == "NORMAL":
             return None
 
@@ -72,20 +77,36 @@ class EngineAdvisor:
         phase = getattr(flight_state, "phase", "UNKNOWN")
 
         if "CHT" in message.upper():
+            scenario = self._scenario("High CHT During Climb")
+
             if phase in {"TAKEOFF", "CLIMB"}:
-                action = (
-                    "Increase airspeed, reduce climb angle, "
-                    "and reduce power if temperature continues rising."
+                reason = self._join_items(
+                    scenario.likely_causes,
+                    fallback=(
+                        "Cylinder temperature is rising during a "
+                        "high-power flight phase."
+                    ),
                 )
-                reason = (
-                    "Cylinder temperature is rising during a "
-                    "high-power flight phase."
+
+                action = self._join_items(
+                    scenario.recommended_actions,
+                    fallback=(
+                        "Increase airspeed, reduce climb angle, "
+                        "and reduce power if necessary."
+                    ),
                 )
             else:
+                reason = (
+                    "Cylinder temperature is approaching its limit. "
+                    + self._join_items(
+                        scenario.likely_causes,
+                        fallback="Cooling airflow may be insufficient.",
+                    )
+                )
+
                 action = (
                     "Reduce power and monitor mixture and cooling airflow."
                 )
-                reason = "Cylinder temperature is approaching its limit."
 
             return EngineAdvice(
                 severity=severity,
@@ -96,14 +117,28 @@ class EngineAdvisor:
             )
 
         if "OIL" in message.upper():
+            scenario = self._scenario("High Oil Temperature")
+
+            reason = self._join_items(
+                scenario.likely_causes,
+                fallback=(
+                    "Oil temperature is predicted to reach its limit."
+                ),
+            )
+
+            action = self._join_items(
+                scenario.recommended_actions,
+                fallback=(
+                    "Reduce power, increase cooling airflow, "
+                    "and level temporarily."
+                ),
+            )
+
             return EngineAdvice(
                 severity=severity,
                 title="Oil Temperature Advisor",
-                reason="Oil temperature is predicted to reach its limit.",
-                action=(
-                    "Reduce power, increase cooling airflow, "
-                    "and consider leveling temporarily."
-                ),
+                reason=reason,
+                action=action,
                 confidence=confidence,
             )
 
@@ -118,12 +153,17 @@ class EngineAdvisor:
             confidence=confidence,
         )
 
-    def _cylinder_advice(self, cylinders) -> EngineAdvice | None:
+    def _cylinder_advice(
+        self,
+        cylinders,
+    ) -> EngineAdvice | None:
         if cylinders is None:
             return None
 
         if not getattr(cylinders, "imbalance_detected", False):
             return None
+
+        scenario = self._scenario("Cylinder Imbalance")
 
         hottest_cylinder = getattr(
             cylinders,
@@ -143,22 +183,37 @@ class EngineAdvisor:
             0.0,
         )
 
+        likely_causes = self._join_items(
+            scenario.likely_causes,
+            fallback="Cooling or mixture imbalance may be present.",
+        )
+
+        recommended_actions = self._join_items(
+            scenario.recommended_actions,
+            fallback=(
+                "Monitor the hottest cylinder, verify mixture balance, "
+                "and inspect cooling airflow if the spread persists."
+            ),
+        )
+
         return EngineAdvice(
             severity="CAUTION",
             title="Cylinder Balance Advisor",
             reason=(
                 f"Cylinder {hottest_cylinder} is hottest. "
                 f"CHT spread {cht_spread:.0f}F, "
-                f"EGT spread {egt_spread:.0f}F."
+                f"EGT spread {egt_spread:.0f}F. "
+                f"Likely causes: {likely_causes}"
             ),
-            action=(
-                "Monitor the hottest cylinder, verify mixture balance, "
-                "and inspect cooling airflow if the spread persists."
-            ),
+            action=recommended_actions,
             confidence=0.8,
         )
 
-    def _health_advice(self, health, data) -> EngineAdvice | None:
+    def _health_advice(
+        self,
+        health,
+        data,
+    ) -> EngineAdvice | None:
         if health is None:
             return None
 
@@ -178,7 +233,9 @@ class EngineAdvisor:
                 return EngineAdvice(
                     severity="CRITICAL",
                     title="Oil Pressure Advisor",
-                    reason="Oil pressure is below the critical threshold.",
+                    reason=(
+                        "Oil pressure is below the critical threshold."
+                    ),
                     action=(
                         "Reduce power and prepare for immediate landing. "
                         "Shut down the engine if pressure is lost."
@@ -191,8 +248,32 @@ class EngineAdvisor:
             title="Engine Health Advisor",
             reason=(
                 f"Engine health status is {status}. "
-                f"Health score: {getattr(health, 'health_score', 0)}%."
+                f"Health score: "
+                f"{getattr(health, 'health_score', 0)}%."
             ),
-            action="Review engine instruments and respond to the active warning.",
+            action=(
+                "Review engine instruments and respond to "
+                "the active warning."
+            ),
             confidence=0.9,
         )
+
+    @staticmethod
+    def _scenario(name: str) -> EngineScenario:
+        for scenario in ENGINE_SCENARIOS:
+            if scenario.name == name:
+                return scenario
+
+        raise ValueError(
+            f"Engine knowledge scenario not found: {name}"
+        )
+
+    @staticmethod
+    def _join_items(
+        items: tuple[str, ...],
+        fallback: str,
+    ) -> str:
+        if not items:
+            return fallback
+
+        return "; ".join(items) + "."

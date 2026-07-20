@@ -41,7 +41,7 @@ ENGINE_SCENARIOS = (
         recommended_actions=(
             "Reduce power",
             "Increase cooling airflow",
-            "Level temporarily",
+            "Leveling temporarily",
         ),
     ),
     EngineScenario(
@@ -56,8 +56,9 @@ ENGINE_SCENARIOS = (
         ),
         recommended_actions=(
             "Monitor hottest cylinder",
-            "Check mixture",
-            "Inspect baffling after landing",
+            "Verify mixture balance",
+            "Check for blockage in cooling airflow",
+            "Inspect baffling after landing to ensure no blockages",
         ),
     ),
 )
