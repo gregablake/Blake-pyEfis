@@ -135,3 +135,44 @@ def test_engine_advisor_beats_raw_prediction_at_same_severity() -> None:
     assert result.severity == "CAUTION"
     assert result.title == "CHT Cooling Advisor"
     assert "increase airspeed" in result.recommendation.lower()
+    
+def test_critical_engine_condition_beats_caution_advisor() -> None:
+    intelligence = AircraftIntelligence()
+
+    aircraft = SimpleNamespace(
+        engine_state=SimpleNamespace(
+            analysis=SimpleNamespace(
+                severity="CRITICAL",
+                summary="Critical oil pressure.",
+                recommendation="Land immediately.",
+            ),
+            cylinders=SimpleNamespace(
+                imbalance_detected=False,
+                message="Balanced.",
+            ),
+            prediction=SimpleNamespace(
+                severity="NORMAL",
+                message="No predicted exceedance.",
+                time_to_cht_limit_s=None,
+                time_to_oil_temp_limit_s=None,
+                confidence=0.0,
+            ),
+            advice=SimpleNamespace(
+                severity="CAUTION",
+                title="CHT Cooling Advisor",
+                reason="Cylinder temperature is rising.",
+                action="Increase airspeed.",
+                confidence=0.9,
+            ),
+            trend=SimpleNamespace(
+                warning="",
+            ),
+        )
+    )
+
+    result = intelligence.analyze(aircraft)
+
+    assert result.severity == "CRITICAL"
+    assert result.title == "Engine"
+    assert "oil pressure" in result.message.lower()
+    
