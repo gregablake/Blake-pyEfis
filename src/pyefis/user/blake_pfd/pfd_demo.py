@@ -54,6 +54,8 @@ from pyefis.user.blake_pfd.core.engine_state import EngineState
 from pyefis.user.blake_pfd.core.cylinder_analyzer import CylinderAnalyzer
 from pyefis.user.blake_pfd.core.aircraft_intelligence import AircraftIntelligence
 from pyefis.user.blake_pfd.core.engine_prediction import EnginePredictor
+from pyefis.user.blake_pfd.core.engine_advisor import EngineAdvisor
+from types import SimpleNamespace
 
 class BlakePfdDemo(QWidget):
     def __init__(self, use_hardware: bool = False, replay_log: str | None = None) -> None:
@@ -102,6 +104,7 @@ class BlakePfdDemo(QWidget):
         self.cylinder_analyzer = CylinderAnalyzer()
         self.aircraft_intelligence = AircraftIntelligence()
         self.engine_predictor = EnginePredictor()
+        self.engine_advisor = EngineAdvisor()
         self.aircraft_recommendation = self.aircraft_intelligence.analyze(self.aircraft)
         self.last_aircraft_recommendation_key = (
             self.aircraft_recommendation.severity,
@@ -173,6 +176,18 @@ class BlakePfdDemo(QWidget):
         self.engine_prediction = self.engine_predictor.predict(
             self.engine_trend
         )
+        
+        self.engine_advice = self.engine_advisor.advise(
+            engine_state=SimpleNamespace(
+                data=self.engine_data,
+                health=self.engine_health,
+                trend=self.engine_trend,
+                analysis=self.engine_analysis,
+                cylinders=self.cylinder_analysis,
+                prediction=self.engine_prediction,
+            ),
+            flight_state=getattr(self, "flight_state", None),
+        )
 
         self.engine_state = EngineState(
             data=self.engine_data,
@@ -180,7 +195,8 @@ class BlakePfdDemo(QWidget):
             trend=self.engine_trend,
             analysis=self.engine_analysis,
             cylinders=self.cylinder_analysis,
-            prediction=self.engine_prediction
+            prediction=self.engine_prediction,
+            advice=self.engine_advice,
         )
 
     def update_data(self) -> None:

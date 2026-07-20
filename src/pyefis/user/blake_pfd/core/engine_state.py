@@ -8,6 +8,7 @@ from pyefis.user.blake_pfd.core.engine_trend_manager import EngineTrend
 from pyefis.user.blake_pfd.core.engine_analyzer import EngineAnalysis
 from pyefis.user.blake_pfd.core.cylinder_analyzer import CylinderAnalysis
 from pyefis.user.blake_pfd.core.engine_prediction import EnginePrediction
+from pyefis.user.blake_pfd.core.engine_advisor import EngineAdvice
 
 @dataclass
 class EngineState:
@@ -17,3 +18,4 @@ class EngineState:
     analysis: EngineAnalysis
     cylinders: CylinderAnalysis
     prediction: EnginePrediction
+    advice: EngineAdvice
