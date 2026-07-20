@@ -126,3 +126,45 @@ def test_engine_prediction_confidence_is_preserved() -> None:
     assert result.title == "Predicted Engine Limit"
     assert result.urgency_s == 30.0
     assert result.confidence == 0.75
+    
+def test_engine_advice_becomes_aircraft_recommendation() -> None:
+    ai = AircraftIntelligence()
+
+    aircraft = SimpleNamespace(
+        engine_state=SimpleNamespace(
+            analysis=SimpleNamespace(
+                severity="NORMAL",
+                summary="Engine normal.",
+                recommendation="Continue.",
+            ),
+            cylinders=SimpleNamespace(
+                imbalance_detected=False,
+                message="Balanced.",
+            ),
+            prediction=SimpleNamespace(
+                severity="NORMAL",
+                message="No predicted exceedance.",
+                time_to_cht_limit_s=None,
+                time_to_oil_temp_limit_s=None,
+                confidence=0.0,
+            ),
+            advice=SimpleNamespace(
+                severity="CAUTION",
+                title="CHT Cooling Advisor",
+                reason="Cylinder temperature is rising during climb.",
+                action="Increase airspeed and reduce climb angle.",
+                confidence=0.85,
+            ),
+            trend=SimpleNamespace(
+                warning="",
+            ),
+        )
+    )
+
+    result = ai.analyze(aircraft)
+
+    assert result.severity == "CAUTION"
+    assert result.title == "CHT Cooling Advisor"
+    assert "rising" in result.message.lower()
+    assert "increase airspeed" in result.recommendation.lower()
+    assert result.confidence == 0.85
