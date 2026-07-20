@@ -18,6 +18,7 @@ class EmsPage:
         aircraft_recommendation=None,
     ) -> None:
         engine_state = aircraft.engine_state
+        engine_advice = getattr(engine_state, "advice", None)
         engine = engine_state.data
         engine_health = engine_state.health
         engine_analysis = engine_state.analysis
@@ -175,6 +176,14 @@ class EmsPage:
             width,
             height,
         )
+            
+        if engine_advice is not None:
+            self.draw_engine_advice_box(
+                painter,
+                engine_advice,
+                width,
+                height,
+            )
             
         if aircraft_recommendation is not None:
             self.draw_aircraft_recommendation_box(
@@ -664,6 +673,114 @@ class EmsPage:
 
         painter.setPen(QColor(255, 255, 255))
         painter.drawText(box_x + 10, box_y + 35, message[:38])
+        
+    def draw_engine_advice_box(
+        self,
+        painter: QPainter,
+        advice,
+        width: int,
+        height: int,
+    ) -> None:
+        severity = getattr(advice, "severity", "NORMAL")
+
+        if severity == "NORMAL":
+            return
+
+        title = getattr(
+            advice,
+            "title",
+            "Engine Advisor",
+        )
+
+        reason = getattr(
+            advice,
+            "reason",
+            "Engine advisory condition detected.",
+        )
+
+        action = getattr(
+            advice,
+            "action",
+            "Monitor engine instruments.",
+        )
+
+        confidence = getattr(
+            advice,
+            "confidence",
+            0.0,
+        )
+
+        box_x = 40
+        box_y = height - 270
+        box_w = width - 80
+        box_h = 58
+
+        color = QColor(255, 220, 0)
+        if severity in {"WARNING", "CRITICAL"}:
+            color = QColor(255, 0, 0)
+
+        painter.fillRect(
+            box_x,
+            box_y,
+            box_w,
+            box_h,
+            QColor(0, 0, 0),
+        )
+
+        painter.setPen(QPen(color, 2))
+        painter.drawRect(
+            box_x,
+            box_y,
+            box_w,
+            box_h,
+        )
+
+        painter.setFont(
+            QFont(
+                "Arial",
+                11,
+                QFont.Weight.Bold,
+            )
+        )
+        painter.setPen(color)
+
+        painter.drawText(
+            box_x + 10,
+            box_y + 18,
+            (
+                f"ENGINE ADVISOR: {title} "
+                f"[{severity}] "
+                f"CONF {confidence * 100:.0f}%"
+            ),
+        )
+
+        painter.setFont(
+            QFont(
+                "Arial",
+                9,
+                QFont.Weight.Bold,
+            )
+        )
+
+        painter.setPen(
+            QColor(
+                255,
+                255,
+                255,
+            )
+        )
+
+        painter.drawText(
+            box_x + 10,
+            box_y + 36,
+            f"WHY: {reason[:70]}",
+        )
+
+        painter.drawText(
+            box_x + 10,
+            box_y + 52,
+            f"ACTION: {action[:70]}",
+        )
         
     def draw_aircraft_recommendation_box(
         self,
