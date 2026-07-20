@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 
+
+
 @dataclass
 class EngineAdvice:
     severity: str = "NORMAL"
@@ -22,6 +24,13 @@ class EngineAdvisor:
         health = getattr(engine_state, "health", None)
         data = getattr(engine_state, "data", None)
 
+        health_advice = self._health_advice(health, data)
+        if (
+            health_advice is not None
+            and health_advice.severity == "CRITICAL"
+        ):
+            return health_advice
+
         prediction_advice = self._prediction_advice(
             prediction,
             flight_state,
@@ -33,7 +42,6 @@ class EngineAdvisor:
         if cylinder_advice is not None:
             return cylinder_advice
 
-        health_advice = self._health_advice(health, data)
         if health_advice is not None:
             return health_advice
 

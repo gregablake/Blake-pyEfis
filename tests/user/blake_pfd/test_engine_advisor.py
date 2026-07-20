@@ -244,3 +244,35 @@ def test_noncritical_engine_health_generates_general_advice() -> None:
     assert "health score: 72%" in advice.reason.lower()
     assert "review engine instruments" in advice.action.lower()
     assert advice.confidence == 0.9
+    
+def test_critical_oil_pressure_beats_prediction_caution() -> None:
+    advisor = EngineAdvisor()
+
+    engine_state = SimpleNamespace(
+        prediction=SimpleNamespace(
+            severity="CAUTION",
+            message="CHT predicted to reach limit in 30s.",
+            confidence=0.85,
+        ),
+        cylinders=SimpleNamespace(
+            imbalance_detected=False,
+        ),
+        health=SimpleNamespace(
+            status="CRITICAL",
+            health_score=40,
+        ),
+        data=SimpleNamespace(
+            oil_pressure_psi=10.0,
+        ),
+    )
+
+    advice = advisor.advise(
+        engine_state,
+        flight_state=SimpleNamespace(
+            phase="CLIMB",
+        ),
+    )
+
+    assert advice.severity == "CRITICAL"
+    assert advice.title == "Oil Pressure Advisor"
+    assert "immediate landing" in advice.action.lower()
