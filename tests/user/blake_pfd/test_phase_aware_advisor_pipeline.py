@@ -105,3 +105,57 @@ def test_cruise_phase_reaches_final_recommendation() -> None:
     assert result.title == "CHT Cooling Advisor"
     assert "lean mixture" in result.recommendation.lower()
     assert "reduce power" in result.recommendation.lower()
+    
+def test_takeoff_cylinder_guidance_reaches_final_recommendation() -> None:
+    advisor = EngineAdvisor()
+    intelligence = AircraftIntelligence()
+
+    engine_state = SimpleNamespace(
+        prediction=SimpleNamespace(
+            severity="NORMAL",
+            message="No predicted exceedance.",
+            confidence=0.0,
+            time_to_cht_limit_s=None,
+            time_to_oil_temp_limit_s=None,
+        ),
+        cylinders=SimpleNamespace(
+            imbalance_detected=True,
+            hottest_cylinder=2,
+            cht_spread_f=70.0,
+            egt_spread_f=160.0,
+            message="Cylinder imbalance detected.",
+        ),
+        health=SimpleNamespace(
+            status="NORMAL",
+        ),
+        data=SimpleNamespace(
+            oil_pressure_psi=45.0,
+        ),
+        analysis=SimpleNamespace(
+            severity="NORMAL",
+            summary="Engine normal.",
+            recommendation="Continue normal operation.",
+        ),
+        trend=SimpleNamespace(
+            warning="",
+        ),
+    )
+
+    engine_state.advice = advisor.advise(
+        engine_state,
+        flight_state=SimpleNamespace(
+            phase="TAKEOFF",
+        ),
+    )
+
+    result = intelligence.analyze(
+        SimpleNamespace(
+            engine_state=engine_state,
+        )
+    )
+
+    assert result.severity == "CAUTION"
+    assert result.title == "Cylinder Balance Advisor"
+    assert "monitor until safe altitude" in result.recommendation.lower()
+    assert "monitor hottest cylinder" in result.recommendation.lower()
+    assert result.confidence == 0.8
