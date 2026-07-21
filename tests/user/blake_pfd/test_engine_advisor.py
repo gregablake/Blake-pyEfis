@@ -318,3 +318,39 @@ def test_oil_advisor_uses_knowledge_base_actions() -> None:
     assert "Leveling temporarily" in advice.action
     assert "High engine load" in advice.reason
     assert "Reduced cooling" in advice.reason
+    
+def test_cylinder_advisor_uses_knowledge_base_actions() -> None:
+    advisor = EngineAdvisor()
+
+    engine_state = SimpleNamespace(
+        prediction=SimpleNamespace(
+            severity="NORMAL",
+            message="No predicted exceedance.",
+            confidence=0.0,
+        ),
+        cylinders=SimpleNamespace(
+            imbalance_detected=True,
+            hottest_cylinder=4,
+            cht_spread_f=65.0,
+            egt_spread_f=170.0,
+        ),
+        health=SimpleNamespace(
+            status="NORMAL",
+        ),
+        data=SimpleNamespace(
+            oil_pressure_psi=45.0,
+        ),
+    )
+
+    advice = advisor.advise(engine_state)
+
+    assert advice.severity == "CAUTION"
+    assert advice.title == "Cylinder Balance Advisor"
+
+    assert "Cooling imbalance" in advice.reason
+    assert "Mixture imbalance" in advice.reason
+
+    assert "Monitor hottest cylinder" in advice.action
+    assert "Verify mixture balance" in advice.action
+    assert "Check for blockage in cooling airflow" in advice.action
+    assert "Inspect baffling after landing" in advice.action
