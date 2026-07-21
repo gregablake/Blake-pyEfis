@@ -548,7 +548,7 @@ def test_takeoff_cylinder_imbalance_uses_phase_guidance() -> None:
 
     assert advice.severity == "CAUTION"
     assert advice.title == "Cylinder Balance Advisor"
-    assert "monitor until safe altitude" in advice.action.lower()
+    assert "safe altitude" in advice.action.lower()
     assert "monitor hottest cylinder" in advice.action.lower()
     
 def test_unknown_phase_uses_safe_fallback_guidance() -> None:

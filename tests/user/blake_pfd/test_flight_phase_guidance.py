@@ -6,10 +6,14 @@ from pyefis.user.blake_pfd.core.flight_phase_guidance import (
 
 def test_expected_flight_phases_exist() -> None:
     assert set(PHASE_GUIDANCE) == {
+        "PARKED",
+        "RUNUP",
+        "TAXI",
         "TAKEOFF",
         "CLIMB",
         "CRUISE",
         "DESCENT",
+        "LANDING",
     }
 
 
@@ -48,3 +52,23 @@ def test_descent_guidance_expects_temperature_reduction() -> None:
 
     assert "decrease naturally" in guidance.high_cht
     assert "cooling trend" in guidance.high_oil_temp
+    
+def test_runup_guidance_prevents_takeoff_with_unstable_engine() -> None:
+    guidance = PHASE_GUIDANCE["RUNUP"]
+
+    assert "do not take off" in guidance.high_cht.lower()
+    assert "do not take off" in guidance.high_oil_temp.lower()
+
+
+def test_landing_guidance_prioritizes_aircraft_control() -> None:
+    guidance = PHASE_GUIDANCE["LANDING"]
+
+    assert "maintain aircraft control" in guidance.high_cht.lower()
+    assert "complete the landing" in guidance.high_oil_temp.lower()
+
+
+def test_taxi_guidance_keeps_power_low() -> None:
+    guidance = PHASE_GUIDANCE["TAXI"]
+
+    assert "reduce power" in guidance.high_cht.lower()
+    assert "before takeoff" in guidance.cylinder_imbalance.lower()

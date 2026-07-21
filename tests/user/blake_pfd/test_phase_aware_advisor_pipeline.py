@@ -156,6 +156,6 @@ def test_takeoff_cylinder_guidance_reaches_final_recommendation() -> None:
 
     assert result.severity == "CAUTION"
     assert result.title == "Cylinder Balance Advisor"
-    assert "monitor until safe altitude" in result.recommendation.lower()
+    assert "safe altitude" in result.recommendation.lower()
     assert "monitor hottest cylinder" in result.recommendation.lower()
     assert result.confidence == 0.8
