@@ -86,3 +86,40 @@ def test_invalid_constructor_values_raise_error() -> None:
         assert "clear_samples" in str(exc)
     else:
         raise AssertionError("Expected ValueError")
+    
+def test_same_severity_new_advisory_does_not_replace_immediately() -> None:
+    latch = AdvisoryLatch(
+        activate_samples=3,
+        clear_samples=5,
+    )
+
+    latch.update("high_cht", "CAUTION")
+    latch.update("high_cht", "CAUTION")
+    latch.update("high_cht", "CAUTION")
+
+    assert latch.state.active_key == "high_cht"
+
+    latch.update("high_oil_temp", "CAUTION")
+
+    assert latch.state.active_key == "high_cht"
+    assert latch.state.active_severity == "CAUTION"
+    
+def test_higher_severity_replaces_active_advisory_immediately() -> None:
+    latch = AdvisoryLatch(
+        activate_samples=3,
+        clear_samples=5,
+    )
+
+    latch.update("high_cht", "CAUTION")
+    latch.update("high_cht", "CAUTION")
+    latch.update("high_cht", "CAUTION")
+
+    assert latch.state.active_key == "high_cht"
+
+    latch.update(
+        "low_oil_pressure",
+        "CRITICAL",
+    )
+
+    assert latch.state.active_key == "low_oil_pressure"
+    assert latch.state.active_severity == "CRITICAL"
