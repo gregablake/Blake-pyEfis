@@ -285,3 +285,36 @@ def test_missing_engine_scenario_raises_clear_error() -> None:
         match="Engine knowledge scenario not found",
     ):
         advisor._scenario("Scenario That Does Not Exist")
+        
+def test_oil_advisor_uses_knowledge_base_actions() -> None:
+    advisor = EngineAdvisor()
+
+    engine_state = SimpleNamespace(
+        prediction=SimpleNamespace(
+            severity="CAUTION",
+            message="Oil temperature predicted to reach limit in 20s.",
+            confidence=0.9,
+        ),
+        cylinders=SimpleNamespace(
+            imbalance_detected=False,
+        ),
+        health=SimpleNamespace(
+            status="NORMAL",
+        ),
+        data=SimpleNamespace(
+            oil_pressure_psi=45.0,
+        ),
+    )
+
+    advice = advisor.advise(
+        engine_state,
+        flight_state=SimpleNamespace(
+            phase="CLIMB",
+        ),
+    )
+
+    assert "Reduce power" in advice.action
+    assert "Increase cooling airflow" in advice.action
+    assert "Leveling temporarily" in advice.action
+    assert "High engine load" in advice.reason
+    assert "Reduced cooling" in advice.reason
