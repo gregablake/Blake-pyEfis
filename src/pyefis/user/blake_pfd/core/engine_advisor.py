@@ -7,6 +7,10 @@ from pyefis.user.blake_pfd.core.engine_knowledge import (
     EngineScenario,
 )
 
+from pyefis.user.blake_pfd.core.flight_phase_guidance import (
+    PHASE_GUIDANCE,
+)
+
 
 @dataclass
 class EngineAdvice:
@@ -75,6 +79,8 @@ class EngineAdvisor:
         )
 
         phase = getattr(flight_state, "phase", "UNKNOWN")
+        
+        phase_guidance = PHASE_GUIDANCE.get(phase)
 
         if "CHT" in message.upper():
             scenario = self._scenario("High CHT During Climb")
@@ -88,13 +94,21 @@ class EngineAdvisor:
                     ),
                 )
 
-                action = self._join_items(
+                knowledge_action = self._join_items(
                     scenario.recommended_actions,
                     fallback=(
-                        "Increase airspeed, reduce climb angle, "
-                        "and reduce power if necessary."
+                    "Increase airspeed, reduce climb angle, "
+                    "and reduce power if necessary."
                     ),
                 )
+
+                if phase_guidance is not None:
+                    action = (
+                        f"{phase_guidance.high_cht} "
+                        f"{knowledge_action}"
+                    )
+                else:
+                    action = knowledge_action
             else:
                 reason = (
                     "Cylinder temperature is approaching its limit. "
@@ -104,10 +118,18 @@ class EngineAdvisor:
                     )
                 )
 
-                action = (
+                knowledge_action = (
                     "Reduce power and monitor mixture and cooling airflow."
                 )
 
+                if phase_guidance is not None:
+                    action = (
+                        f"{phase_guidance.high_cht} "
+                        f"{knowledge_action}"
+                    )
+                else:
+                    action = knowledge_action
+                    
             return EngineAdvice(
                 severity=severity,
                 title="CHT Cooling Advisor",
@@ -133,6 +155,12 @@ class EngineAdvisor:
                     "and level temporarily."
                 ),
             )
+            
+            if phase_guidance is not None:
+                action = (
+                    f"{phase_guidance.high_oil_temp} "
+                    f"{action}"
+                )
 
             return EngineAdvice(
                 severity=severity,

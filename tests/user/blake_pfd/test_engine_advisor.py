@@ -393,3 +393,125 @@ def test_cht_climb_advisor_uses_knowledge_base_actions() -> None:
     assert "Reduce power if necessary" in advice.action
 
     assert advice.confidence == 0.85
+    
+def test_takeoff_cht_advice_uses_takeoff_guidance() -> None:
+    advisor = EngineAdvisor()
+
+    engine_state = SimpleNamespace(
+        prediction=SimpleNamespace(
+            severity="CAUTION",
+            message="CHT predicted to reach limit in 30s.",
+            confidence=0.8,
+        ),
+        cylinders=SimpleNamespace(
+            imbalance_detected=False,
+        ),
+        health=SimpleNamespace(
+            status="NORMAL",
+        ),
+        data=SimpleNamespace(
+            oil_pressure_psi=45.0,
+        ),
+    )
+
+    advice = advisor.advise(
+        engine_state,
+        flight_state=SimpleNamespace(
+            phase="TAKEOFF",
+        ),
+    )
+
+    assert "continue takeoff" in advice.action.lower()
+    assert "increase airspeed" in advice.action.lower()
+
+
+def test_climb_oil_temperature_uses_climb_guidance() -> None:
+    advisor = EngineAdvisor()
+
+    engine_state = SimpleNamespace(
+        prediction=SimpleNamespace(
+            severity="CAUTION",
+            message="Oil temperature predicted to reach limit in 20s.",
+            confidence=0.85,
+        ),
+        cylinders=SimpleNamespace(
+            imbalance_detected=False,
+        ),
+        health=SimpleNamespace(
+            status="NORMAL",
+        ),
+        data=SimpleNamespace(
+            oil_pressure_psi=45.0,
+        ),
+    )
+
+    advice = advisor.advise(
+        engine_state,
+        flight_state=SimpleNamespace(
+            phase="CLIMB",
+        ),
+    )
+
+    assert "reduce climb angle" in advice.action.lower()
+    assert "increase cooling airflow" in advice.action.lower()
+
+
+def test_cruise_oil_temperature_uses_cruise_guidance() -> None:
+    advisor = EngineAdvisor()
+
+    engine_state = SimpleNamespace(
+        prediction=SimpleNamespace(
+            severity="CAUTION",
+            message="Oil temperature predicted to reach limit in 20s.",
+            confidence=0.85,
+        ),
+        cylinders=SimpleNamespace(
+            imbalance_detected=False,
+        ),
+        health=SimpleNamespace(
+            status="NORMAL",
+        ),
+        data=SimpleNamespace(
+            oil_pressure_psi=45.0,
+        ),
+    )
+
+    advice = advisor.advise(
+        engine_state,
+        flight_state=SimpleNamespace(
+            phase="CRUISE",
+        ),
+    )
+
+    assert "reduce power" in advice.action.lower()
+    assert "increase cooling" in advice.action.lower()
+
+
+def test_descent_oil_temperature_uses_descent_guidance() -> None:
+    advisor = EngineAdvisor()
+
+    engine_state = SimpleNamespace(
+        prediction=SimpleNamespace(
+            severity="CAUTION",
+            message="Oil temperature predicted to reach limit in 20s.",
+            confidence=0.85,
+        ),
+        cylinders=SimpleNamespace(
+            imbalance_detected=False,
+        ),
+        health=SimpleNamespace(
+            status="NORMAL",
+        ),
+        data=SimpleNamespace(
+            oil_pressure_psi=45.0,
+        ),
+    )
+
+    advice = advisor.advise(
+        engine_state,
+        flight_state=SimpleNamespace(
+            phase="DESCENT",
+        ),
+    )
+
+    assert "cooling trend" in advice.action.lower()
