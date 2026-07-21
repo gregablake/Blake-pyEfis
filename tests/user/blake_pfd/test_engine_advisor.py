@@ -354,3 +354,42 @@ def test_cylinder_advisor_uses_knowledge_base_actions() -> None:
     assert "Verify mixture balance" in advice.action
     assert "Check for blockage in cooling airflow" in advice.action
     assert "Inspect baffling after landing" in advice.action
+    
+def test_cht_climb_advisor_uses_knowledge_base_actions() -> None:
+    advisor = EngineAdvisor()
+
+    engine_state = SimpleNamespace(
+        prediction=SimpleNamespace(
+            severity="CAUTION",
+            message="CHT predicted to reach limit in 30s.",
+            confidence=0.85,
+        ),
+        cylinders=SimpleNamespace(
+            imbalance_detected=False,
+        ),
+        health=SimpleNamespace(
+            status="NORMAL",
+        ),
+        data=SimpleNamespace(
+            oil_pressure_psi=45.0,
+        ),
+    )
+
+    advice = advisor.advise(
+        engine_state,
+        flight_state=SimpleNamespace(
+            phase="CLIMB",
+        ),
+    )
+
+    assert advice.severity == "CAUTION"
+    assert advice.title == "CHT Cooling Advisor"
+
+    assert "Cooling airflow insufficient" in advice.reason
+    assert "Climb angle too steep" in advice.reason
+
+    assert "Increase airspeed" in advice.action
+    assert "Reduce climb angle" in advice.action
+    assert "Reduce power if necessary" in advice.action
+
+    assert advice.confidence == 0.85
