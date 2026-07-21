@@ -1,7 +1,7 @@
 from types import SimpleNamespace
 
 from pyefis.user.blake_pfd.core.engine_advisor import EngineAdvisor
-
+import pytest
 
 def test_normal_engine_returns_normal_advice() -> None:
     advisor = EngineAdvisor()
@@ -276,3 +276,12 @@ def test_critical_oil_pressure_beats_prediction_caution() -> None:
     assert advice.severity == "CRITICAL"
     assert advice.title == "Oil Pressure Advisor"
     assert "immediate landing" in advice.action.lower()
+    
+def test_missing_engine_scenario_raises_clear_error() -> None:
+    advisor = EngineAdvisor()
+
+    with pytest.raises(
+        ValueError,
+        match="Engine knowledge scenario not found",
+    ):
+        advisor._scenario("Scenario That Does Not Exist")
