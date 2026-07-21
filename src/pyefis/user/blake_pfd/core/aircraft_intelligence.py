@@ -44,14 +44,6 @@ class AircraftIntelligence:
 
         return max(recommendations, key=self._priority_key)
 
-    def _priority_key(self, rec: AircraftRecommendation) -> tuple[int, float]:
-        return (
-            self._SEVERITY_ORDER.get(rec.severity, 0),
-            rec.urgency_s if rec.urgency_s is not None else float('inf'),
-            rec.confidence if rec.confidence is not None else 0.0,
-            -rec.source_priority,
-        )
-
     def _add_engine_analysis(
         self,
         recommendations: list[AircraftRecommendation],
@@ -162,48 +154,6 @@ class AircraftIntelligence:
                 urgency_s=urgency_s,
                 confidence=confidence,
                 source_priority=1,
-            )
-        )
-
-    def _add_engine_advice(
-        self,
-        recommendations: list[AircraftRecommendation],
-        engine_state,
-    ) -> None:
-        advice = getattr(engine_state, "advice", None)
-
-        if advice is None:
-            return
-
-        severity = getattr(advice, "severity", "NORMAL")
-
-        if severity == "NORMAL":
-            return
-
-        recommendations.append(
-            AircraftRecommendation(
-                severity=severity,
-                title=getattr(
-                    advice,
-                    "title",
-                    "Engine Advisor",
-                ),
-                message=getattr(
-                    advice,
-                    "reason",
-                    "Engine advisory condition detected.",
-                ),
-                recommendation=getattr(
-                    advice,
-                    "action",
-                    "Monitor engine instruments.",
-                ),
-                confidence=getattr(
-                    advice,
-                    "confidence",
-                    None,
-                ),
-                source_priority=2,
             )
         )
         
