@@ -550,3 +550,36 @@ def test_takeoff_cylinder_imbalance_uses_phase_guidance() -> None:
     assert advice.title == "Cylinder Balance Advisor"
     assert "monitor until safe altitude" in advice.action.lower()
     assert "monitor hottest cylinder" in advice.action.lower()
+    
+def test_unknown_phase_uses_safe_fallback_guidance() -> None:
+    advisor = EngineAdvisor()
+
+    engine_state = SimpleNamespace(
+        prediction=SimpleNamespace(
+            severity="CAUTION",
+            message="CHT predicted to reach limit in 30s.",
+            confidence=0.8,
+        ),
+        cylinders=SimpleNamespace(
+            imbalance_detected=False,
+        ),
+        health=SimpleNamespace(
+            status="NORMAL",
+        ),
+        data=SimpleNamespace(
+            oil_pressure_psi=45.0,
+        ),
+    )
+
+    advice = advisor.advise(
+        engine_state,
+        flight_state=SimpleNamespace(
+            phase="UNKNOWN",
+        ),
+    )
+
+    assert advice.severity == "CAUTION"
+    assert advice.title == "CHT Cooling Advisor"
+    assert "reduce power" in advice.action.lower()
+    assert "cooling airflow" in advice.action.lower()
+    assert advice.confidence == 0.8
