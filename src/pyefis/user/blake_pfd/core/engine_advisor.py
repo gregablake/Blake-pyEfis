@@ -46,7 +46,10 @@ class EngineAdvisor:
         if prediction_advice is not None:
             return prediction_advice
 
-        cylinder_advice = self._cylinder_advice(cylinders)
+        cylinder_advice = self._cylinder_advice(
+            cylinders,
+            flight_state,
+        )
         if cylinder_advice is not None:
             return cylinder_advice
 
@@ -184,6 +187,7 @@ class EngineAdvisor:
     def _cylinder_advice(
         self,
         cylinders,
+        flight_state,
     ) -> EngineAdvice | None:
         if cylinders is None:
             return None
@@ -192,6 +196,9 @@ class EngineAdvisor:
             return None
 
         scenario = self._scenario("Cylinder Imbalance")
+        
+        phase = getattr(flight_state, "phase", "UNKNOWN")
+        phase_guidance = PHASE_GUIDANCE.get(phase)
 
         hottest_cylinder = getattr(
             cylinders,
@@ -223,6 +230,12 @@ class EngineAdvisor:
                 "and inspect cooling airflow if the spread persists."
             ),
         )
+        
+        if phase_guidance is not None:
+            recommended_actions = (
+                f"{phase_guidance.cylinder_imbalance} "
+                f"{recommended_actions}"
+            )
 
         return EngineAdvice(
             severity="CAUTION",
