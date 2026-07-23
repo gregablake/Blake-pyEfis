@@ -42,3 +42,26 @@ def test_single_sample_has_zero_rates(monkeypatch) -> None:
     assert result.cht_rate == 0.0
     assert result.oil_temp_rate == 0.0
     assert result.oil_pressure_rate == 0.0
+    
+def test_clear_resets_all_engine_histories(monkeypatch) -> None:
+    monkeypatch.setattr(
+        trend_module,
+        "monotonic",
+        lambda: 100.0,
+    )
+
+    manager = EngineTrendManager()
+
+    manager.update(
+        engine(
+            cht=400.0,
+            oil_temp=220.0,
+            oil_pressure=45.0,
+        )
+    )
+
+    manager.clear()
+
+    assert manager.cht_history.sample_count == 0
+    assert manager.oil_temp_history.sample_count == 0
+    assert manager.oil_pressure_history.sample_count == 0
