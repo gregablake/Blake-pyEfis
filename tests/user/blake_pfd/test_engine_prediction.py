@@ -126,3 +126,83 @@ def test_prediction_reports_full_confidence() -> None:
     result = predictor.predict(trend)
 
     assert result.confidence == 1.0
+    
+    
+def test_prediction_preserves_sensor_rates() -> None:
+    predictor = EnginePredictor()
+
+    trend = SimpleNamespace(
+        current_cht=390.0,
+        current_oil_temp=220.0,
+        cht_rate=1.5,
+        oil_temp_rate=0.75,
+        sample_count=20,
+        history_duration_s=10.0,
+    )
+
+    result = predictor.predict(trend)
+
+    assert result.cht_rate_f_per_s == 1.5
+    assert result.oil_temp_rate_f_per_s == 0.75
+    assert "1.5F/s" in result.message
+
+
+def test_cht_is_reported_when_more_urgent_than_oil() -> None:
+    predictor = EnginePredictor()
+
+    trend = SimpleNamespace(
+        current_cht=420.0,
+        current_oil_temp=220.0,
+        cht_rate=2.0,
+        oil_temp_rate=1.0,
+        sample_count=20,
+        history_duration_s=10.0,
+    )
+
+    result = predictor.predict(trend)
+
+    assert result.time_to_cht_limit_s == 5.0
+    assert result.time_to_oil_temp_limit_s == 30.0
+    assert result.severity == "CAUTION"
+    assert result.message.startswith("CHT rising")
+
+
+def test_oil_is_reported_when_more_urgent_than_cht() -> None:
+    predictor = EnginePredictor()
+
+    trend = SimpleNamespace(
+        current_cht=400.0,
+        current_oil_temp=240.0,
+        cht_rate=1.0,
+        oil_temp_rate=2.0,
+        sample_count=20,
+        history_duration_s=10.0,
+    )
+
+    result = predictor.predict(trend)
+
+    assert result.time_to_cht_limit_s == 30.0
+    assert result.time_to_oil_temp_limit_s == 5.0
+    assert result.severity == "CAUTION"
+    assert result.message.startswith(
+        "Oil temperature rising"
+    )
+
+
+def test_already_exceeded_limit_reports_zero_seconds() -> None:
+    predictor = EnginePredictor()
+
+    trend = SimpleNamespace(
+        current_cht=435.0,
+        current_oil_temp=220.0,
+        cht_rate=1.0,
+        oil_temp_rate=0.0,
+        sample_count=20,
+        history_duration_s=10.0,
+    )
+
+    result = predictor.predict(trend)
+
+    assert result.time_to_cht_limit_s == 0.0
+    assert result.severity == "CAUTION"
+    assert "limit in 0s" in result.message
