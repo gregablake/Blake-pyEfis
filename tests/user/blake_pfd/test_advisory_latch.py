@@ -123,3 +123,43 @@ def test_higher_severity_replaces_active_advisory_immediately() -> None:
 
     assert latch.state.active_key == "low_oil_pressure"
     assert latch.state.active_severity == "CRITICAL"
+    
+def test_persistent_same_severity_advisory_replaces_current_one() -> None:
+    latch = AdvisoryLatch(
+        activate_samples=3,
+        clear_samples=5,
+    )
+
+    latch.update("high_cht", "CAUTION")
+    latch.update("high_cht", "CAUTION")
+    latch.update("high_cht", "CAUTION")
+
+    assert latch.state.active_key == "high_cht"
+
+    latch.update("high_oil_temp", "CAUTION")
+    assert latch.state.active_key == "high_cht"
+
+    latch.update("high_oil_temp", "CAUTION")
+    assert latch.state.active_key == "high_cht"
+
+    latch.update("high_oil_temp", "CAUTION")
+
+    assert latch.state.active_key == "high_oil_temp"
+    assert latch.state.active_severity == "CAUTION"
+    
+def test_changing_pending_advisory_restarts_sample_count() -> None:
+    latch = AdvisoryLatch(
+        activate_samples=3,
+        clear_samples=5,
+    )
+
+    latch.update("high_cht", "CAUTION")
+    latch.update("high_cht", "CAUTION")
+    latch.update("high_cht", "CAUTION")
+
+    latch.update("high_oil_temp", "CAUTION")
+    latch.update("cylinder_imbalance", "CAUTION")
+
+    assert latch.state.active_key == "high_cht"
+    assert latch.state.pending_key == "cylinder_imbalance"
+    assert latch.state.consecutive_pending_samples == 1
