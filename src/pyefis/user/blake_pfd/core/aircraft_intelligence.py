@@ -42,7 +42,10 @@ class AircraftIntelligence:
         if not recommendations:
             return AircraftRecommendation()
 
-        return max(recommendations, key=self._priority_key)
+        return max(
+            recommendations,
+            key=self._priority_key,
+        )
 
     def _add_engine_analysis(
         self,
@@ -59,11 +62,7 @@ class AircraftIntelligence:
         if severity == "NORMAL":
             return
 
-        title = (
-            "Engine"
-            if severity in {"WARNING", "CRITICAL"}
-            else "Engine Caution"
-        )
+        title = "Engine" if severity in {"WARNING", "CRITICAL"} else "Engine Caution"
 
         recommendations.append(
             AircraftRecommendation(
@@ -156,7 +155,7 @@ class AircraftIntelligence:
                 source_priority=1,
             )
         )
-        
+
     def _add_engine_advice(
         self,
         recommendations: list[AircraftRecommendation],
@@ -197,7 +196,7 @@ class AircraftIntelligence:
                 source_priority=2,
             )
         )
-        
+
     def _add_engine_trend(
         self,
         recommendations: list[AircraftRecommendation],
