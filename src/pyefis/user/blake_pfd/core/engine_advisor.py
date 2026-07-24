@@ -6,7 +6,6 @@ from pyefis.user.blake_pfd.core.engine_knowledge import (
     ENGINE_SCENARIOS,
     EngineScenario,
 )
-
 from pyefis.user.blake_pfd.core.flight_phase_guidance import (
     PHASE_GUIDANCE,
 )
@@ -22,17 +21,45 @@ class EngineAdvice:
 
 
 class EngineAdvisor:
-    def advise(self, engine_state, flight_state=None) -> EngineAdvice:
+    def advise(
+        self,
+        engine_state,
+        flight_state=None,
+    ) -> EngineAdvice:
         if engine_state is None:
             return EngineAdvice()
 
-        prediction = getattr(engine_state, "prediction", None)
-        cylinders = getattr(engine_state, "cylinders", None)
-        health = getattr(engine_state, "health", None)
-        data = getattr(engine_state, "data", None)
+        prediction = getattr(
+            engine_state,
+            "prediction",
+            None,
+        )
 
-        # A current critical condition must always beat a future prediction.
-        health_advice = self._health_advice(health, data)
+        cylinders = getattr(
+            engine_state,
+            "cylinders",
+            None,
+        )
+
+        health = getattr(
+            engine_state,
+            "health",
+            None,
+        )
+
+        data = getattr(
+            engine_state,
+            "data",
+            None,
+        )
+
+        # A current critical condition must always beat
+        # a future predicted condition.
+        health_advice = self._health_advice(
+            health,
+            data,
+        )
+
         if (
             health_advice is not None
             and health_advice.severity == "CRITICAL"
@@ -43,6 +70,7 @@ class EngineAdvisor:
             prediction,
             flight_state,
         )
+
         if prediction_advice is not None:
             return prediction_advice
 
@@ -50,6 +78,7 @@ class EngineAdvisor:
             cylinders,
             flight_state,
         )
+
         if cylinder_advice is not None:
             return cylinder_advice
 
@@ -66,7 +95,11 @@ class EngineAdvisor:
         if prediction is None:
             return None
 
-        severity = getattr(prediction, "severity", "NORMAL")
+        severity = getattr(
+            prediction,
+            "severity",
+            "NORMAL",
+        )
 
         if severity == "NORMAL":
             return None
@@ -76,13 +109,15 @@ class EngineAdvisor:
             "message",
             "Engine limit predicted.",
         )
-        
+
         parameter = getattr(
             prediction,
             "parameter",
             None,
         )
-        
+
+        # Backward compatibility for older prediction objects
+        # that do not yet contain the structured parameter field.
         if parameter is None:
             upper_message = message.upper()
 
@@ -92,99 +127,36 @@ class EngineAdvisor:
                 parameter = "OIL_TEMP"
 
         confidence = float(
-            getattr(prediction, "confidence", 0.0)
+            getattr(
+                prediction,
+                "confidence",
+                0.0,
+            )
         )
 
-        phase = getattr(flight_state, "phase", "UNKNOWN")
-        
-        phase_guidance = PHASE_GUIDANCE.get(phase)
+        phase = getattr(
+            flight_state,
+            "phase",
+            "UNKNOWN",
+        )
+
+        phase_guidance = PHASE_GUIDANCE.get(
+            phase
+        )
 
         if parameter == "CHT":
-            scenario = self._scenario("High CHT During Climb")
-
-            if phase in {"TAKEOFF", "CLIMB"}:
-                reason = self._join_items(
-                    scenario.likely_causes,
-                    fallback=(
-                        "Cylinder temperature is rising during a "
-                        "high-power flight phase."
-                    ),
-                )
-
-                knowledge_action = self._join_items(
-                    scenario.recommended_actions,
-                    fallback=(
-                    "Increase airspeed, reduce climb angle, "
-                    "and reduce power if necessary."
-                    ),
-                )
-
-                if phase_guidance is not None:
-                    action = (
-                        f"{phase_guidance.high_cht} "
-                        f"{knowledge_action}"
-                    )
-                else:
-                    action = knowledge_action
-            else:
-                reason = (
-                    "Cylinder temperature is approaching its limit. "
-                    + self._join_items(
-                        scenario.likely_causes,
-                        fallback="Cooling airflow may be insufficient.",
-                    )
-                )
-
-                knowledge_action = (
-                    "Reduce power and monitor mixture and cooling airflow."
-                )
-
-                if phase_guidance is not None:
-                    action = (
-                        f"{phase_guidance.high_cht} "
-                        f"{knowledge_action}"
-                    )
-                else:
-                    action = knowledge_action
-                    
-            return EngineAdvice(
+            return self._cht_prediction_advice(
                 severity=severity,
-                title="CHT Cooling Advisor",
-                reason=reason,
-                action=action,
                 confidence=confidence,
+                phase=phase,
+                phase_guidance=phase_guidance,
             )
 
         if parameter == "OIL_TEMP":
-            scenario = self._scenario("High Oil Temperature")
-
-            reason = self._join_items(
-                scenario.likely_causes,
-                fallback=(
-                    "Oil temperature is predicted to reach its limit."
-                ),
-            )
-
-            action = self._join_items(
-                scenario.recommended_actions,
-                fallback=(
-                    "Reduce power, increase cooling airflow, "
-                    "and level temporarily."
-                ),
-            )
-            
-            if phase_guidance is not None:
-                action = (
-                    f"{phase_guidance.high_oil_temp} "
-                    f"{action}"
-                )
-
-            return EngineAdvice(
+            return self._oil_temperature_prediction_advice(
                 severity=severity,
-                title="Oil Temperature Advisor",
-                reason=reason,
-                action=action,
                 confidence=confidence,
+                phase_guidance=phase_guidance,
             )
 
         return EngineAdvice(
@@ -198,6 +170,113 @@ class EngineAdvisor:
             confidence=confidence,
         )
 
+    def _cht_prediction_advice(
+        self,
+        severity: str,
+        confidence: float,
+        phase: str,
+        phase_guidance,
+    ) -> EngineAdvice:
+        scenario = self._scenario(
+            "High CHT During Climb"
+        )
+
+        if phase in {"TAKEOFF", "CLIMB"}:
+            reason = self._join_items(
+                scenario.likely_causes,
+                fallback=(
+                    "Cylinder temperature is rising during a "
+                    "high-power flight phase."
+                ),
+            )
+
+            knowledge_action = self._join_items(
+                scenario.recommended_actions,
+                fallback=(
+                    "Increase airspeed, reduce climb angle, "
+                    "and reduce power if necessary."
+                ),
+            )
+
+            if phase_guidance is not None:
+                action = (
+                    f"{phase_guidance.high_cht} "
+                    f"{knowledge_action}"
+                )
+            else:
+                action = knowledge_action
+
+        else:
+            reason = (
+                "Cylinder temperature is approaching its limit. "
+                + self._join_items(
+                    scenario.likely_causes,
+                    fallback=(
+                        "Cooling airflow may be insufficient."
+                    ),
+                )
+            )
+
+            knowledge_action = (
+                "Reduce power and monitor mixture "
+                "and cooling airflow."
+            )
+
+            if phase_guidance is not None:
+                action = (
+                    f"{phase_guidance.high_cht} "
+                    f"{knowledge_action}"
+                )
+            else:
+                action = knowledge_action
+
+        return EngineAdvice(
+            severity=severity,
+            title="CHT Cooling Advisor",
+            reason=reason,
+            action=action,
+            confidence=confidence,
+        )
+
+    def _oil_temperature_prediction_advice(
+        self,
+        severity: str,
+        confidence: float,
+        phase_guidance,
+    ) -> EngineAdvice:
+        scenario = self._scenario(
+            "High Oil Temperature"
+        )
+
+        reason = self._join_items(
+            scenario.likely_causes,
+            fallback=(
+                "Oil temperature is predicted to reach its limit."
+            ),
+        )
+
+        action = self._join_items(
+            scenario.recommended_actions,
+            fallback=(
+                "Reduce power, increase cooling airflow, "
+                "and level temporarily."
+            ),
+        )
+
+        if phase_guidance is not None:
+            action = (
+                f"{phase_guidance.high_oil_temp} "
+                f"{action}"
+            )
+
+        return EngineAdvice(
+            severity=severity,
+            title="Oil Temperature Advisor",
+            reason=reason,
+            action=action,
+            confidence=confidence,
+        )
+
     def _cylinder_advice(
         self,
         cylinders,
@@ -206,13 +285,26 @@ class EngineAdvisor:
         if cylinders is None:
             return None
 
-        if not getattr(cylinders, "imbalance_detected", False):
+        if not getattr(
+            cylinders,
+            "imbalance_detected",
+            False,
+        ):
             return None
 
-        scenario = self._scenario("Cylinder Imbalance")
-        
-        phase = getattr(flight_state, "phase", "UNKNOWN")
-        phase_guidance = PHASE_GUIDANCE.get(phase)
+        scenario = self._scenario(
+            "Cylinder Imbalance"
+        )
+
+        phase = getattr(
+            flight_state,
+            "phase",
+            "UNKNOWN",
+        )
+
+        phase_guidance = PHASE_GUIDANCE.get(
+            phase
+        )
 
         hottest_cylinder = getattr(
             cylinders,
@@ -234,7 +326,9 @@ class EngineAdvisor:
 
         likely_causes = self._join_items(
             scenario.likely_causes,
-            fallback="Cooling or mixture imbalance may be present.",
+            fallback=(
+                "Cooling or mixture imbalance may be present."
+            ),
         )
 
         recommended_actions = self._join_items(
@@ -244,7 +338,7 @@ class EngineAdvisor:
                 "and inspect cooling airflow if the spread persists."
             ),
         )
-        
+
         if phase_guidance is not None:
             recommended_actions = (
                 f"{phase_guidance.cylinder_imbalance} "
@@ -272,7 +366,11 @@ class EngineAdvisor:
         if health is None:
             return None
 
-        status = getattr(health, "status", "NORMAL")
+        status = getattr(
+            health,
+            "status",
+            "NORMAL",
+        )
 
         if status == "NORMAL":
             return None
@@ -314,7 +412,9 @@ class EngineAdvisor:
         )
 
     @staticmethod
-    def _scenario(name: str) -> EngineScenario:
+    def _scenario(
+        name: str,
+    ) -> EngineScenario:
         for scenario in ENGINE_SCENARIOS:
             if scenario.name == name:
                 return scenario
