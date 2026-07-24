@@ -1,8 +1,12 @@
-from __future__ import annotations
-
+from dataclasses import dataclass
 from time import monotonic
 
-
+@dataclass(frozen=True)
+class RecommendationDisplayStatus:
+    state: str = "IDLE"
+    active_title: str | None = None
+    pending_title: str | None = None
+    seconds_remaining: float | None = None
 class RecommendationDisplayStabilizer:
     def __init__(
         self,
@@ -112,6 +116,65 @@ class RecommendationDisplayStabilizer:
             self._clear_since_s = None
 
         return self._active_recommendation
+    
+    def status(
+        self,
+        timestamp_s: float | None = None,
+    ) -> RecommendationDisplayStatus:
+        now_s = (
+            monotonic()
+            if timestamp_s is None
+            else float(timestamp_s)
+        )
+
+        if self._pending_recommendation is not None:
+            elapsed_s = (
+                now_s - self._pending_since_s
+                if self._pending_since_s is not None
+                else 0.0
+            )
+
+            seconds_remaining = max(
+                0.0,
+                self.activate_delay_s - elapsed_s,
+            )
+
+            return RecommendationDisplayStatus(
+                state="PENDING",
+                active_title=self._title(
+                    self._active_recommendation
+                ),
+                pending_title=self._title(
+                    self._pending_recommendation
+                ),
+                seconds_remaining=seconds_remaining,
+            )
+
+        if self._active_recommendation is not None:
+            if self._clear_since_s is not None:
+                elapsed_s = now_s - self._clear_since_s
+
+                seconds_remaining = max(
+                    0.0,
+                    self.clear_delay_s - elapsed_s,
+                )
+
+                return RecommendationDisplayStatus(
+                    state="CLEARING",
+                    active_title=self._title(
+                        self._active_recommendation
+                    ),
+                    seconds_remaining=seconds_remaining,
+                )
+
+            return RecommendationDisplayStatus(
+                state="ACTIVE",
+                active_title=self._title(
+                    self._active_recommendation
+                ),
+            )
+
+        return RecommendationDisplayStatus()
 
     def reset(self) -> None:
         self._active_recommendation = None
@@ -140,17 +203,28 @@ class RecommendationDisplayStabilizer:
         return self._recommendation_key(
             self._active_recommendation
         )
-
+        
     @staticmethod
-    def _recommendation_key(
+    def _title(
         recommendation,
-    ) -> str:
-        title = str(
+    ) -> str | None:
+        if recommendation is None:
+            return None
+
+        return str(
             getattr(
                 recommendation,
                 "title",
                 "Engine Caution",
             )
-        )
+        ).strip()
 
-        return title.strip().upper()
+    @classmethod
+    def _recommendation_key(
+        cls,
+        recommendation,
+    ) -> str:
+        return (
+            cls._title(recommendation)
+            or "ENGINE CAUTION"
+        ).upper()

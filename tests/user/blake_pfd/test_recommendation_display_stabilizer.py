@@ -265,3 +265,146 @@ def test_invalid_delays_raise_errors() -> None:
         RecommendationDisplayStabilizer(
             clear_delay_s=-1.0,
         )
+        
+def test_status_reports_idle_state() -> None:
+    stabilizer = RecommendationDisplayStabilizer()
+
+    status = stabilizer.status(
+        timestamp_s=0.0,
+    )
+
+    assert status.state == "IDLE"
+    assert status.active_title is None
+    assert status.pending_title is None
+    assert status.seconds_remaining is None
+
+
+def test_status_reports_pending_countdown() -> None:
+    stabilizer = RecommendationDisplayStabilizer(
+        activate_delay_s=1.5,
+    )
+
+    caution = recommendation(
+        "CAUTION",
+        "CHT Cooling Advisor",
+    )
+
+    stabilizer.update(
+        caution,
+        timestamp_s=10.0,
+    )
+
+    status = stabilizer.status(
+        timestamp_s=10.6,
+    )
+
+    assert status.state == "PENDING"
+    assert status.pending_title == "CHT Cooling Advisor"
+    assert status.active_title is None
+    assert status.seconds_remaining == pytest.approx(
+        0.9,
+    )
+
+
+def test_status_reports_active_caution() -> None:
+    stabilizer = RecommendationDisplayStabilizer(
+        activate_delay_s=0.0,
+    )
+
+    caution = recommendation(
+        "CAUTION",
+        "CHT Cooling Advisor",
+    )
+
+    stabilizer.update(
+        caution,
+        timestamp_s=0.0,
+    )
+
+    status = stabilizer.status(
+        timestamp_s=1.0,
+    )
+
+    assert status.state == "ACTIVE"
+    assert status.active_title == "CHT Cooling Advisor"
+    assert status.pending_title is None
+    assert status.seconds_remaining is None
+
+
+def test_status_reports_clear_countdown() -> None:
+    stabilizer = RecommendationDisplayStabilizer(
+        activate_delay_s=0.0,
+        clear_delay_s=2.5,
+    )
+
+    caution = recommendation(
+        "CAUTION",
+        "CHT Cooling Advisor",
+    )
+
+    normal = recommendation(
+        "NORMAL",
+        "Normal",
+    )
+
+    stabilizer.update(
+        caution,
+        timestamp_s=0.0,
+    )
+
+    stabilizer.update(
+        normal,
+        timestamp_s=1.0,
+    )
+
+    status = stabilizer.status(
+        timestamp_s=2.0,
+    )
+
+    assert status.state == "CLEARING"
+    assert status.active_title == "CHT Cooling Advisor"
+    assert status.seconds_remaining == pytest.approx(
+        1.5,
+    )
+
+
+def test_status_reports_replacement_pending_with_active_title() -> None:
+    stabilizer = RecommendationDisplayStabilizer(
+        activate_delay_s=1.5,
+    )
+
+    cht = recommendation(
+        "CAUTION",
+        "CHT Cooling Advisor",
+    )
+
+    oil = recommendation(
+        "CAUTION",
+        "Oil Temperature Advisor",
+    )
+
+    stabilizer.update(
+        cht,
+        timestamp_s=0.0,
+    )
+
+    stabilizer.update(
+        cht,
+        timestamp_s=1.5,
+    )
+
+    stabilizer.update(
+        oil,
+        timestamp_s=2.0,
+    )
+
+    status = stabilizer.status(
+        timestamp_s=2.5,
+    )
+
+    assert status.state == "PENDING"
+    assert status.active_title == "CHT Cooling Advisor"
+    assert status.pending_title == "Oil Temperature Advisor"
+    assert status.seconds_remaining == pytest.approx(
+        1.0,
+    )
