@@ -12,6 +12,54 @@ from pyefis.user.blake_pfd.engine_data import EngineData
 class WarningItem:
     text: str
     color: QColor
+    
+def format_ai_warning_text(
+    title: str,
+    urgency_s: float | None = None,
+    confidence: float | None = None,
+    max_title_length: int = 22,
+) -> str:
+    clean_title = str(title).strip().upper()
+
+    if len(clean_title) > max_title_length:
+        clean_title = (
+            clean_title[: max_title_length - 1]
+            + "…"
+        )
+
+    parts = [
+        "AI",
+        clean_title,
+    ]
+
+    if urgency_s is not None:
+        safe_urgency_s = max(
+            0.0,
+            float(urgency_s),
+        )
+
+        parts.append(
+            f"{safe_urgency_s:.0f}s"
+        )
+
+    if confidence is not None:
+        safe_confidence = min(
+            1.0,
+            max(
+                0.0,
+                float(confidence),
+            ),
+        )
+
+        parts.append(
+            f"{safe_confidence * 100:.0f}%"
+        )
+
+    return " ".join(
+        part
+        for part in parts
+        if part
+    )
 
 
 def get_engine_warnings(engine: EngineData) -> list[WarningItem]:
@@ -121,37 +169,31 @@ def draw_master_warning_strip(
     if aircraft_recommendation is not None:
         severity = getattr(aircraft_recommendation, "severity", "NORMAL")
         title = getattr(aircraft_recommendation, "title", "")
-        urgency_s = getattr(
-            aircraft_recommendation,
-            "urgency_s",
-            None,
+        warning_text = format_ai_warning_text(
+            title=title,
+            urgency_s=getattr(
+                aircraft_recommendation,
+                "urgency_s",
+                None,
+            ),
+            confidence=getattr(
+                aircraft_recommendation,
+                "confidence",
+                None,
+            ),
         )
-
-        urgency_text = ""
-        if urgency_s is not None:
-            urgency_text = f" {urgency_s:.0f}s"
-            
-        confidence = getattr(
-            aircraft_recommendation,
-            "confidence",
-            None,
-        )
-
-        confidence_text = ""
-        if confidence is not None:
-            confidence_text = f" {confidence * 100:.0f}%"
 
         if severity in {"WARNING", "CRITICAL"}:
             warnings.append(
                 WarningItem(
-                    f"AI {title.upper()}{urgency_text}{confidence_text}",
+                    warning_text,
                     QColor(255, 0, 0),
                 )
             )
         elif severity == "CAUTION":
             warnings.append(
                 WarningItem(
-                    f"AI {title.upper()}{urgency_text}{confidence_text}",
+                    warning_text,
                     QColor(255, 220, 0),
                 )
             )
