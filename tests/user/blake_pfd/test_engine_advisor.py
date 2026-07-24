@@ -614,3 +614,34 @@ def test_missing_flight_state_uses_safe_fallback_guidance() -> None:
     assert "reduce power" in advice.action.lower()
     assert "cooling airflow" in advice.action.lower()
     assert advice.confidence == 0.8
+    
+def test_advisor_uses_structured_prediction_parameter() -> None:
+    advisor = EngineAdvisor()
+
+    engine_state = SimpleNamespace(
+        prediction=SimpleNamespace(
+            severity="CAUTION",
+            parameter="CHT",
+            message="Temperature trajectory requires attention.",
+            confidence=0.8,
+        ),
+        cylinders=SimpleNamespace(
+            imbalance_detected=False,
+        ),
+        health=SimpleNamespace(
+            status="NORMAL",
+        ),
+        data=SimpleNamespace(
+            oil_pressure_psi=45.0,
+        ),
+    )
+
+    advice = advisor.advise(
+        engine_state,
+        flight_state=SimpleNamespace(
+            phase="CLIMB",
+        ),
+    )
+
+    assert advice.title == "CHT Cooling Advisor"
+    assert "increase airspeed" in advice.action.lower()

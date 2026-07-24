@@ -316,3 +316,60 @@ def test_invalid_prediction_confidence_threshold_raises_error() -> None:
         EnginePredictor(
             minimum_confidence=1.1,
         )
+        
+def test_cht_prediction_sets_structured_parameter() -> None:
+    predictor = EnginePredictor()
+
+    trend = SimpleNamespace(
+        current_cht=420.0,
+        current_oil_temp=220.0,
+        cht_rate=2.0,
+        oil_temp_rate=0.0,
+        sample_count=20,
+        history_duration_s=10.0,
+    )
+
+    result = predictor.predict(trend)
+
+    assert result.severity == "CAUTION"
+    assert result.parameter == "CHT"
+
+
+def test_oil_prediction_sets_structured_parameter() -> None:
+    predictor = EnginePredictor()
+
+    trend = SimpleNamespace(
+        current_cht=390.0,
+        current_oil_temp=240.0,
+        cht_rate=0.0,
+        oil_temp_rate=2.0,
+        sample_count=20,
+        history_duration_s=10.0,
+    )
+
+    result = predictor.predict(trend)
+
+    assert result.severity == "CAUTION"
+    assert result.parameter == "OIL_TEMP"
+
+
+
+
+def test_low_confidence_prediction_has_no_active_parameter() -> None:
+    predictor = EnginePredictor(
+        minimum_confidence=0.10,
+    )
+
+    trend = SimpleNamespace(
+        current_cht=420.0,
+        current_oil_temp=220.0,
+        cht_rate=5.0,
+        oil_temp_rate=0.0,
+        sample_count=5,
+        history_duration_s=2.0,
+    )
+
+    result = predictor.predict(trend)
+
+    assert result.severity == "NORMAL"
+    assert result.parameter is None

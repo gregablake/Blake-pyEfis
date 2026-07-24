@@ -76,6 +76,20 @@ class EngineAdvisor:
             "message",
             "Engine limit predicted.",
         )
+        
+        parameter = getattr(
+            prediction,
+            "parameter",
+            None,
+        )
+        
+        if parameter is None:
+            upper_message = message.upper()
+
+            if "CHT" in upper_message:
+                parameter = "CHT"
+            elif "OIL" in upper_message:
+                parameter = "OIL_TEMP"
 
         confidence = float(
             getattr(prediction, "confidence", 0.0)
@@ -85,7 +99,7 @@ class EngineAdvisor:
         
         phase_guidance = PHASE_GUIDANCE.get(phase)
 
-        if "CHT" in message.upper():
+        if parameter == "CHT":
             scenario = self._scenario("High CHT During Climb")
 
             if phase in {"TAKEOFF", "CLIMB"}:
@@ -141,7 +155,7 @@ class EngineAdvisor:
                 confidence=confidence,
             )
 
-        if "OIL" in message.upper():
+        if parameter == "OIL_TEMP":
             scenario = self._scenario("High Oil Temperature")
 
             reason = self._join_items(

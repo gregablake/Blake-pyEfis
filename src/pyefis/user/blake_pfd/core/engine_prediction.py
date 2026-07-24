@@ -13,7 +13,8 @@ class EnginePrediction:
 
     cht_rate_f_per_s: float = 0.0
     oil_temp_rate_f_per_s: float = 0.0
-
+    
+    parameter: str | None = None
     message: str = "No predicted exceedance."
     severity: str = "NORMAL"
     confidence: float = 0.0
@@ -173,18 +174,16 @@ class EnginePredictor:
                 "collecting prediction confidence."
             )
             return prediction
-        
-        if confidence < self.minimum_confidence:
-            prediction.message = (
-                "Potential limit trend detected; "
-                "collecting prediction confidence."
-            )
-            return prediction
 
         name, time_to_limit_s, rate = min(
             urgent_predictions,
             key=lambda item: item[1],
         )
+
+        if name == "CHT":
+            prediction.parameter = "CHT"
+        else:
+            prediction.parameter = "OIL_TEMP"
 
         prediction.severity = "CAUTION"
         prediction.message = (
@@ -192,5 +191,7 @@ class EnginePredictor:
             f"{rate:.1f}F/s; predicted to reach "
             f"limit in {time_to_limit_s:.0f}s."
         )
+
+        return prediction
 
         return prediction
