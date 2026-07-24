@@ -28,11 +28,16 @@ def test_warning_manager_passes_aircraft_moving_true(monkeypatch) -> None:
         fake_draw_master_warning_strip,
     )
 
+    warning = SimpleNamespace(
+        severity="WARNING",
+        title="Engine Warning",
+    )
+
     app = SimpleNamespace(
         pfd=SimpleNamespace(ground_speed_kt=40.0),
         engine_data=object(),
         engine_checklist_page=object(),
-        aircraft_recommendation=object(),
+        aircraft_recommendation=warning,
     )
 
     manager = WarningManager(app)
@@ -45,10 +50,7 @@ def test_warning_manager_passes_aircraft_moving_true(monkeypatch) -> None:
     assert captured["width"] == 1000
     assert captured["checklist"] is app.engine_checklist_page
     assert captured["aircraft_moving"] is True
-    assert (
-        captured["aircraft_recommendation"]
-        is app.aircraft_recommendation
-    )
+    assert captured["aircraft_recommendation"] is warning
 
 
 def test_warning_manager_passes_aircraft_moving_false_without_pfd(
