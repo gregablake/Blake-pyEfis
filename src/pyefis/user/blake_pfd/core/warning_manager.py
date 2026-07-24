@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pyefis.user.blake_pfd.core.recommendation_display_stabilizer import (
     RecommendationDisplayStabilizer,
+    format_recommendation_display_status,
 )
 from pyefis.user.blake_pfd.master_warning import (
     draw_master_warning_strip,
@@ -52,3 +53,8 @@ class WarningManager:
         
     def recommendation_status(self):
         return self.recommendation_stabilizer.status()
+    
+    def recommendation_status_text(self) -> str:
+        return format_recommendation_display_status(
+            self.recommendation_status()
+        )

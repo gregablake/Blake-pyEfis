@@ -104,3 +104,51 @@ def test_warning_manager_exposes_stabilizer_status() -> None:
     assert status.state == "IDLE"
     assert status.active_title is None
     assert status.pending_title is None
+    
+def test_warning_manager_formats_idle_status_text() -> None:
+    app = SimpleNamespace(
+        pfd=None,
+        engine_data=object(),
+        engine_checklist_page=object(),
+        aircraft_recommendation=SimpleNamespace(
+            severity="NORMAL",
+            title="Normal",
+        ),
+    )
+
+    manager = WarningManager(app)
+
+    assert manager.recommendation_status_text() == ""
+
+
+def test_warning_manager_formats_pending_status_text(
+    monkeypatch,
+) -> None:
+    app = SimpleNamespace(
+        pfd=None,
+        engine_data=object(),
+        engine_checklist_page=object(),
+        aircraft_recommendation=SimpleNamespace(
+            severity="CAUTION",
+            title="CHT Cooling Advisor",
+        ),
+    )
+
+    manager = WarningManager(app)
+
+    manager.recommendation_stabilizer.update(
+        app.aircraft_recommendation,
+        timestamp_s=10.0,
+    )
+
+    monkeypatch.setattr(
+        warning_module,
+        "format_recommendation_display_status",
+        lambda status: (
+            f"{status.pending_title} pending"
+        ),
+    )
+
+    result = manager.recommendation_status_text()
+
+    assert result == "CHT Cooling Advisor pending"
