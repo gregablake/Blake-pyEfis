@@ -49,3 +49,6 @@ class WarningManager:
             aircraft_moving=aircraft_moving,
             aircraft_recommendation=display_recommendation,
         )
+        
+    def recommendation_status(self):
+        return self.recommendation_stabilizer.status()

@@ -85,3 +85,22 @@ def test_warning_manager_passes_aircraft_moving_false_without_pfd(
     manager.draw(object(), 1000)
 
     assert captured["aircraft_moving"] is False
+    
+def test_warning_manager_exposes_stabilizer_status() -> None:
+    app = SimpleNamespace(
+        pfd=None,
+        engine_data=object(),
+        engine_checklist_page=object(),
+        aircraft_recommendation=SimpleNamespace(
+            severity="NORMAL",
+            title="Normal",
+        ),
+    )
+
+    manager = WarningManager(app)
+
+    status = manager.recommendation_status()
+
+    assert status.state == "IDLE"
+    assert status.active_title is None
+    assert status.pending_title is None
