@@ -206,3 +206,80 @@ def test_already_exceeded_limit_reports_zero_seconds() -> None:
     assert result.time_to_cht_limit_s == 0.0
     assert result.severity == "CAUTION"
     assert "limit in 0s" in result.message
+    
+def test_low_confidence_prediction_does_not_create_caution() -> None:
+    predictor = EnginePredictor(
+        minimum_confidence=0.10,
+    )
+
+    trend = SimpleNamespace(
+        current_cht=420.0,
+        current_oil_temp=220.0,
+        cht_rate=5.0,
+        oil_temp_rate=0.0,
+        sample_count=5,
+        history_duration_s=2.0,
+    )
+
+    result = predictor.predict(trend)
+
+    assert result.time_to_cht_limit_s == 2.0
+    assert result.confidence == 0.05
+    assert result.severity == "NORMAL"
+    assert result.message == (
+        "Potential limit trend detected; "
+        "collecting prediction confidence."
+    )
+
+
+def test_prediction_activates_after_confidence_threshold() -> None:
+    predictor = EnginePredictor(
+        minimum_confidence=0.10,
+    )
+
+    trend = SimpleNamespace(
+        current_cht=420.0,
+        current_oil_temp=220.0,
+        cht_rate=2.0,
+        oil_temp_rate=0.0,
+        sample_count=5,
+        history_duration_s=5.0,
+    )
+
+    result = predictor.predict(trend)
+
+    assert result.confidence == 0.125
+    assert result.severity == "CAUTION"
+    assert result.message.startswith("CHT rising")
+
+
+def test_custom_prediction_confidence_threshold() -> None:
+    predictor = EnginePredictor(
+        minimum_confidence=0.50,
+    )
+
+    trend = SimpleNamespace(
+        current_cht=420.0,
+        current_oil_temp=220.0,
+        cht_rate=2.0,
+        oil_temp_rate=0.0,
+        sample_count=10,
+        history_duration_s=10.0,
+    )
+
+    result = predictor.predict(trend)
+
+    assert result.confidence == 0.5
+    assert result.severity == "CAUTION"
+
+
+def test_invalid_prediction_confidence_threshold_raises_error() -> None:
+    import pytest
+
+    with pytest.raises(
+        ValueError,
+        match="minimum_confidence",
+    ):
+        EnginePredictor(
+            minimum_confidence=1.1,
+        )

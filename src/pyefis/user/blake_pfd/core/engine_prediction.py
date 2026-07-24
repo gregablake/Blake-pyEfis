@@ -20,6 +20,19 @@ class EnginePrediction:
 
 
 class EnginePredictor:
+    def __init__(
+        self,
+        minimum_confidence: float = 0.10,
+    ) -> None:
+        if not 0.0 <= minimum_confidence <= 1.0:
+            raise ValueError(
+                "minimum_confidence must be between 0 and 1"
+            )
+
+        self.minimum_confidence = float(
+            minimum_confidence
+        )
+
     def predict(self, trend) -> EnginePrediction:
         sample_count = getattr(
             trend,
@@ -150,6 +163,13 @@ class EnginePredictor:
         ]
 
         if not urgent_predictions:
+            return prediction
+        
+        if confidence < self.minimum_confidence:
+            prediction.message = (
+                "Potential limit trend detected; "
+                "collecting prediction confidence."
+            )
             return prediction
 
         name, time_to_limit_s, rate = min(
