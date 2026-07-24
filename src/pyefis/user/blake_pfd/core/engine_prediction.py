@@ -20,6 +20,8 @@ class EnginePrediction:
 
 
 class EnginePredictor:
+    
+    
     def __init__(
         self,
         minimum_confidence: float = 0.10,
@@ -163,6 +165,13 @@ class EnginePredictor:
         ]
 
         if not urgent_predictions:
+            return prediction
+        
+        if confidence < self.minimum_confidence:
+            prediction.message = (
+                "Potential limit trend detected; "
+                "collecting prediction confidence."
+            )
             return prediction
         
         if confidence < self.minimum_confidence:

@@ -283,3 +283,36 @@ def test_invalid_prediction_confidence_threshold_raises_error() -> None:
         EnginePredictor(
             minimum_confidence=1.1,
         )
+
+
+def test_prediction_activates_after_confidence_threshold() -> None:
+    predictor = EnginePredictor(
+        minimum_confidence=0.10,
+    )
+
+    trend = SimpleNamespace(
+        current_cht=420.0,
+        current_oil_temp=220.0,
+        cht_rate=2.0,
+        oil_temp_rate=0.0,
+        sample_count=5,
+        history_duration_s=5.0,
+    )
+
+    result = predictor.predict(trend)
+
+    assert result.confidence == 0.125
+    assert result.severity == "CAUTION"
+    assert result.message.startswith("CHT rising")
+
+
+def test_invalid_prediction_confidence_threshold_raises_error() -> None:
+    import pytest
+
+    with pytest.raises(
+        ValueError,
+        match="minimum_confidence",
+    ):
+        EnginePredictor(
+            minimum_confidence=1.1,
+        )
