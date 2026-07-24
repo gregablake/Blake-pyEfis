@@ -193,6 +193,11 @@ class AircraftIntelligence:
                     "confidence",
                     None,
                 ),
+                urgency_s=getattr(
+                    advice,
+                    "urgency_s",
+                    None,
+                ),
                 source_priority=2,
             )
         )

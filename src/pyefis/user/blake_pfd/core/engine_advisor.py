@@ -18,6 +18,7 @@ class EngineAdvice:
     reason: str = "No abnormal engine condition detected."
     action: str = "Continue normal operation."
     confidence: float = 0.0
+    urgency_s: float | None = None
 
 
 class EngineAdvisor:
@@ -133,6 +134,25 @@ class EngineAdvisor:
                 0.0,
             )
         )
+        
+        times = [
+            value
+            for value in (
+                getattr(
+                    prediction,
+                    "time_to_cht_limit_s",
+                    None,
+                ),
+                getattr(
+                    prediction,
+                    "time_to_oil_temp_limit_s",
+                    None,
+                ),
+            )
+            if value is not None
+        ]
+
+        urgency_s = min(times) if times else None
 
         phase = getattr(
             flight_state,
@@ -148,6 +168,7 @@ class EngineAdvisor:
             return self._cht_prediction_advice(
                 severity=severity,
                 confidence=confidence,
+                urgency_s=urgency_s,
                 phase=phase,
                 phase_guidance=phase_guidance,
             )
@@ -156,6 +177,7 @@ class EngineAdvisor:
             return self._oil_temperature_prediction_advice(
                 severity=severity,
                 confidence=confidence,
+                urgency_s=urgency_s,
                 phase_guidance=phase_guidance,
             )
 
@@ -168,12 +190,14 @@ class EngineAdvisor:
                 "before the predicted limit is reached."
             ),
             confidence=confidence,
+            urgency_s=urgency_s,
         )
 
     def _cht_prediction_advice(
         self,
         severity: str,
         confidence: float,
+        urgency_s: float | None,
         phase: str,
         phase_guidance,
     ) -> EngineAdvice:
@@ -236,12 +260,14 @@ class EngineAdvisor:
             reason=reason,
             action=action,
             confidence=confidence,
+            urgency_s=urgency_s,
         )
 
     def _oil_temperature_prediction_advice(
         self,
         severity: str,
         confidence: float,
+        urgency_s: float | None,
         phase_guidance,
     ) -> EngineAdvice:
         scenario = self._scenario(
@@ -275,6 +301,7 @@ class EngineAdvisor:
             reason=reason,
             action=action,
             confidence=confidence,
+            urgency_s=urgency_s,
         )
 
     def _cylinder_advice(

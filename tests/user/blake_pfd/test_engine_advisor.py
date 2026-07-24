@@ -645,3 +645,36 @@ def test_advisor_uses_structured_prediction_parameter() -> None:
 
     assert advice.title == "CHT Cooling Advisor"
     assert "increase airspeed" in advice.action.lower()
+    
+def test_prediction_urgency_is_preserved_in_engine_advice() -> None:
+    advisor = EngineAdvisor()
+
+    engine_state = SimpleNamespace(
+        prediction=SimpleNamespace(
+            severity="CAUTION",
+            parameter="CHT",
+            message="Temperature trajectory requires attention.",
+            confidence=0.85,
+            time_to_cht_limit_s=22.0,
+            time_to_oil_temp_limit_s=None,
+        ),
+        cylinders=SimpleNamespace(
+            imbalance_detected=False,
+        ),
+        health=SimpleNamespace(
+            status="NORMAL",
+        ),
+        data=SimpleNamespace(
+            oil_pressure_psi=45.0,
+        ),
+    )
+
+    advice = advisor.advise(
+        engine_state,
+        flight_state=SimpleNamespace(
+            phase="CLIMB",
+        ),
+    )
+
+    assert advice.title == "CHT Cooling Advisor"
+    assert advice.urgency_s == 22.0
