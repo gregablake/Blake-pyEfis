@@ -14,8 +14,8 @@ class WarningManager:
 
         self.recommendation_stabilizer = (
             RecommendationDisplayStabilizer(
-                activate_samples=3,
-                clear_samples=5,
+                activate_delay_s=1.5,
+                clear_delay_s=2.5,
             )
         )
 
