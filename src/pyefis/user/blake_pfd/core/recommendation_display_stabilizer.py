@@ -7,6 +7,36 @@ class RecommendationDisplayStatus:
     active_title: str | None = None
     pending_title: str | None = None
     seconds_remaining: float | None = None
+    
+def format_recommendation_display_status(
+    status: RecommendationDisplayStatus,
+) -> str:
+    if status.state == "PENDING":
+        title = status.pending_title or "Caution"
+
+        if status.seconds_remaining is None:
+            return f"{title} pending"
+
+        return (
+            f"{title} pending "
+            f"{status.seconds_remaining:.1f}s"
+        )
+
+    if status.state == "CLEARING":
+        title = status.active_title or "Caution"
+
+        if status.seconds_remaining is None:
+            return f"{title} clearing"
+
+        return (
+            f"{title} clearing "
+            f"{status.seconds_remaining:.1f}s"
+        )
+
+    if status.state == "ACTIVE":
+        return status.active_title or "Caution active"
+
+    return ""
 class RecommendationDisplayStabilizer:
     def __init__(
         self,
