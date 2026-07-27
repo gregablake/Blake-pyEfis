@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from math import isfinite
 from time import monotonic
 
 @dataclass(frozen=True)
@@ -43,14 +44,22 @@ class RecommendationDisplayStabilizer:
         activate_delay_s: float = 1.5,
         clear_delay_s: float = 2.5,
     ) -> None:
-        if activate_delay_s < 0.0:
+        if (
+            not isfinite(activate_delay_s)
+            or activate_delay_s < 0.0
+        ):
             raise ValueError(
-                "activate_delay_s must not be negative"
+                "activate_delay_s must be finite "
+                "and not negative"
             )
 
-        if clear_delay_s < 0.0:
+        if (
+            not isfinite(clear_delay_s)
+            or clear_delay_s < 0.0
+        ):
             raise ValueError(
-                "clear_delay_s must not be negative"
+                "clear_delay_s must be finite "
+                "and not negative"
             )
 
         self.activate_delay_s = float(
@@ -66,16 +75,31 @@ class RecommendationDisplayStabilizer:
         self._pending_key: str | None = None
         self._pending_since_s: float | None = None
         self._clear_since_s: float | None = None
+        
+    @staticmethod
+    def _resolve_timestamp(
+        timestamp_s: float | None,
+    ) -> float:
+        value = (
+            monotonic()
+            if timestamp_s is None
+            else float(timestamp_s)
+        )
+
+        if not isfinite(value):
+            raise ValueError(
+                "timestamp_s must be finite"
+            )
+
+        return value
 
     def update(
         self,
         recommendation,
         timestamp_s: float | None = None,
     ):
-        now_s = (
-            monotonic()
-            if timestamp_s is None
-            else float(timestamp_s)
+        now_s = self._resolve_timestamp(
+            timestamp_s
         )
 
         severity = str(
@@ -151,17 +175,18 @@ class RecommendationDisplayStabilizer:
         self,
         timestamp_s: float | None = None,
     ) -> RecommendationDisplayStatus:
-        now_s = (
-            monotonic()
-            if timestamp_s is None
-            else float(timestamp_s)
+        now_s = self._resolve_timestamp(
+            timestamp_s
         )
 
         if self._pending_recommendation is not None:
-            elapsed_s = (
-                now_s - self._pending_since_s
-                if self._pending_since_s is not None
-                else 0.0
+            elapsed_s = max(
+                0.0,
+                (
+                    now_s - self._pending_since_s
+                    if self._pending_since_s is not None
+                    else 0.0
+                ),
             )
 
             seconds_remaining = max(
@@ -182,7 +207,10 @@ class RecommendationDisplayStabilizer:
 
         if self._active_recommendation is not None:
             if self._clear_since_s is not None:
-                elapsed_s = now_s - self._clear_since_s
+                elapsed_s = max(
+                    0.0,
+                    now_s - self._clear_since_s,
+                )
 
                 seconds_remaining = max(
                     0.0,

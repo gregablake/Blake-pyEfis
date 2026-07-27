@@ -408,3 +408,76 @@ def test_status_reports_replacement_pending_with_active_title() -> None:
     assert status.seconds_remaining == pytest.approx(
         1.0,
     )
+    
+def test_nan_timestamp_raises_error() -> None:
+    stabilizer = RecommendationDisplayStabilizer()
+
+    caution = recommendation(
+        "CAUTION",
+        "CHT Cooling Advisor",
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="timestamp_s must be finite",
+    ):
+        stabilizer.update(
+            caution,
+            timestamp_s=float("nan"),
+        )
+
+
+def test_infinite_timestamp_raises_error() -> None:
+    stabilizer = RecommendationDisplayStabilizer()
+
+    with pytest.raises(
+        ValueError,
+        match="timestamp_s must be finite",
+    ):
+        stabilizer.status(
+            timestamp_s=float("inf"),
+        )
+
+
+def test_infinite_delay_raises_error() -> None:
+    with pytest.raises(
+        ValueError,
+        match="activate_delay_s",
+    ):
+        RecommendationDisplayStabilizer(
+            activate_delay_s=float("inf"),
+        )
+
+    with pytest.raises(
+        ValueError,
+        match="clear_delay_s",
+    ):
+        RecommendationDisplayStabilizer(
+            clear_delay_s=float("nan"),
+        )
+
+
+def test_backwards_timestamp_does_not_activate_caution() -> None:
+    stabilizer = RecommendationDisplayStabilizer(
+        activate_delay_s=1.5,
+    )
+
+    caution = recommendation(
+        "CAUTION",
+        "CHT Cooling Advisor",
+    )
+
+    assert stabilizer.update(
+        caution,
+        timestamp_s=10.0,
+    ) is None
+
+    assert stabilizer.update(
+        caution,
+        timestamp_s=9.0,
+    ) is None
+
+    assert stabilizer.update(
+        caution,
+        timestamp_s=11.5,
+    ) is caution
