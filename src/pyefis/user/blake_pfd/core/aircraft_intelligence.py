@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pyefis.user.blake_pfd.core.fuel_advisor import (
+    FuelAdvisor,
+)
 
 
 @dataclass
@@ -21,23 +24,59 @@ class AircraftIntelligence:
         "WARNING": 2,
         "CRITICAL": 3,
     }
+    
+    def __init__(
+        self,
+        fuel_advisor: FuelAdvisor | None = None,
+    ) -> None:
+        self.fuel_advisor = (
+            fuel_advisor
+            if fuel_advisor is not None
+            else FuelAdvisor()
+        )
 
     def analyze(self, aircraft) -> AircraftRecommendation:
         if aircraft is None:
             return AircraftRecommendation()
 
-        engine_state = getattr(aircraft, "engine_state", None)
-
-        if engine_state is None:
-            return AircraftRecommendation()
+        engine_state = getattr(
+            aircraft,
+            "engine_state",
+            None,
+        )
 
         recommendations: list[AircraftRecommendation] = []
 
-        self._add_engine_analysis(recommendations, engine_state)
-        self._add_cylinder_analysis(recommendations, engine_state)
-        self._add_engine_prediction(recommendations, engine_state)
-        self._add_engine_advice(recommendations, engine_state)
-        self._add_engine_trend(recommendations, engine_state)
+        if engine_state is not None:
+            self._add_engine_analysis(
+                recommendations,
+                engine_state,
+            )
+
+            self._add_cylinder_analysis(
+                recommendations,
+                engine_state,
+            )
+
+            self._add_engine_prediction(
+                recommendations,
+                engine_state,
+            )
+
+            self._add_engine_advice(
+                recommendations,
+                engine_state,
+            )
+
+            self._add_engine_trend(
+                recommendations,
+                engine_state,
+            )
+
+        self._add_fuel_advice(
+            recommendations,
+            aircraft,
+        )
 
         if not recommendations:
             return AircraftRecommendation()
@@ -226,6 +265,61 @@ class AircraftIntelligence:
                     "Adjust power, mixture, airspeed, or climb rate "
                     "before limits are reached."
                 ),
+            )
+        )
+        
+    def _add_fuel_advice(
+        self,
+        recommendations: list[AircraftRecommendation],
+        aircraft,
+    ) -> None:
+        fuel_state = getattr(
+            aircraft,
+            "fuel",
+            None,
+        )
+
+        navigation_state = getattr(
+            aircraft,
+            "navigation",
+            None,
+        )
+
+        ground_speed_kt = getattr(
+            aircraft,
+            "ground_speed_kt",
+            0.0,
+        )
+
+        advice = self.fuel_advisor.advise(
+            fuel_state=fuel_state,
+            navigation_state=navigation_state,
+            ground_speed_kt=ground_speed_kt,
+        )
+
+        if advice.severity == "NORMAL":
+            return
+
+        urgency_s = None
+
+        if (
+            advice.reserve_at_destination_hr is not None
+            and advice.reserve_at_destination_hr >= 0.0
+        ):
+            urgency_s = (
+                advice.reserve_at_destination_hr
+                * 3600.0
+            )
+
+        recommendations.append(
+            AircraftRecommendation(
+                severity=advice.severity,
+                title=advice.title,
+                message=advice.reason,
+                recommendation=advice.action,
+                urgency_s=urgency_s,
+                confidence=1.0,
+                source_priority=3,
             )
         )
 
