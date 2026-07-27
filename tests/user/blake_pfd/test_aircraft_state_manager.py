@@ -3,7 +3,7 @@ from types import SimpleNamespace
 from pyefis.user.blake_pfd.core.aircraft_state_manager import (
     AircraftStateManager,
 )
-
+from pyefis.user.blake_pfd.engine_data import EngineData
 
 def test_aircraft_state_manager_builds_complete_state() -> None:
     manager = AircraftStateManager()
@@ -68,3 +68,46 @@ def test_aircraft_state_manager_builds_complete_state() -> None:
     assert result.ground_speed_kt == 105.0
     assert result.altitude_ft == 3500.0
     assert result.vsi_fpm == 250.0
+    
+def test_aircraft_state_manager_accepts_real_engine_data() -> None:
+    manager = AircraftStateManager()
+
+    pfd = SimpleNamespace(
+        bearing_deg=180.0,
+        distance_to_waypoint_nm=50.0,
+        desired_track_deg=182.0,
+        course_error_deg=-2.0,
+        ground_speed_kt=110.0,
+        pressure_alt_ft=4500.0,
+        vsi_fpm=0.0,
+    )
+
+    engine = EngineData(
+        fuel_remaining_gal=16.0,
+        fuel_used_gal=8.0,
+        fuel_flow_gph=8.0,
+        endurance_hr=2.0,
+        fuel_range_nm=220.0,
+        volts=14.1,
+        amps=7.0,
+        alternator_online=True,
+    )
+
+    result = manager.update(
+        pfd=pfd,
+        engine=engine,
+        selected_waypoint_id="KDAY",
+    )
+
+    assert result.engine is engine
+    assert result.fuel.remaining_gal == 16.0
+    assert result.fuel.flow_gph == 8.0
+    assert result.fuel.endurance_hr == 2.0
+    assert result.fuel.range_nm == 220.0
+    assert result.navigation.distance_nm == 50.0
+    assert result.ground_speed_kt == 110.0
+    
+def test_engine_data_has_default_fuel_range() -> None:
+    engine = EngineData()
+
+    assert engine.fuel_range_nm == 0.0

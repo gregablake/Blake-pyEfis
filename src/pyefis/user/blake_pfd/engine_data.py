@@ -25,3 +25,4 @@ class EngineData:
     fuel_remaining_gal: float = 0.0
     fuel_used_gal: float = 0.0
     endurance_hr: float = 0.0
+    fuel_range_nm: float = 0.0
