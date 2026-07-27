@@ -31,6 +31,16 @@ class ElectricalState:
     volts: float = 0.0
     amps: float = 0.0
     alternator_online: bool = True
+    
+@dataclass
+class WindState:
+    speed_kt: float = 0.0
+    from_deg: float = 0.0
+    headwind_kt: float = 0.0
+    tailwind_kt: float = 0.0
+    crosswind_kt: float = 0.0
+    crosswind_direction: str = "NONE"
+    valid: bool = False
 
 
 @dataclass
@@ -42,6 +52,7 @@ class AircraftState:
     fuel: FuelState = field(default_factory=FuelState)
     electrical: ElectricalState = field(default_factory=ElectricalState)
     navigation: NavigationState = field(default_factory=NavigationState)
+    wind: WindState = field(default_factory=WindState)
 
     # Legacy compatibility (remove after migration)
     engine: EngineData | None = None

@@ -147,3 +147,71 @@ def test_aircraft_state_manager_calculates_live_fuel_range() -> None:
     assert result.fuel.endurance_hr == 1.5
     assert result.fuel.range_nm == 180.0
     assert result.fuel.calculation_valid is True
+    
+def test_aircraft_state_manager_calculates_wind_components() -> None:
+    manager = AircraftStateManager()
+
+    pfd = SimpleNamespace(
+        bearing_deg=90.0,
+        distance_to_waypoint_nm=25.0,
+        desired_track_deg=0.0,
+        course_error_deg=0.0,
+        ground_speed_kt=100.0,
+        pressure_alt_ft=3000.0,
+        vsi_fpm=0.0,
+    )
+
+    engine = EngineData(
+        fuel_remaining_gal=10.0,
+        fuel_used_gal=5.0,
+        fuel_flow_gph=8.0,
+    )
+
+    result = manager.update(
+        pfd=pfd,
+        engine=engine,
+        selected_waypoint_id="KHAO",
+        wind_speed_kt=20.0,
+        wind_from_deg=45.0,
+    )
+
+    assert result.wind.valid is True
+
+    assert result.wind.headwind_kt == pytest.approx(
+        14.142,
+        rel=1e-3,
+    )
+
+    assert result.wind.crosswind_kt == pytest.approx(
+        14.142,
+        rel=1e-3,
+    )
+
+    assert result.wind.crosswind_direction == "RIGHT"
+    
+def test_aircraft_state_manager_handles_invalid_wind() -> None:
+    manager = AircraftStateManager()
+
+    pfd = SimpleNamespace(
+        bearing_deg=0.0,
+        distance_to_waypoint_nm=0.0,
+        desired_track_deg=0.0,
+        course_error_deg=0.0,
+        ground_speed_kt=100.0,
+        pressure_alt_ft=3000.0,
+        vsi_fpm=0.0,
+    )
+
+    engine = EngineData()
+
+    result = manager.update(
+        pfd=pfd,
+        engine=engine,
+        selected_waypoint_id="",
+        wind_speed_kt=float("nan"),
+        wind_from_deg=90.0,
+    )
+
+    assert result.wind.valid is False
+    assert result.wind.headwind_kt == 0.0
+    assert result.wind.crosswind_kt == 0.0
