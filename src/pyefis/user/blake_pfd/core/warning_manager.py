@@ -24,6 +24,7 @@ class WarningManager:
         self,
         painter,
         width: int,
+        timestamp_s: float | None = None,
     ) -> None:
         aircraft_moving = False
 
@@ -38,7 +39,8 @@ class WarningManager:
                     self.app,
                     "aircraft_recommendation",
                     None,
-                )
+                ),
+                timestamp_s=timestamp_s,
             )
         )
 
@@ -51,10 +53,20 @@ class WarningManager:
             aircraft_recommendation=display_recommendation,
         )
         
-    def recommendation_status(self):
-        return self.recommendation_stabilizer.status()
+    def recommendation_status(
+        self,
+        timestamp_s: float | None = None,
+    ):
+        return self.recommendation_stabilizer.status(
+            timestamp_s=timestamp_s,
+        )
     
-    def recommendation_status_text(self) -> str:
+    def recommendation_status_text(
+        self,
+        timestamp_s: float | None = None,
+    ) -> str:
         return format_recommendation_display_status(
-            self.recommendation_status()
+            self.recommendation_status(
+                timestamp_s=timestamp_s,
+            )
         )

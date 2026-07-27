@@ -152,3 +152,91 @@ def test_warning_manager_formats_pending_status_text(
     result = manager.recommendation_status_text()
 
     assert result == "CHT Cooling Advisor pending"
+    
+def test_warning_manager_activates_caution_after_elapsed_time(
+    monkeypatch,
+) -> None:
+    captured = []
+
+    def fake_draw_master_warning_strip(
+        painter,
+        engine,
+        width,
+        checklist=None,
+        aircraft_moving=False,
+        aircraft_recommendation=None,
+    ) -> None:
+        captured.append(aircraft_recommendation)
+
+    monkeypatch.setattr(
+        warning_module,
+        "draw_master_warning_strip",
+        fake_draw_master_warning_strip,
+    )
+
+    caution = SimpleNamespace(
+        severity="CAUTION",
+        title="CHT Cooling Advisor",
+    )
+
+    app = SimpleNamespace(
+        pfd=None,
+        engine_data=object(),
+        engine_checklist_page=object(),
+        aircraft_recommendation=caution,
+    )
+
+    manager = WarningManager(app)
+
+    manager.draw(
+        object(),
+        1000,
+        timestamp_s=10.0,
+    )
+
+    manager.draw(
+        object(),
+        1000,
+        timestamp_s=11.4,
+    )
+
+    manager.draw(
+        object(),
+        1000,
+        timestamp_s=11.5,
+    )
+
+    assert captured == [
+        None,
+        None,
+        caution,
+    ]
+
+
+def test_warning_manager_reports_pending_countdown() -> None:
+    caution = SimpleNamespace(
+        severity="CAUTION",
+        title="CHT Cooling Advisor",
+    )
+
+    app = SimpleNamespace(
+        pfd=None,
+        engine_data=object(),
+        engine_checklist_page=object(),
+        aircraft_recommendation=caution,
+    )
+
+    manager = WarningManager(app)
+
+    manager.recommendation_stabilizer.update(
+        caution,
+        timestamp_s=10.0,
+    )
+
+    result = manager.recommendation_status_text(
+        timestamp_s=10.6,
+    )
+
+    assert result == (
+        "CHT Cooling Advisor pending 0.9s"
+    )
