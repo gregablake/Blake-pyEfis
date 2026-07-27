@@ -14,6 +14,9 @@ from pyefis.user.blake_pfd.core.reachable_airport_selector import (
     RankedAirportCandidate,
     ReachableAirportSelector,
 )
+from pyefis.user.blake_pfd.core.wind_calculator import (
+    WindCalculator,
+)
 
 
 @dataclass(frozen=True)
@@ -38,6 +41,7 @@ class ReachableAirportPipeline:
         glide_calculator: GlideCalculator | None = None,
         analyzer: AirportGlideAnalyzer | None = None,
         selector: ReachableAirportSelector | None = None,
+        wind_calculator: WindCalculator | None = None,
     ) -> None:
         self.glide_calculator = (
             glide_calculator
@@ -57,13 +61,19 @@ class ReachableAirportPipeline:
             else ReachableAirportSelector()
         )
 
+        self.wind_calculator = (
+            wind_calculator
+            if wind_calculator is not None
+            else WindCalculator()
+        )
+
     def evaluate(
         self,
         airports: list[NearbyAirportRecord],
         aircraft_altitude_ft,
         terrain_elevation_ft=0.0,
-        headwind_kt=0.0,
-        tailwind_kt=0.0,
+        wind_speed_kt=0.0,
+        wind_from_deg=0.0,
     ) -> ReachableAirportResult:
         altitude = self._safe_nonnegative(
             aircraft_altitude_ft
@@ -73,40 +83,65 @@ class ReachableAirportPipeline:
             terrain_elevation_ft
         )
 
-        headwind = self._safe_nonnegative(
-            headwind_kt
+        safe_wind_speed = self._safe_nonnegative(
+            wind_speed_kt
         )
 
-        tailwind = self._safe_nonnegative(
-            tailwind_kt
+        safe_wind_from = self._safe_angle(
+            wind_from_deg
         )
 
         if (
             altitude is None
             or terrain_elevation is None
-            or headwind is None
-            or tailwind is None
+            or safe_wind_speed is None
+            or safe_wind_from is None
         ):
             return ReachableAirportResult()
 
-        glide = self.glide_calculator.calculate(
-            altitude_ft=altitude,
-            terrain_elevation_ft=terrain_elevation,
-            headwind_kt=headwind,
-            tailwind_kt=tailwind,
-        )
-
-        if not glide.valid:
-            return ReachableAirportResult()
-
         analyzed: list[AirportGlideCandidate] = []
+        maximum_glide_range_nm = 0.0
 
         for airport in airports:
+            wind = (
+                self.wind_calculator.calculate_components(
+                    wind_speed_kt=safe_wind_speed,
+                    wind_from_deg=safe_wind_from,
+                    course_deg=airport.bearing_deg,
+                )
+            )
+
+            if not wind.valid:
+                analyzed.append(
+                    AirportGlideCandidate(
+                        identifier=str(
+                            airport.identifier
+                        ),
+                    )
+                )
+                continue
+
+            glide = self.glide_calculator.calculate(
+                altitude_ft=altitude,
+                terrain_elevation_ft=(
+                    terrain_elevation
+                ),
+                headwind_kt=wind.headwind_kt,
+                tailwind_kt=wind.tailwind_kt,
+            )
+
+            maximum_glide_range_nm = max(
+                maximum_glide_range_nm,
+                glide.wind_corrected_range_nm,
+            )
+
             candidate = self.analyzer.analyze(
                 identifier=airport.identifier,
                 distance_nm=airport.distance_nm,
                 bearing_deg=airport.bearing_deg,
-                airport_elevation_ft=airport.elevation_ft,
+                airport_elevation_ft=(
+                    airport.elevation_ft
+                ),
                 aircraft_altitude_ft=altitude,
                 glide=glide,
             )
@@ -118,9 +153,7 @@ class ReachableAirportPipeline:
         )
 
         return ReachableAirportResult(
-            glide_range_nm=(
-                glide.wind_corrected_range_nm
-            ),
+            glide_range_nm=maximum_glide_range_nm,
             candidates=tuple(analyzed),
             ranked=tuple(ranked),
             valid=True,
@@ -142,3 +175,17 @@ class ReachableAirportPipeline:
             0.0,
             number,
         )
+
+    @staticmethod
+    def _safe_angle(
+        value,
+    ) -> float | None:
+        try:
+            number = float(value)
+        except (TypeError, ValueError):
+            return None
+
+        if not isfinite(number):
+            return None
+
+        return number % 360.0

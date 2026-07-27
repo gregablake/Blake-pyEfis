@@ -9,6 +9,8 @@ from pyefis.user.blake_pfd.core.reachable_airport_selector import (
     ReachableAirportSelector,
 )
 
+import pytest
+
 
 def airport(
     identifier: str,
@@ -106,9 +108,17 @@ def test_headwind_reduces_reachable_airports() -> None:
     )
 
     airports = [
-        airport("CLOSE", 4.0),
-        airport("EDGE", 7.0),
-    ]
+        airport(
+            "CLOSE",
+            4.0,
+            bearing_deg=0.0,
+        ),
+        airport(
+            "EDGE",
+            7.0,
+            bearing_deg=0.0,
+        ),
+]
 
     still_air = pipeline.evaluate(
         airports=airports,
@@ -118,7 +128,8 @@ def test_headwind_reduces_reachable_airports() -> None:
     headwind = pipeline.evaluate(
         airports=airports,
         aircraft_altitude_ft=5000.0,
-        headwind_kt=35.0,
+        wind_speed_kt=35.0,
+        wind_from_deg=0.0,
     )
 
     still_air_ids = {
@@ -178,4 +189,103 @@ def test_invalid_airport_is_retained_but_not_ranked() -> None:
 
     assert len(result.candidates) == 1
     assert result.candidates[0].valid is False
+    assert result.ranked == ()
+    
+def test_same_wind_affects_opposite_airports_differently() -> None:
+    pipeline = ReachableAirportPipeline(
+        glide_calculator=GlideCalculator(
+            glide_ratio=9.0,
+            best_glide_speed_kt=80.0,
+            reserve_altitude_ft=0.0,
+        )
+    )
+
+    result = pipeline.evaluate(
+        airports=[
+            airport(
+                "NORTH",
+                distance_nm=6.0,
+                bearing_deg=0.0,
+            ),
+            airport(
+                "SOUTH",
+                distance_nm=6.0,
+                bearing_deg=180.0,
+            ),
+        ],
+        aircraft_altitude_ft=5000.0,
+        wind_speed_kt=30.0,
+        wind_from_deg=0.0,
+    )
+
+    candidates = {
+        item.identifier: item
+        for item in result.candidates
+    }
+
+    assert (
+        candidates["SOUTH"].arrival_altitude_ft
+        > candidates["NORTH"].arrival_altitude_ft
+    )
+
+    assert (
+        candidates["SOUTH"].safety_margin_ft
+        > candidates["NORTH"].safety_margin_ft
+    )
+
+
+def test_crosswind_does_not_change_forward_glide_range() -> None:
+    pipeline = ReachableAirportPipeline(
+        glide_calculator=GlideCalculator(
+            glide_ratio=9.0,
+            best_glide_speed_kt=80.0,
+            reserve_altitude_ft=0.0,
+        )
+    )
+
+    calm = pipeline.evaluate(
+        airports=[
+            airport(
+                "EAST",
+                distance_nm=5.0,
+                bearing_deg=90.0,
+            )
+        ],
+        aircraft_altitude_ft=5000.0,
+    )
+
+    crosswind = pipeline.evaluate(
+        airports=[
+            airport(
+                "EAST",
+                distance_nm=5.0,
+                bearing_deg=90.0,
+            )
+        ],
+        aircraft_altitude_ft=5000.0,
+        wind_speed_kt=30.0,
+        wind_from_deg=0.0,
+    )
+
+    assert (
+        crosswind.candidates[0].arrival_altitude_ft
+        == pytest.approx(
+            calm.candidates[0].arrival_altitude_ft
+        )
+    )
+
+
+def test_invalid_wind_returns_invalid_result() -> None:
+    pipeline = ReachableAirportPipeline()
+
+    result = pipeline.evaluate(
+        airports=[
+            airport("TEST", 3.0),
+        ],
+        aircraft_altitude_ft=5000.0,
+        wind_speed_kt=float("nan"),
+        wind_from_deg=0.0,
+    )
+
+    assert result.valid is False
     assert result.ranked == ()
