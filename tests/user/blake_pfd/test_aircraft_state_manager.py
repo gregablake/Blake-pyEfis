@@ -1,5 +1,7 @@
 from types import SimpleNamespace
 
+import pytest
+
 from pyefis.user.blake_pfd.core.aircraft_state_manager import (
     AircraftStateManager,
 )
@@ -52,8 +54,11 @@ def test_aircraft_state_manager_builds_complete_state() -> None:
     assert result.fuel.remaining_gal == 18.0
     assert result.fuel.used_gal == 6.0
     assert result.fuel.flow_gph == 8.5
-    assert result.fuel.endurance_hr == 2.1
-    assert result.fuel.range_nm == 220.0
+    assert result.fuel.endurance_hr == pytest.approx(18.0 / 8.5)
+
+    assert result.fuel.range_nm == pytest.approx(
+    (18.0 / 8.5) * 105.0
+    )
 
     assert result.electrical.volts == 14.2
     assert result.electrical.amps == 8.0
@@ -106,8 +111,39 @@ def test_aircraft_state_manager_accepts_real_engine_data() -> None:
     assert result.fuel.range_nm == 220.0
     assert result.navigation.distance_nm == 50.0
     assert result.ground_speed_kt == 110.0
-    
+    assert result.fuel.calculation_valid is True
 def test_engine_data_has_default_fuel_range() -> None:
     engine = EngineData()
 
     assert engine.fuel_range_nm == 0.0
+    
+def test_aircraft_state_manager_calculates_live_fuel_range() -> None:
+    manager = AircraftStateManager()
+
+    pfd = SimpleNamespace(
+        bearing_deg=0.0,
+        distance_to_waypoint_nm=0.0,
+        desired_track_deg=0.0,
+        course_error_deg=0.0,
+        ground_speed_kt=120.0,
+        pressure_alt_ft=3000.0,
+        vsi_fpm=0.0,
+    )
+
+    engine = EngineData(
+        fuel_remaining_gal=12.0,
+        fuel_used_gal=4.0,
+        fuel_flow_gph=8.0,
+        endurance_hr=99.0,
+        fuel_range_nm=999.0,
+    )
+
+    result = manager.update(
+        pfd=pfd,
+        engine=engine,
+        selected_waypoint_id="",
+    )
+
+    assert result.fuel.endurance_hr == 1.5
+    assert result.fuel.range_nm == 180.0
+    assert result.fuel.calculation_valid is True

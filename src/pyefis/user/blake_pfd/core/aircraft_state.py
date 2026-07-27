@@ -23,6 +23,7 @@ class FuelState:
     flow_gph: float = 0.0
     endurance_hr: float = 0.0
     range_nm: float = 0.0
+    calculation_valid: bool = False
 
 
 @dataclass

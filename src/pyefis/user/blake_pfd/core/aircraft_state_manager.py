@@ -10,11 +10,23 @@ from pyefis.user.blake_pfd.core.engine_state import EngineState
 from pyefis.user.blake_pfd.core.flight_state_manager import FlightState
 from pyefis.user.blake_pfd.engine_data import EngineData
 from pyefis.user.blake_pfd.flight_computer import FlightData
+from pyefis.user.blake_pfd.core.fuel_state_calculator import (
+    FuelStateCalculator,
+)
 
 
 class AircraftStateManager:
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        fuel_calculator: FuelStateCalculator | None = None,
+    ) -> None:
         self.state = AircraftState()
+
+        self.fuel_calculator = (
+            fuel_calculator
+            if fuel_calculator is not None
+            else FuelStateCalculator()
+        )
 
     def update(
         self,
@@ -24,6 +36,16 @@ class AircraftStateManager:
         flight_state: FlightState | None = None,
         engine_state: EngineState | None = None,
     ) -> AircraftState:
+        calculated_fuel = (
+            self.fuel_calculator.calculate(
+                remaining_gal=engine.fuel_remaining_gal,
+                used_gal=engine.fuel_used_gal,
+                flow_gph=engine.fuel_flow_gph,
+                ground_speed_kt=pfd.ground_speed_kt,
+                fallback_endurance_hr=engine.endurance_hr,
+                fallback_range_nm=engine.fuel_range_nm,
+            )
+        )
         self.state = AircraftState(
             flight_state=flight_state,
             engine_state=engine_state,
@@ -32,11 +54,24 @@ class AircraftStateManager:
             engine=engine,
 
             fuel=FuelState(
-                remaining_gal=engine.fuel_remaining_gal,
-                used_gal=engine.fuel_used_gal,
-                flow_gph=engine.fuel_flow_gph,
-                endurance_hr=engine.endurance_hr,
-                range_nm=engine.fuel_range_nm,
+                remaining_gal=(
+                    calculated_fuel.remaining_gal
+                ),
+                used_gal=(
+                    calculated_fuel.used_gal
+                ),
+                flow_gph=(
+                    calculated_fuel.flow_gph
+                ),
+                endurance_hr=(
+                    calculated_fuel.endurance_hr
+                ),
+                range_nm=(
+                    calculated_fuel.range_nm
+                ),
+                calculation_valid=(
+                    calculated_fuel.calculation_valid
+                ),
             ),
             electrical=ElectricalState(
                 volts=engine.volts,
