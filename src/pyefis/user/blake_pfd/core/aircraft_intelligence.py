@@ -4,6 +4,9 @@ from dataclasses import dataclass
 from pyefis.user.blake_pfd.core.fuel_advisor import (
     FuelAdvisor,
 )
+from pyefis.user.blake_pfd.core.aircraft_performance_config import (
+    AircraftPerformanceConfig,
+)
 
 
 @dataclass
@@ -28,11 +31,18 @@ class AircraftIntelligence:
     def __init__(
         self,
         fuel_advisor: FuelAdvisor | None = None,
+        performance_config: AircraftPerformanceConfig | None = None,
     ) -> None:
         self.fuel_advisor = (
             fuel_advisor
             if fuel_advisor is not None
             else FuelAdvisor()
+        )
+
+        self.performance_config = (
+            performance_config
+            if performance_config is not None
+            else AircraftPerformanceConfig()
         )
 
     def analyze(self, aircraft) -> AircraftRecommendation:
@@ -74,6 +84,11 @@ class AircraftIntelligence:
             )
 
         self._add_fuel_advice(
+            recommendations,
+            aircraft,
+        )
+        
+        self._add_emergency_airport_advice(
             recommendations,
             aircraft,
         )
@@ -320,6 +335,83 @@ class AircraftIntelligence:
                 urgency_s=urgency_s,
                 confidence=1.0,
                 source_priority=3,
+            )
+        )
+        
+    def _add_emergency_airport_advice(
+        self,
+        recommendations: list[AircraftRecommendation],
+        aircraft,
+    ) -> None:
+        emergency_state = getattr(
+            aircraft,
+            "emergency_airport",
+            None,
+        )
+
+        if emergency_state is None:
+            return
+
+        advice = getattr(
+            emergency_state,
+            "advice",
+            None,
+        )
+
+        if advice is None:
+            return
+
+        severity = getattr(
+            advice,
+            "severity",
+            "NORMAL",
+        )
+
+        if severity == "NORMAL":
+            return
+
+        distance_nm = getattr(
+            advice,
+            "distance_nm",
+            None,
+        )
+
+        urgency_s = None
+
+        if (
+            distance_nm is not None
+            and distance_nm >= 0.0
+        ):
+             urgency_s = (
+                float(distance_nm)
+                / self.performance_config.best_glide_speed_kt
+                * 3600.0
+            )
+
+        recommendations.append(
+            AircraftRecommendation(
+                severity=severity,
+                title=getattr(
+                    advice,
+                    "title",
+                    "Emergency Airport Guidance",
+                ),
+                message=getattr(
+                    advice,
+                    "message",
+                    "Emergency landing guidance is active.",
+                ),
+                recommendation=getattr(
+                    advice,
+                    "action",
+                    (
+                        "Maintain aircraft control and identify "
+                        "the best available landing area."
+                    ),
+                ),
+                urgency_s=urgency_s,
+                confidence=1.0,
+                source_priority=4,
             )
         )
 
