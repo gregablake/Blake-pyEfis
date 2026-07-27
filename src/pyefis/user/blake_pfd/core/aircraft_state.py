@@ -5,6 +5,9 @@ from dataclasses import dataclass, field
 from pyefis.user.blake_pfd.core.flight_state_manager import FlightState
 from pyefis.user.blake_pfd.engine_data import EngineData
 from pyefis.user.blake_pfd.core.engine_state import EngineState
+from pyefis.user.blake_pfd.core.emergency_airport_manager import (
+    EmergencyAirportState,
+)
 
 
 @dataclass
@@ -53,6 +56,9 @@ class AircraftState:
     electrical: ElectricalState = field(default_factory=ElectricalState)
     navigation: NavigationState = field(default_factory=NavigationState)
     wind: WindState = field(default_factory=WindState)
+    emergency_airport: EmergencyAirportState = field(
+        default_factory=EmergencyAirportState
+    )
 
     # Legacy compatibility (remove after migration)
     engine: EngineData | None = None

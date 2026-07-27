@@ -7,6 +7,16 @@ from pyefis.user.blake_pfd.core.aircraft_state_manager import (
 )
 from pyefis.user.blake_pfd.engine_data import EngineData
 
+from pyefis.user.blake_pfd.core.emergency_airport_advisor import (
+    EmergencyAirportAdvice,
+)
+from pyefis.user.blake_pfd.core.emergency_airport_manager import (
+    EmergencyAirportState,
+)
+from pyefis.user.blake_pfd.core.reachable_airport_pipeline import (
+    ReachableAirportResult,
+)
+
 def test_aircraft_state_manager_builds_complete_state() -> None:
     manager = AircraftStateManager()
 
@@ -215,3 +225,80 @@ def test_aircraft_state_manager_handles_invalid_wind() -> None:
     assert result.wind.valid is False
     assert result.wind.headwind_kt == 0.0
     assert result.wind.crosswind_kt == 0.0
+    
+def test_aircraft_state_manager_preserves_emergency_airport_state() -> None:
+    manager = AircraftStateManager()
+
+    pfd = SimpleNamespace(
+        bearing_deg=90.0,
+        distance_to_waypoint_nm=20.0,
+        desired_track_deg=90.0,
+        course_error_deg=0.0,
+        ground_speed_kt=100.0,
+        pressure_alt_ft=5000.0,
+        vsi_fpm=0.0,
+    )
+
+    engine = EngineData()
+
+    emergency_state = EmergencyAirportState(
+        result=ReachableAirportResult(
+            glide_range_nm=8.5,
+            valid=True,
+        ),
+        advice=EmergencyAirportAdvice(
+            severity="WARNING",
+            title="Best Airport: KHAO",
+            message="KHAO is the best reachable airport.",
+            action="Turn toward KHAO.",
+            airport_identifier="KHAO",
+            bearing_deg=90.0,
+            distance_nm=4.0,
+            arrival_altitude_ft=2200.0,
+            safety_margin_ft=1500.0,
+            valid=True,
+        ),
+    )
+
+    result = manager.update(
+        pfd=pfd,
+        engine=engine,
+        selected_waypoint_id="",
+        emergency_airport_state=emergency_state,
+    )
+
+    assert result.emergency_airport is emergency_state
+    assert result.emergency_airport.result.valid is True
+    assert (
+        result.emergency_airport.advice.airport_identifier
+        == "KHAO"
+    )
+    assert (
+        result.emergency_airport.advice.title
+        == "Best Airport: KHAO"
+    )
+    
+def test_aircraft_state_manager_defaults_emergency_state() -> None:
+    manager = AircraftStateManager()
+
+    pfd = SimpleNamespace(
+        bearing_deg=0.0,
+        distance_to_waypoint_nm=0.0,
+        desired_track_deg=0.0,
+        course_error_deg=0.0,
+        ground_speed_kt=0.0,
+        pressure_alt_ft=0.0,
+        vsi_fpm=0.0,
+    )
+
+    result = manager.update(
+        pfd=pfd,
+        engine=EngineData(),
+        selected_waypoint_id="",
+    )
+
+    assert result.emergency_airport.result.valid is False
+    assert (
+        result.emergency_airport.advice.airport_identifier
+        is None
+    )

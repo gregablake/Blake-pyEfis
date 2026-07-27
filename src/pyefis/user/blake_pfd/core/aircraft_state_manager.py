@@ -18,6 +18,10 @@ from pyefis.user.blake_pfd.core.wind_calculator import (
 from pyefis.user.blake_pfd.engine_data import EngineData
 from pyefis.user.blake_pfd.flight_computer import FlightData
 
+from pyefis.user.blake_pfd.core.emergency_airport_manager import (
+    EmergencyAirportState,
+)
+
 
 class AircraftStateManager:
     def __init__(
@@ -48,6 +52,8 @@ class AircraftStateManager:
         engine_state: EngineState | None = None,
         wind_speed_kt: float = 0.0,
         wind_from_deg: float = 0.0,
+        emergency_airport_state: EmergencyAirportState | None = None,
+        
     ) -> AircraftState:
         calculated_fuel = self.fuel_calculator.calculate(
             remaining_gal=engine.fuel_remaining_gal,
@@ -57,6 +63,7 @@ class AircraftStateManager:
             fallback_endurance_hr=engine.endurance_hr,
             fallback_range_nm=engine.fuel_range_nm,
         )
+        
 
         calculated_wind = (
             self.wind_calculator.calculate_components(
@@ -70,7 +77,6 @@ class AircraftStateManager:
             flight_state=flight_state,
             engine_state=engine_state,
 
-            # Legacy compatibility for older code
             engine=engine,
 
             fuel=FuelState(
@@ -108,6 +114,12 @@ class AircraftStateManager:
                     calculated_wind.crosswind_direction
                 ),
                 valid=calculated_wind.valid,
+            ),
+
+            emergency_airport=(
+                emergency_airport_state
+                if emergency_airport_state is not None
+                else EmergencyAirportState()
             ),
 
             ground_speed_kt=pfd.ground_speed_kt,
