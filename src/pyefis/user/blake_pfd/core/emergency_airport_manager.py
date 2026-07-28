@@ -11,6 +11,9 @@ from pyefis.user.blake_pfd.core.reachable_airport_pipeline import (
     ReachableAirportPipeline,
     ReachableAirportResult,
 )
+from pyefis.user.blake_pfd.core.aircraft_performance_config import (
+    AircraftPerformanceConfig,
+)
 
 
 @dataclass(frozen=True)
@@ -24,11 +27,20 @@ class EmergencyAirportManager:
         self,
         pipeline: ReachableAirportPipeline | None = None,
         advisor: EmergencyAirportAdvisor | None = None,
+        performance_config: AircraftPerformanceConfig | None = None,
     ) -> None:
+        self.performance_config = (
+            performance_config
+            if performance_config is not None
+            else AircraftPerformanceConfig()
+        )
+
         self.pipeline = (
             pipeline
             if pipeline is not None
-            else ReachableAirportPipeline()
+            else ReachableAirportPipeline(
+                performance_config=self.performance_config
+            )
         )
 
         self.advisor = (

@@ -8,6 +8,10 @@ from pyefis.user.blake_pfd.core.reachable_airport_pipeline import (
     NearbyAirportRecord,
     ReachableAirportPipeline,
 )
+from pyefis.user.blake_pfd.core.aircraft_performance_config import (
+    AircraftPerformanceConfig,
+)
+import pytest
 
 
 def airport(
@@ -165,3 +169,35 @@ def test_clear_resets_manager_state() -> None:
     assert manager.state.result.valid is False
     assert manager.state.result.ranked == ()
     assert manager.state.advice.airport_identifier is None
+    
+def test_manager_uses_shared_performance_configuration() -> None:
+    manager = EmergencyAirportManager(
+        performance_config=AircraftPerformanceConfig(
+            best_glide_speed_kt=95.0,
+            glide_ratio=11.0,
+            glide_reserve_altitude_ft=500.0,
+        )
+    )
+
+    state = manager.update(
+        airports=[
+            airport(
+                "TEST",
+                distance_nm=5.0,
+                bearing_deg=0.0,
+                elevation_ft=500.0,
+            )
+        ],
+        aircraft_altitude_ft=6000.0,
+        emergency_active=True,
+    )
+
+    expected_range_nm = (
+        5500.0
+        * 11.0
+        / 6076.12
+    )
+
+    assert state.result.glide_range_nm == pytest.approx(
+        expected_range_nm
+    )

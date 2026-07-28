@@ -17,7 +17,9 @@ from pyefis.user.blake_pfd.core.reachable_airport_selector import (
 from pyefis.user.blake_pfd.core.wind_calculator import (
     WindCalculator,
 )
-
+from pyefis.user.blake_pfd.core.aircraft_performance_config import (
+    AircraftPerformanceConfig,
+)
 
 @dataclass(frozen=True)
 class NearbyAirportRecord:
@@ -42,11 +44,29 @@ class ReachableAirportPipeline:
         analyzer: AirportGlideAnalyzer | None = None,
         selector: ReachableAirportSelector | None = None,
         wind_calculator: WindCalculator | None = None,
+        performance_config: AircraftPerformanceConfig | None = None,
     ) -> None:
+        self.performance_config = (
+            performance_config
+            if performance_config is not None
+            else AircraftPerformanceConfig()
+        )
+
         self.glide_calculator = (
             glide_calculator
             if glide_calculator is not None
-            else GlideCalculator()
+            else GlideCalculator(
+                glide_ratio=(
+                    self.performance_config.glide_ratio
+                ),
+                best_glide_speed_kt=(
+                    self.performance_config.best_glide_speed_kt
+                ),
+                reserve_altitude_ft=(
+                    self.performance_config
+                    .glide_reserve_altitude_ft
+                ),
+            )
         )
 
         self.analyzer = (

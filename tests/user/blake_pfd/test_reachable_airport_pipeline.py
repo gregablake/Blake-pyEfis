@@ -9,6 +9,10 @@ from pyefis.user.blake_pfd.core.reachable_airport_selector import (
     ReachableAirportSelector,
 )
 
+from pyefis.user.blake_pfd.core.aircraft_performance_config import (
+    AircraftPerformanceConfig,
+)
+
 import pytest
 
 
@@ -289,3 +293,75 @@ def test_invalid_wind_returns_invalid_result() -> None:
 
     assert result.valid is False
     assert result.ranked == ()
+    
+def test_pipeline_uses_aircraft_performance_configuration() -> None:
+    pipeline = ReachableAirportPipeline(
+        performance_config=AircraftPerformanceConfig(
+            best_glide_speed_kt=100.0,
+            glide_ratio=12.0,
+            glide_reserve_altitude_ft=500.0,
+        )
+    )
+
+    result = pipeline.evaluate(
+        airports=[
+            airport(
+                "TEST",
+                distance_nm=8.0,
+                bearing_deg=0.0,
+                elevation_ft=500.0,
+            )
+        ],
+        aircraft_altitude_ft=6000.0,
+    )
+
+    expected_available_altitude_ft = (
+        6000.0 - 500.0
+    )
+
+    expected_range_nm = (
+        expected_available_altitude_ft
+        * 12.0
+        / 6076.12
+    )
+
+    assert result.valid is True
+
+    assert result.glide_range_nm == pytest.approx(
+        expected_range_nm
+    )
+def test_explicit_glide_calculator_overrides_configuration() -> None:
+    pipeline = ReachableAirportPipeline(
+        performance_config=AircraftPerformanceConfig(
+            best_glide_speed_kt=100.0,
+            glide_ratio=12.0,
+            glide_reserve_altitude_ft=500.0,
+        ),
+        glide_calculator=GlideCalculator(
+            best_glide_speed_kt=80.0,
+            glide_ratio=8.0,
+            reserve_altitude_ft=0.0,
+        ),
+    )
+
+    result = pipeline.evaluate(
+        airports=[
+            airport(
+                "TEST",
+                distance_nm=5.0,
+                bearing_deg=0.0,
+                elevation_ft=0.0,
+            )
+        ],
+        aircraft_altitude_ft=6000.0,
+    )
+
+    expected_range_nm = (
+        6000.0
+        * 8.0
+        / 6076.12
+    )
+
+    assert result.glide_range_nm == pytest.approx(
+        expected_range_nm
+    )
