@@ -12,6 +12,9 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+from pyefis.user.blake_pfd.core.aircraft_performance_config import (
+    AircraftPerformanceConfig,
+)
 
 
 CONFIG_PATH = Path(__file__).with_name("pfd_config.yaml")
@@ -104,6 +107,7 @@ class BlakePfdConfig:
     features: FeatureConfig
     navigation: NavigationConfig
     airspeed: AirspeedConfig
+    performance: AircraftPerformanceConfig
     altitude: AltitudeConfig
     synthetic_vision: SyntheticVisionConfig
     stratux: StratuxConfig
@@ -117,6 +121,7 @@ class BlakePfdConfig:
     simulation: SimulationConfig
     fuel: FuelConfig
     audio_alerts: AudioAlertsConfig
+    
 @dataclass
 class RouteConfig:
     auto_sequence: bool = True
@@ -186,6 +191,12 @@ def load_config(path: Path = CONFIG_PATH) -> BlakePfdConfig:
         features=FeatureConfig(**raw.get("features", {})),
         navigation=NavigationConfig(**raw.get("navigation", {})),
         airspeed=AirspeedConfig(**raw.get("airspeed", {})),
+        performance=AircraftPerformanceConfig(
+            **raw.get(
+                "performance",
+                {},
+            )
+        ),
         altitude=AltitudeConfig(**raw.get("altitude", {})),
         synthetic_vision=SyntheticVisionConfig(**raw.get("synthetic_vision", {})),
         stratux=StratuxConfig(**raw.get("stratux", {})),

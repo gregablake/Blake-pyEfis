@@ -3,8 +3,10 @@ display:
   height: 600
   fullscreen: true
   ui_scale: 1.0
+
 sensors:
   mode: sim
+
 features:
   show_airspeed: true
   show_altitude: true
@@ -31,12 +33,14 @@ features:
   show_nearest_airports: true
   show_airport_info: true
   show_route: true
+
 navigation:
   selected_waypoint_id: KHAO
   selected_waypoint_name: Butler Co Regional Airport - Hogan Field
   selected_waypoint_lat: 39.363800048799995
   selected_waypoint_lon: -84.5220031738
   desired_track_deg: 358.3007871086837
+  
 airspeed:
   vso_kt: 45
   vs_kt: 50
@@ -45,16 +49,25 @@ airspeed:
   va_kt: 120
   vno_kt: 150
   vne_kt: 180
+
+performance:
+  best_glide_speed_kt: 80.0
+  glide_ratio: 9.0
+  glide_reserve_altitude_ft: 1000.0
+
 altitude:
   baro_setting_inhg: 29.92
+
 synthetic_vision:
   terrain_database_path: ''
   obstacle_database_path: ''
   airport_database_path: ''
+
 stratux:
   enabled: true
   host: 192.168.10.1
   gdl90_port: 4000
+
 safe_taxi:
   enabled: true
   auto_switch_groundspeed_kt: 25
@@ -62,31 +75,40 @@ safe_taxi:
   airport_name: Butler County Regional
   airport_lat: 39.3638
   airport_lon: -84.522
+
 route:
   auto_sequence: true
   sequence_distance_nm: 1.0
+
 navigation_scaling:
   mode: enroute
   enroute_full_scale_nm: 5.0
   terminal_full_scale_nm: 1.0
   approach_full_scale_nm: 0.3
+
 vnav:
   enabled: true
   glidepath_angle_deg: 3.0
+
 moving_map:
   range_nm: 25.0
+
 obs:
   enabled: false
   selected_course_deg: 0.0
+
 declutter:
   level: 0
+
 logging:
   enabled: true
   interval_s: 1.0
+
 simulation:
   profile: straight
   paused: false
   reset_counter: 1
+
 fuel:
   yellow_gal: 6.0
   red_gal: 3.0
@@ -94,8 +116,10 @@ fuel:
   red_endurance_hr: 0.5
   total_gal: 24.0
   remaining_gal: 24.0
+
 ems_test:
   mode: normal
+
 audio_alerts:
   enabled: true
   buzzer_enabled: true
