@@ -58,7 +58,9 @@ from types import SimpleNamespace
 from pyefis.user.blake_pfd.core.aircraft_systems_factory import (
     build_aircraft_systems,
 )
-
+from pyefis.user.blake_pfd.core.nearby_airport_provider import (
+    NearbyAirportProvider,
+)
 class BlakePfdDemo(QWidget):
     def __init__(self, use_hardware: bool = False, replay_log: str | None = None) -> None:
         super().__init__()
@@ -83,6 +85,12 @@ class BlakePfdDemo(QWidget):
 
         self.database = AviationDatabase()
         self.database.load_all()
+        self.nearby_airport_provider = (
+            NearbyAirportProvider(
+                database=self.database,
+                maximum_results=25,
+            )
+        )
 
         self.route_manager = RouteManager()
         self.flight_computer = FlightComputer()
