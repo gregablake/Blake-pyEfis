@@ -52,16 +52,33 @@ from pyefis.user.blake_pfd.core.engine_analyzer import EngineAnalyzer
 from pyefis.user.blake_pfd.core.engine_trend_manager import EngineTrendManager
 from pyefis.user.blake_pfd.core.engine_state import EngineState
 from pyefis.user.blake_pfd.core.cylinder_analyzer import CylinderAnalyzer
-from pyefis.user.blake_pfd.core.aircraft_intelligence import AircraftIntelligence
 from pyefis.user.blake_pfd.core.engine_prediction import EnginePredictor
 from pyefis.user.blake_pfd.core.engine_advisor import EngineAdvisor
 from types import SimpleNamespace
+from pyefis.user.blake_pfd.core.aircraft_systems_factory import (
+    build_aircraft_systems,
+)
 
 class BlakePfdDemo(QWidget):
     def __init__(self, use_hardware: bool = False, replay_log: str | None = None) -> None:
         super().__init__()
 
         self.config = load_config()
+        self.aircraft_systems = build_aircraft_systems(
+            self.config
+        )
+
+        self.aircraft_intelligence = (
+            self.aircraft_systems.aircraft_intelligence
+        )
+
+        self.emergency_airport_manager = (
+            self.aircraft_systems.emergency_airport_manager
+        )
+
+        self.reachable_airport_pipeline = (
+            self.aircraft_systems.reachable_airport_pipeline
+        )
         self.startup_status = run_startup_check()
 
         self.database = AviationDatabase()
@@ -90,6 +107,9 @@ class BlakePfdDemo(QWidget):
         self.ems_alert_history = EmsAlertHistory()
         self.engine_checklist_page = EngineChecklistPage()
         self.aircraft_state_manager = AircraftStateManager()
+        self.emergency_airport_state = (
+            self.emergency_airport_manager.state
+        )
         self.aircraft = self.aircraft_state_manager.state
         self.checklist_manager = ChecklistManager()
         self.checklist_state = self.checklist_manager.state
@@ -102,7 +122,6 @@ class BlakePfdDemo(QWidget):
         self.engine_trend_manager = EngineTrendManager()
         self.engine_analyzer = EngineAnalyzer()
         self.cylinder_analyzer = CylinderAnalyzer()
-        self.aircraft_intelligence = AircraftIntelligence()
         self.engine_predictor = EnginePredictor()
         self.engine_advisor = EngineAdvisor()
         self.aircraft_recommendation = self.aircraft_intelligence.analyze(self.aircraft)
@@ -232,6 +251,9 @@ class BlakePfdDemo(QWidget):
                 flight_state=self.flight_state,
                 engine_state=self.engine_state,
                 selected_waypoint_id=self.config.navigation.selected_waypoint_id,
+                emergency_airport_state=(
+                    self.emergency_airport_state
+                ),
             )
             
         self.aircraft_recommendation = self.aircraft_intelligence.analyze(
