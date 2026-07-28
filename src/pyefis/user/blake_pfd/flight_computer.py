@@ -30,6 +30,10 @@ class FlightData:
     heading_deg: float = 0.0
     track_deg: float = 0.0
     ground_speed_kt: float = 0.0
+    
+    latitude_deg: float = 0.0
+    longitude_deg: float = 0.0
+    position_valid: bool = False
 
     wind_speed_kt: float = 0.0
     wind_direction_deg: float = 0.0
@@ -83,6 +87,43 @@ class FlightComputer:
         flight.heading_deg = normalize_degrees(raw.heading_deg)
         flight.track_deg = normalize_degrees(raw.gps_track_deg)
         flight.ground_speed_kt = raw.gps_ground_speed_kt
+        
+        latitude = safe_latitude(
+            getattr(
+                raw,
+                "gps_lat_deg",
+                None,
+            )
+        )
+
+        longitude = safe_longitude(
+            getattr(
+                raw,
+                "gps_lon_deg",
+                None,
+            )
+        )
+
+        flight.position_valid = (
+            latitude is not None
+            and longitude is not None
+            and not (
+                latitude == 0.0
+                and longitude == 0.0
+            )
+        )
+
+        flight.latitude_deg = (
+            latitude
+            if latitude is not None
+            else 0.0
+        )
+
+        flight.longitude_deg = (
+            longitude
+            if longitude is not None
+            else 0.0
+        )
 
         flight.wind_speed_kt, flight.wind_direction_deg = wind_from_heading_track(
             tas_kt=flight.tas_kt,
@@ -104,29 +145,51 @@ class FlightComputer:
         if self.config.obs.enabled:
             desired_track = self.config.obs.selected_course_deg
 
-        nav = calculate_nav_solution(
-            aircraft_lat_deg=getattr(raw, "gps_lat_deg", 39.10),
-            aircraft_lon_deg=getattr(raw, "gps_lon_deg", -84.50),
-            aircraft_alt_ft=flight.pressure_alt_ft,
-            waypoint=waypoint,
-            desired_track_deg=desired_track,
-            glidepath_angle_deg=self.config.vnav.glidepath_angle_deg,
-            cdi_full_scale_nm=get_cdi_full_scale_nm(self.config),
-            vnav_enabled=self.config.vnav.enabled,
-        )
+        if flight.position_valid:
+            nav = calculate_nav_solution(
+                aircraft_lat_deg=flight.latitude_deg,
+                aircraft_lon_deg=flight.longitude_deg,
+                aircraft_alt_ft=flight.pressure_alt_ft,
+                waypoint=waypoint,
+                desired_track_deg=desired_track,
+                glidepath_angle_deg=(
+                    self.config.vnav.glidepath_angle_deg
+                ),
+                cdi_full_scale_nm=get_cdi_full_scale_nm(
+                    self.config
+                ),
+                vnav_enabled=self.config.vnav.enabled,
+            )
 
-        flight.bearing_deg = nav.bearing_to_wp_deg
-        flight.desired_track_deg = nav.desired_track_deg
-        flight.distance_to_waypoint_nm = nav.distance_to_wp_nm
-        flight.course_error_deg = nav.course_error_deg
-        flight.cdi = nav.cdi_deflection_nm
-        flight.vdi = nav.vdi_deflection_deg
+            flight.bearing_deg = nav.bearing_to_wp_deg
+            flight.distance_to_waypoint_nm = (
+                nav.distance_to_wp_nm
+            )
+            flight.course_error_deg = nav.course_error_deg
+            flight.cdi = nav.cdi_deflection_nm
+            flight.vdi = nav.vdi_deflection_deg
+            flight.desired_track_deg = nav.desired_track_deg
 
-        if self.config.route.auto_sequence:
+        else:
+            flight.bearing_deg = 0.0
+            flight.distance_to_waypoint_nm = 0.0
+            flight.course_error_deg = 0.0
+            flight.cdi = 0.0
+            flight.vdi = 0.0
+            flight.desired_track_deg = desired_track
+
+        if (
+            flight.position_valid
+            and self.config.route.auto_sequence
+        ):
             self.route_manager.maybe_advance_leg(
                 distance_to_waypoint_nm=nav.distance_to_wp_nm,
-                sequence_distance_nm=self.config.route.sequence_distance_nm,
+                sequence_distance_nm=(
+                    self.config.route.sequence_distance_nm
+                ),
             )
+        else:
+            flight.desired_track_deg = desired_track
 
         return flight
 
@@ -198,3 +261,26 @@ def calculate_slip_skid(accel_y_g: float, accel_z_g: float) -> float:
 
 def normalize_degrees(value: float) -> float:
     return value % 360.0
+
+def safe_latitude(value) -> float | None:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+
+    if not -90.0 <= number <= 90.0:
+        return None
+
+    return number
+
+
+def safe_longitude(value) -> float | None:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+
+    if not -180.0 <= number <= 180.0:
+        return None
+
+    return number

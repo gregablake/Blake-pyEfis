@@ -85,6 +85,7 @@ class BlakePfdDemo(QWidget):
 
         self.database = AviationDatabase()
         self.database.load_all()
+        
         self.nearby_airport_provider = (
             NearbyAirportProvider(
                 database=self.database,
@@ -229,9 +230,9 @@ class BlakePfdDemo(QWidget):
     def update_data(self) -> None:
         self.pfd = self.sensor_manager.read_flight()
         self.update_engine_state()
-        
+
         engine = self.engine_state.data
-        
+
         if self.pfd is not None:
             engine.fuel_range_nm = (
                 engine.endurance_hr * self.pfd.ground_speed_kt
@@ -242,46 +243,101 @@ class BlakePfdDemo(QWidget):
                 engine=engine,
             )
 
-            self.checklist_state = self.checklist_manager.update(
-                self.flight_state.phase
-            )
+            # ---------------------------------------------------------
+            # Emergency airport analysis
+            # ---------------------------------------------------------
+            if self.pfd.position_valid:
+                nearby_airports = (
+                    self.nearby_airport_provider.get_nearby_airports(
+                        aircraft_lat_deg=self.pfd.latitude_deg,
+                        aircraft_lon_deg=self.pfd.longitude_deg,
+                    )
+                )
 
-            self.engine_checklist_page.set_phase_by_name(
-                self.flight_state.phase
-            )
+                self.emergency_airport_state = (
+                    self.emergency_airport_manager.update(
+                        airports=nearby_airports,
+                        aircraft_altitude_ft=(
+                            self.pfd.pressure_alt_ft
+                        ),
+                        terrain_elevation_ft=0.0,
+                        wind_speed_kt=self.pfd.wind_speed_kt,
+                        wind_from_deg=(
+                            self.pfd.wind_direction_deg
+                        ),
+                        emergency_active=False,
+                    )
+                )
+            else:
+                self.emergency_airport_manager.clear()
+                self.emergency_airport_state = (
+                    self.emergency_airport_manager.state
+                )
 
-            if self.checklist_state.should_popup:
-                self.page_manager.set_page("ENGINE_CHECKLIST")
+                self.checklist_state = (
+                    self.checklist_manager.update(
+                        self.flight_state.phase
+                    )
+                )
 
-            self.aircraft = self.aircraft_state_manager.update(
-                pfd=self.pfd,
-                engine=engine,
-                flight_state=self.flight_state,
-                engine_state=self.engine_state,
-                selected_waypoint_id=self.config.navigation.selected_waypoint_id,
-                emergency_airport_state=(
-                    self.emergency_airport_state
-                ),
+                self.engine_checklist_page.set_phase_by_name(
+                    self.flight_state.phase
+                )
+
+                if self.checklist_state.should_popup:
+                    self.page_manager.set_page(
+                        "ENGINE_CHECKLIST"
+                    )
+
+                self.aircraft = (
+                    self.aircraft_state_manager.update(
+                        pfd=self.pfd,
+                        engine=engine,
+                        flight_state=self.flight_state,
+                        engine_state=self.engine_state,
+                        selected_waypoint_id=(
+                            self.config.navigation.selected_waypoint_id
+                        ),
+                        wind_speed_kt=(
+                            self.pfd.wind_speed_kt
+                        ),
+                        wind_from_deg=(
+                            self.pfd.wind_direction_deg
+                        ),
+                        emergency_airport_state=(
+                            self.emergency_airport_state
+                        ),
+                    )
+                )
+
+        self.aircraft_recommendation = (
+            self.aircraft_intelligence.analyze(
+                self.aircraft
             )
-            
-        self.aircraft_recommendation = self.aircraft_intelligence.analyze(
-            self.aircraft
         )
+
         recommendation_key = (
             self.aircraft_recommendation.severity,
             self.aircraft_recommendation.title,
         )
 
-        if recommendation_key != self.last_aircraft_recommendation_key:
+        if (
+            recommendation_key
+            != self.last_aircraft_recommendation_key
+        ):
             self.flight_state_manager.event_log.write(
                 "AI_RECOMMENDATION",
-                f"{self.aircraft_recommendation.severity}: "
-                f"{self.aircraft_recommendation.title} - "
-                f"{self.aircraft_recommendation.message}",
+                (
+                    f"{self.aircraft_recommendation.severity}: "
+                    f"{self.aircraft_recommendation.title} - "
+                    f"{self.aircraft_recommendation.message}"
+                ),
             )
 
-            self.last_aircraft_recommendation_key = recommendation_key
-            
+            self.last_aircraft_recommendation_key = (
+                recommendation_key
+            )
+
         self.ems_alert_history.update(engine)
         self.ems_trend_page.add_sample(engine)
 
@@ -290,14 +346,19 @@ class BlakePfdDemo(QWidget):
             silenced=self.ems_alert_history.silenced,
         )
 
-        if self.config.logging.enabled and self.pfd is not None:
+        if (
+            self.config.logging.enabled
+            and self.pfd is not None
+        ):
             self.flight_logger.maybe_log(
                 self.pfd,
-                waypoint_id=self.config.navigation.selected_waypoint_id,
+                waypoint_id=(
+                    self.config.navigation.selected_waypoint_id
+                ),
                 engine=engine,
-            )
+        )
 
-        self.update()
+    self.update()
     def keyPressEvent(self, event) -> None:  # noqa: N802
         self.event_manager.handle_key(event)
         self.update()
