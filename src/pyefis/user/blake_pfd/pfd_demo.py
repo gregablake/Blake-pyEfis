@@ -343,20 +343,17 @@ class BlakePfdDemo(QWidget):
                         ),
                     )
                 ) 
-                
             else:
                 self.emergency_airport_manager.clear()
                 self.emergency_airport_state = (
                     self.emergency_airport_manager.state
                 )
-                
                 self.landing_site_status = (
                     self.landing_site_monitor.evaluate(
                        selected_airport_distance_nm=None,
                        max_glide_distance_nm=0.0,
                     )
                 )
-
                 self.checklist_state = (
                     self.checklist_manager.update(
                         self.flight_state.phase
