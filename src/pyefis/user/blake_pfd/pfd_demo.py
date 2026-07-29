@@ -65,6 +65,11 @@ from pyefis.user.blake_pfd.core.nearby_airport_provider import (
 from pyefis.user.blake_pfd.core.emergency_detection import (
     EmergencyDetection,
 )
+
+from pyefis.user.blake_pfd.core.landing_site_monitor import (
+    LandingSiteMonitor,
+)
+
 class BlakePfdDemo(QWidget):
     def __init__(self, use_hardware: bool = False, replay_log: str | None = None) -> None:
         super().__init__()
@@ -80,6 +85,14 @@ class BlakePfdDemo(QWidget):
 
         self.emergency_airport_manager = (
             self.aircraft_systems.emergency_airport_manager
+        )
+        
+        self.landing_site_monitor = LandingSiteMonitor()
+        self.landing_site_status = (
+            self.landing_site_monitor.evaluate(
+                selected_airport_distance_nm=None,
+                max_glide_distance_nm=0.0,
+            )
         )
 
         self.reachable_airport_pipeline = (
@@ -315,6 +328,20 @@ class BlakePfdDemo(QWidget):
                         ),
                     )
                 )
+                
+                advice = self.emergency_airport_state.advice
+
+                self.landing_site_status = (
+                    self.landing_site_monitor.evaluate(
+                        selected_airport_distance_nm=(
+                            advice.distance_nm
+                        ),
+                        max_glide_distance_nm=(
+                            self.glide_state.wind_corrected_range_nm
+                        ),
+                    )
+                )
+                
             else:
                 self.emergency_airport_manager.clear()
                 self.emergency_airport_state = (
