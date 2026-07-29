@@ -124,11 +124,18 @@ class BlakePfdDemo(QWidget):
             self.emergency_airport_manager.state
         )
         self.aircraft = self.aircraft_state_manager.state
+        self.pilot_emergency_selected = False
+
+        # Initialize the emergency detection system
         self.emergency_detection = EmergencyDetection()
+
         self.emergency_status = (
             self.emergency_detection.evaluate(
                 engine_state=None,
                 flight_state=None,
+                pilot_selected=(
+                    self.pilot_emergency_selected
+                ),
             )
         )
         self.checklist_manager = ChecklistManager()
@@ -237,6 +244,23 @@ class BlakePfdDemo(QWidget):
             prediction=self.engine_prediction,
             advice=self.engine_advice,
         )
+        
+    def activate_pilot_emergency(self) -> None:
+        self.pilot_emergency_selected = True
+
+        self.flight_state_manager.event_log.write(
+            "EMERGENCY_MODE",
+            "Pilot manually activated emergency mode.",
+        )
+
+
+    def cancel_pilot_emergency(self) -> None:
+        self.pilot_emergency_selected = False
+
+        self.flight_state_manager.event_log.write(
+            "EMERGENCY_MODE",
+            "Pilot manually cancelled emergency mode.",
+        )
 
     def update_data(self) -> None:
         self.pfd = self.sensor_manager.read_flight()
@@ -258,6 +282,9 @@ class BlakePfdDemo(QWidget):
                 self.emergency_detection.evaluate(
                     engine_state=self.engine_state,
                     flight_state=self.flight_state,
+                    pilot_selected=(
+                        self.pilot_emergency_selected
+                    ),
                 )
             )
 

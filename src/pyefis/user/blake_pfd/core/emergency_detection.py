@@ -14,6 +14,8 @@ from pyefis.user.blake_pfd.core.flight_state_manager import (
 class EmergencyStatus:
     active: bool = False
     reason: str = ""
+    automatic: bool = False
+    pilot_selected: bool = False
 
 
 class EmergencyDetection:
@@ -22,7 +24,15 @@ class EmergencyDetection:
         *,
         engine_state: EngineState | None,
         flight_state: FlightState | None,
+        pilot_selected: bool = False,
     ) -> EmergencyStatus:
+        if pilot_selected:
+            return EmergencyStatus(
+                active=True,
+                reason="PILOT_SELECTED",
+                automatic=False,
+                pilot_selected=True,
+            )
 
         if engine_state is None:
             return EmergencyStatus()
@@ -30,19 +40,37 @@ class EmergencyDetection:
         if flight_state is None:
             return EmergencyStatus()
 
+        phase = str(
+            getattr(
+                flight_state,
+                "phase",
+                "UNKNOWN",
+            )
+        ).upper()
+
+        engine_running = bool(
+            getattr(
+                engine_state,
+                "running",
+                True,
+            )
+        )
+
         if (
-            flight_state.phase.upper()
+            phase
             in {
                 "TAKEOFF",
                 "CLIMB",
                 "CRUISE",
                 "DESCENT",
             }
-            and engine_state.running is False
+            and not engine_running
         ):
             return EmergencyStatus(
                 active=True,
                 reason="ENGINE_STOPPED",
+                automatic=True,
+                pilot_selected=False,
             )
 
         return EmergencyStatus()

@@ -72,3 +72,34 @@ def test_running_engine_keeps_airport_advice_inactive() -> None:
     assert emergency.active is False
     assert state.advice.severity == "NORMAL"
     assert state.advice.airport_identifier is None
+    
+def test_pilot_selected_emergency_activates_airport_advice() -> None:
+    detector = EmergencyDetection()
+    manager = EmergencyAirportManager()
+
+    emergency = detector.evaluate(
+        engine_state=SimpleNamespace(
+            running=True,
+        ),
+        flight_state=SimpleNamespace(
+            phase="CRUISE",
+        ),
+        pilot_selected=True,
+    )
+
+    state = manager.update(
+        airports=[
+            NearbyAirportRecord(
+                identifier="KHAO",
+                distance_nm=3.0,
+                bearing_deg=90.0,
+                elevation_ft=600.0,
+            )
+        ],
+        aircraft_altitude_ft=6000.0,
+        emergency_active=emergency.active,
+    )
+
+    assert emergency.active is True
+    assert emergency.reason == "PILOT_SELECTED"
+    assert state.advice.airport_identifier == "KHAO"
