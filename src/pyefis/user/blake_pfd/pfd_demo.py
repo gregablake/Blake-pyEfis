@@ -645,7 +645,18 @@ class BlakePfdDemo(QWidget):
 
         if features.show_weather:
             self.draw_weather_overlay(painter, self.weather.read(), width, height)
-        self.draw_aircraft_state_label(painter, width, height)
+        self.draw_aircraft_state_label(
+            painter,
+            width,
+            height,
+        )
+
+        self.draw_emergency_landing_guidance(
+            painter,
+            width,
+            height,
+        )
+
         self.draw_warning_strip(painter, width)
         painter.end()
 
@@ -1501,6 +1512,200 @@ class BlakePfdDemo(QWidget):
         painter.setFont(QFont("Arial", 12, QFont.Weight.Bold))
         painter.setPen(QColor(0, 255, 0) if weather_state.ok else QColor(255, 180, 0))
         painter.drawText(width - 230, 105, "WX ONLINE" if weather_state.ok else "WX WAITING")
+        
+    def draw_emergency_landing_guidance(
+        self,
+        painter: QPainter,
+        width: int,
+        height: int,
+    ) -> None:
+        plan = getattr(
+            self,
+            "emergency_landing_plan",
+            None,
+        )
+
+        if plan is None or not plan.active:
+            return
+
+        box_w = 500
+        box_h = 170
+        box_x = width // 2 - box_w // 2
+        box_y = 65
+
+        painter.fillRect(
+            box_x,
+            box_y,
+            box_w,
+            box_h,
+            QColor(0, 0, 0),
+        )
+
+        border_color = (
+            QColor(255, 0, 0)
+            if not plan.valid
+            else QColor(255, 180, 0)
+        )
+
+        painter.setPen(
+            QPen(
+                border_color,
+                4,
+            )
+        )
+        painter.drawRect(
+            box_x,
+            box_y,
+            box_w,
+            box_h,
+        )
+
+        painter.setFont(
+            QFont(
+                "Arial",
+                18,
+                QFont.Weight.Bold,
+            )
+        )
+        painter.setPen(border_color)
+        painter.drawText(
+            box_x + 15,
+            box_y + 30,
+            "EMERGENCY LANDING",
+        )
+
+        painter.setFont(
+            QFont(
+                "Arial",
+                13,
+                QFont.Weight.Bold,
+            )
+        )
+        painter.setPen(
+            QColor(
+                255,
+                255,
+                255,
+            )
+        )
+
+        if not plan.valid:
+            painter.drawText(
+                box_x + 15,
+                box_y + 65,
+                plan.instruction,
+            )
+
+            if plan.recommended_speed_kt is not None:
+                painter.drawText(
+                    box_x + 15,
+                    box_y + 100,
+                    (
+                        "BEST GLIDE "
+                        f"{plan.recommended_speed_kt:.0f} KT"
+                    ),
+                )
+
+            painter.drawText(
+                box_x + 15,
+                box_y + 135,
+                (
+                    "CHECKLIST: "
+                    f"{plan.checklist_name}"
+                ),
+            )
+            return
+
+        airport = (
+            plan.airport_identifier
+            or "UNKNOWN"
+        )
+
+        distance_text = (
+            f"{plan.distance_nm:.1f} NM"
+            if plan.distance_nm is not None
+            else "-- NM"
+        )
+
+        bearing_text = (
+            f"{plan.bearing_deg:.0f}°"
+            if plan.bearing_deg is not None
+            else "--°"
+        )
+
+        painter.drawText(
+            box_x + 15,
+            box_y + 62,
+            (
+                f"DIVERT: {airport}    "
+                f"DIST: {distance_text}    "
+                f"BRG: {bearing_text}"
+            ),
+        )
+
+        speed_text = (
+            f"{plan.recommended_speed_kt:.0f} KT"
+            if plan.recommended_speed_kt is not None
+            else "-- KT"
+        )
+
+        time_text = "--:--"
+
+        if plan.estimated_time_sec is not None:
+            total_seconds = max(
+                0,
+                int(plan.estimated_time_sec),
+            )
+            minutes = total_seconds // 60
+            seconds = total_seconds % 60
+            time_text = (
+                f"{minutes:02d}:{seconds:02d}"
+            )
+
+        painter.drawText(
+            box_x + 15,
+            box_y + 95,
+            (
+                f"BEST GLIDE: {speed_text}    "
+                f"TIME: {time_text}"
+            ),
+        )
+
+        arrival_text = (
+            f"{plan.arrival_altitude_ft:.0f} FT"
+            if plan.arrival_altitude_ft is not None
+            else "-- FT"
+        )
+
+        margin_text = (
+            f"{plan.safety_margin_ft:.0f} FT"
+            if plan.safety_margin_ft is not None
+            else "-- FT"
+        )
+
+        painter.drawText(
+            box_x + 15,
+            box_y + 128,
+            (
+                f"ARRIVAL ALT: {arrival_text}    "
+                f"MARGIN: {margin_text}"
+            ),
+        )
+
+        painter.setPen(
+            QColor(
+                255,
+                220,
+                0,
+            )
+        )
+        painter.drawText(
+            box_x + 15,
+            box_y + 158,
+            plan.instruction,
+        )
+        
+        
     
     def draw_aircraft_state_label(
         self,
