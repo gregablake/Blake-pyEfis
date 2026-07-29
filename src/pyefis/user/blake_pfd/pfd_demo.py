@@ -61,6 +61,10 @@ from pyefis.user.blake_pfd.core.aircraft_systems_factory import (
 from pyefis.user.blake_pfd.core.nearby_airport_provider import (
     NearbyAirportProvider,
 )
+
+from pyefis.user.blake_pfd.core.emergency_detection import (
+    EmergencyDetection,
+)
 class BlakePfdDemo(QWidget):
     def __init__(self, use_hardware: bool = False, replay_log: str | None = None) -> None:
         super().__init__()
@@ -120,6 +124,13 @@ class BlakePfdDemo(QWidget):
             self.emergency_airport_manager.state
         )
         self.aircraft = self.aircraft_state_manager.state
+        self.emergency_detection = EmergencyDetection()
+        self.emergency_status = (
+            self.emergency_detection.evaluate(
+                engine_state=None,
+                flight_state=None,
+            )
+        )
         self.checklist_manager = ChecklistManager()
         self.checklist_state = self.checklist_manager.state
         self.sensor_manager = SensorManager(
@@ -242,6 +253,13 @@ class BlakePfdDemo(QWidget):
                 self.pfd,
                 engine=engine,
             )
+            
+            self.emergency_status = (
+                self.emergency_detection.evaluate(
+                    engine_state=self.engine_state,
+                    flight_state=self.flight_state,
+                )
+            )
 
             # ---------------------------------------------------------
             # Emergency airport analysis
@@ -265,7 +283,9 @@ class BlakePfdDemo(QWidget):
                         wind_from_deg=(
                             self.pfd.wind_direction_deg
                         ),
-                        emergency_active=False,
+                        emergency_active=(
+                            self.emergency_status.active
+                        ),
                     )
                 )
             else:
