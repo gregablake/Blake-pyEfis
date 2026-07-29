@@ -70,6 +70,10 @@ from pyefis.user.blake_pfd.core.landing_site_monitor import (
     LandingSiteMonitor,
 )
 
+from pyefis.user.blake_pfd.core.emergency_landing_planner import (
+    EmergencyLandingPlanner,
+)
+
 class BlakePfdDemo(QWidget):
     def __init__(self, use_hardware: bool = False, replay_log: str | None = None) -> None:
         super().__init__()
@@ -88,10 +92,21 @@ class BlakePfdDemo(QWidget):
         )
         
         self.landing_site_monitor = LandingSiteMonitor()
+        self.emergency_landing_planner = (
+            EmergencyLandingPlanner(
+                best_glide_speed_kt=80.0,
+            )
+        )
         self.landing_site_status = (
             self.landing_site_monitor.evaluate(
                 selected_airport_distance_nm=None,
                 max_glide_distance_nm=0.0,
+            )
+        )
+        self.emergency_landing_plan = (
+            self.emergency_landing_planner.create_plan(
+                advice=None,
+                emergency_active=False,
             )
         )
 
@@ -342,53 +357,76 @@ class BlakePfdDemo(QWidget):
                             .glide_range_nm
                         ),
                     )
-                ) 
+                )
+
+                self.emergency_landing_plan = (
+                    self.emergency_landing_planner.create_plan(
+                        advice=advice,
+                        emergency_active=(
+                            self.emergency_status.active
+                        ),
+                        ground_speed_kt=(
+                            self.pfd.ground_speed_kt
+                        ),
+                    )
+                )
+
             else:
                 self.emergency_airport_manager.clear()
+
                 self.emergency_airport_state = (
                     self.emergency_airport_manager.state
                 )
+
                 self.landing_site_status = (
                     self.landing_site_monitor.evaluate(
-                       selected_airport_distance_nm=None,
-                       max_glide_distance_nm=0.0,
-                    )
-                )
-                self.checklist_state = (
-                    self.checklist_manager.update(
-                        self.flight_state.phase
+                        selected_airport_distance_nm=None,
+                        max_glide_distance_nm=0.0,
                     )
                 )
 
-                self.engine_checklist_page.set_phase_by_name(
+                self.emergency_landing_plan = (
+                    self.emergency_landing_planner.create_plan(
+                        advice=None,
+                        emergency_active=False,
+                    )
+                )
+
+            self.checklist_state = (
+                self.checklist_manager.update(
                     self.flight_state.phase
                 )
+            )
 
-                if self.checklist_state.should_popup:
-                    self.page_manager.set_page(
-                        "ENGINE_CHECKLIST"
-                    )
+            self.engine_checklist_page.set_phase_by_name(
+                self.flight_state.phase
+            )
 
-                self.aircraft = (
-                    self.aircraft_state_manager.update(
-                        pfd=self.pfd,
-                        engine=engine,
-                        flight_state=self.flight_state,
-                        engine_state=self.engine_state,
-                        selected_waypoint_id=(
-                            self.config.navigation.selected_waypoint_id
-                        ),
-                        wind_speed_kt=(
-                            self.pfd.wind_speed_kt
-                        ),
-                        wind_from_deg=(
-                            self.pfd.wind_direction_deg
-                        ),
-                        emergency_airport_state=(
-                            self.emergency_airport_state
-                        ),
-                    )
+            if self.checklist_state.should_popup:
+                self.page_manager.set_page(
+                    "ENGINE_CHECKLIST"
                 )
+
+            self.aircraft = (
+                self.aircraft_state_manager.update(
+                    pfd=self.pfd,
+                    engine=engine,
+                    flight_state=self.flight_state,
+                    engine_state=self.engine_state,
+                    selected_waypoint_id=(
+                        self.config.navigation.selected_waypoint_id
+                    ),
+                    wind_speed_kt=(
+                        self.pfd.wind_speed_kt
+                    ),
+                    wind_from_deg=(
+                        self.pfd.wind_direction_deg
+                    ),
+                    emergency_airport_state=(
+                        self.emergency_airport_state
+                    ),
+                )
+            )
 
         self.aircraft_recommendation = (
             self.aircraft_intelligence.analyze(
@@ -436,9 +474,10 @@ class BlakePfdDemo(QWidget):
                     self.config.navigation.selected_waypoint_id
                 ),
                 engine=engine,
-        )
+            )
 
-    self.update()
+        self.update()
+
     def keyPressEvent(self, event) -> None:  # noqa: N802
         self.event_manager.handle_key(event)
         self.update()
