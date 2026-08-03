@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+from time import monotonic
 from math import cos, radians, sin
 from pathlib import Path
 
@@ -74,6 +75,10 @@ from pyefis.user.blake_pfd.core.emergency_landing_planner import (
     EmergencyLandingPlanner,
 )
 
+from pyefis.user.blake_pfd.core.energy_state_calculator import (
+    EnergyStateCalculator,
+)
+
 class BlakePfdDemo(QWidget):
     def __init__(self, use_hardware: bool = False, replay_log: str | None = None) -> None:
         super().__init__()
@@ -97,6 +102,21 @@ class BlakePfdDemo(QWidget):
                 best_glide_speed_kt=80.0,
             )
         )
+        
+        self.energy_state_calculator = (
+            EnergyStateCalculator(
+                stable_trend_threshold_fpm=50.0,
+            )
+        )
+
+        self.energy_state = (
+            self.energy_state_calculator.calculate(
+                altitude_ft=None,
+                terrain_elevation_ft=0.0,
+                airspeed_kt=0.0,
+            )
+        )
+        
         self.landing_site_status = (
             self.landing_site_monitor.evaluate(
                 selected_airport_distance_nm=None,
@@ -391,6 +411,36 @@ class BlakePfdDemo(QWidget):
                         emergency_active=False,
                     )
                 )
+                
+            selected_site_distance_nm = getattr(
+                self.emergency_landing_plan,
+                    "distance_nm",
+                    None,
+            )
+
+            glide_range_nm = getattr(
+                self.emergency_airport_state.result,
+                    "glide_range_nm",
+                    None,
+            )
+
+            self.energy_state = (
+                self.energy_state_calculator.calculate(
+                    altitude_ft=(
+                        self.pfd.pressure_alt_ft
+                    ),
+                    terrain_elevation_ft=0.0,
+                    airspeed_kt=(
+                        self.pfd.ias_kt
+                    ),
+                    timestamp_s=monotonic(),
+                    selected_site_distance_nm=(
+                    selected_site_distance_nm
+                    ),
+                    glide_range_nm=glide_range_nm,
+                    target_altitude_ft=None,
+                )
+            )
 
             self.checklist_state = (
                 self.checklist_manager.update(
