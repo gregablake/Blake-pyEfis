@@ -1252,54 +1252,319 @@ class BlakePfdDemo(QWidget):
             painter.drawText(box_x + 10, y, f"{airport.ident:<5} {distance_nm:>4.1f}NM {airport.name[:24]}")
             y += 22
 
-    def draw_moving_map_overlay(self, painter: QPainter, map_state, width: int, height: int) -> None:
+    def draw_moving_map_overlay(
+        self,
+        painter: QPainter,
+        map_state,
+        width: int,
+        height: int,
+    ) -> None:
         box_x = 20
         box_y = 300
         box_w = 300
         box_h = 220
 
-        painter.fillRect(box_x, box_y, box_w, box_h, QColor(0, 0, 0))
-        painter.setPen(QPen(QColor(0, 180, 255), 2))
-        painter.drawRect(box_x, box_y, box_w, box_h)
+        painter.fillRect(
+            box_x,
+            box_y,
+            box_w,
+            box_h,
+            QColor(0, 0, 0),
+        )
+        painter.setPen(
+            QPen(
+                QColor(0, 180, 255),
+                2,
+            )
+        )
+        painter.drawRect(
+            box_x,
+            box_y,
+            box_w,
+            box_h,
+        )
 
-        painter.setFont(QFont("Arial", 12, QFont.Weight.Bold))
-        painter.setPen(QColor(0, 180, 255))
-        painter.drawText(box_x + 10, box_y + 24, f"MAP {map_state.range_nm:.0f} NM")
+        painter.setFont(
+            QFont(
+                "Arial",
+                12,
+                QFont.Weight.Bold,
+            )
+        )
+        painter.setPen(
+            QColor(0, 180, 255)
+        )
+        painter.drawText(
+            box_x + 10,
+            box_y + 24,
+            f"MAP {map_state.range_nm:.0f} NM",
+        )
 
         center_x = box_x + box_w // 2
         center_y = box_y + box_h // 2
 
-        painter.setBrush(QBrush(QColor(255, 220, 0)))
-        painter.setPen(QPen(QColor(255, 220, 0), 2))
-        painter.drawPolygon(
-            QPolygonF([
-                point(center_x, center_y - 12),
-                point(center_x - 8, center_y + 10),
-                point(center_x + 8, center_y + 10),
-            ])
+        radius = min(
+            box_w,
+            box_h,
+        ) * 0.42
+
+        painter.setPen(
+            QPen(
+                QColor(60, 60, 60),
+                1,
+            )
+        )
+        painter.drawEllipse(
+            center_x - int(radius),
+            center_y - int(radius),
+            int(radius * 2),
+            int(radius * 2),
         )
 
-        radius = min(box_w, box_h) * 0.42
+        emergency_plan = getattr(
+            self,
+            "emergency_landing_plan",
+            None,
+        )
 
-        painter.setPen(QPen(QColor(60, 60, 60), 1))
-        painter.drawEllipse(center_x - int(radius), center_y - int(radius), int(radius * 2), int(radius * 2))
+        glide_range_nm = 0.0
 
-        painter.setFont(QFont("Arial", 8, QFont.Weight.Bold))
+        emergency_state = getattr(
+            self,
+            "emergency_airport_state",
+            None,
+        )
+
+        if emergency_state is not None:
+            result = getattr(
+                emergency_state,
+                "result",
+                None,
+            )
+
+            if result is not None:
+                glide_range_nm = max(
+                    0.0,
+                    float(
+                        getattr(
+                            result,
+                            "glide_range_nm",
+                            0.0,
+                        )
+                        or 0.0
+                    ),
+                )
+
+        if (
+            glide_range_nm > 0.0
+            and map_state.range_nm > 0.0
+        ):
+            glide_radius = min(
+                radius,
+                radius
+                * glide_range_nm
+                / map_state.range_nm,
+            )
+
+            painter.setPen(
+                QPen(
+                    QColor(0, 255, 0),
+                    2,
+                )
+            )
+            painter.setBrush(
+                QBrush(
+                    Qt.BrushStyle.NoBrush
+                )
+            )
+            painter.drawEllipse(
+                center_x - int(glide_radius),
+                center_y - int(glide_radius),
+                int(glide_radius * 2),
+                int(glide_radius * 2),
+            )
+
+        selected_airport = None
+
+        if (
+            emergency_plan is not None
+            and emergency_plan.active
+            and emergency_plan.airport_identifier
+        ):
+            selected_airport = (
+                emergency_plan.airport_identifier.upper()
+            )
+
+        painter.setFont(
+            QFont(
+                "Arial",
+                8,
+                QFont.Weight.Bold,
+            )
+        )
 
         for airport in map_state.airports:
             if airport.distance_nm > map_state.range_nm:
                 continue
 
-            scale = airport.distance_nm / map_state.range_nm
-            angle = radians(airport.bearing_deg - 90)
+            scale = (
+                airport.distance_nm
+                / map_state.range_nm
+            )
 
-            airport_x = center_x + int(cos(angle) * radius * scale)
-            airport_y = center_y + int(sin(angle) * radius * scale)
+            angle = radians(
+                airport.bearing_deg - 90
+            )
 
-            painter.setPen(QPen(QColor(0, 255, 255), 2))
-            painter.drawEllipse(airport_x - 3, airport_y - 3, 6, 6)
-            painter.drawText(airport_x + 5, airport_y, airport.ident)
+            airport_x = center_x + int(
+                cos(angle)
+                * radius
+                * scale
+            )
+            airport_y = center_y + int(
+                sin(angle)
+                * radius
+                * scale
+            )
 
+            is_selected = (
+                selected_airport is not None
+                and airport.ident.upper()
+                == selected_airport
+            )
+
+            is_reachable = (
+                glide_range_nm > 0.0
+                and airport.distance_nm
+                <= glide_range_nm
+            )
+
+            if is_selected:
+                airport_color = QColor(
+                    255,
+                    0,
+                    0,
+                )
+            elif is_reachable:
+                airport_color = QColor(
+                    0,
+                    255,
+                    0,
+                )
+            else:
+                airport_color = QColor(
+                    130,
+                    130,
+                    130,
+                )
+
+            if is_selected:
+                painter.setPen(
+                    QPen(
+                        QColor(255, 0, 255),
+                        3,
+                    )
+                )
+                painter.drawLine(
+                    center_x,
+                    center_y,
+                    airport_x,
+                    airport_y,
+                )
+
+                painter.setPen(
+                    QPen(
+                        airport_color,
+                        3,
+                    )
+                )
+                painter.setBrush(
+                    QBrush(
+                        Qt.BrushStyle.NoBrush
+                    )
+                )
+                painter.drawEllipse(
+                    airport_x - 8,
+                    airport_y - 8,
+                    16,
+                    16,
+                )
+
+            painter.setPen(
+                QPen(
+                    airport_color,
+                    2,
+                )
+            )
+            painter.setBrush(
+                QBrush(
+                    airport_color
+                )
+            )
+            painter.drawEllipse(
+                airport_x - 3,
+                airport_y - 3,
+                6,
+                6,
+            )
+
+            painter.drawText(
+                airport_x + 6,
+                airport_y,
+                airport.ident,
+            )
+
+        painter.setBrush(
+            QBrush(
+                QColor(255, 220, 0)
+            )
+        )
+        painter.setPen(
+            QPen(
+                QColor(255, 220, 0),
+                2,
+            )
+        )
+        painter.drawPolygon(
+            QPolygonF(
+                [
+                    point(
+                        center_x,
+                        center_y - 12,
+                    ),
+                    point(
+                        center_x - 8,
+                        center_y + 10,
+                    ),
+                    point(
+                        center_x + 8,
+                        center_y + 10,
+                    ),
+                ]
+            )
+        )
+
+        if (
+            emergency_plan is not None
+            and emergency_plan.active
+        ):
+            painter.setFont(
+                QFont(
+                    "Arial",
+                    9,
+                    QFont.Weight.Bold,
+                )
+            )
+            painter.setPen(
+                QColor(255, 180, 0)
+            )
+            painter.drawText(
+                box_x + 10,
+                box_y + box_h - 8,
+                (
+                    f"GLIDE {glide_range_nm:.1f} NM"
+                ),
+            )
     def draw_route_overlay(self, painter: QPainter, width: int, height: int) -> None:
         route = self.route_manager.load_route()
         active_leg = self.route_manager.get_active_leg()
