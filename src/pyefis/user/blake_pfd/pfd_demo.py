@@ -79,6 +79,16 @@ from pyefis.user.blake_pfd.core.energy_state_calculator import (
     EnergyStateCalculator,
 )
 
+from pyefis.user.blake_pfd.core.terrain_sampler import (
+    TerrainSampler,
+)
+from pyefis.user.blake_pfd.core.terrain_profile_provider import (
+    TerrainProfileProvider,
+)
+from pyefis.user.blake_pfd.core.terrain_awareness_manager import (
+    TerrainAwarenessManager,
+)
+
 class BlakePfdDemo(QWidget):
     def __init__(self, use_hardware: bool = False, replay_log: str | None = None) -> None:
         super().__init__()
@@ -151,6 +161,37 @@ class BlakePfdDemo(QWidget):
         self.safe_taxi = SafeTaxiComputer()
         self.moving_map = MovingMapComputer()
         self.terrain = TerrainComputer()
+
+        self.terrain_sampler = TerrainSampler(
+            terrain=self.terrain,
+        )
+        
+        self.terrain_profile_provider = (
+            TerrainProfileProvider(
+                elevation_sampler=self.terrain_sampler,
+                sample_distances_nm=(
+                    1.0,
+                    2.0,
+                    3.0,
+                    5.0,
+                    8.0,
+                    10.0,
+                ),
+            )
+        )
+
+        self.terrain_awareness_manager = (
+            TerrainAwarenessManager(
+                profile_provider=(
+                    self.terrain_profile_provider
+                ),
+            )
+        )
+
+        self.terrain_awareness_state = (
+            self.terrain_awareness_manager.state
+        )
+
         self.obstacles = ObstacleComputer()
         self.weather = WeatherReader()
         self.event_manager = EventManager(self)
@@ -342,8 +383,12 @@ class BlakePfdDemo(QWidget):
             if self.pfd.position_valid:
                 nearby_airports = (
                     self.nearby_airport_provider.get_nearby_airports(
-                        aircraft_lat_deg=self.pfd.latitude_deg,
-                        aircraft_lon_deg=self.pfd.longitude_deg,
+                        aircraft_lat_deg=(
+                            self.pfd.latitude_deg
+                        ),
+                        aircraft_lon_deg=(
+                            self.pfd.longitude_deg
+                        ),
                     )
                 )
 
@@ -354,7 +399,9 @@ class BlakePfdDemo(QWidget):
                             self.pfd.pressure_alt_ft
                         ),
                         terrain_elevation_ft=0.0,
-                        wind_speed_kt=self.pfd.wind_speed_kt,
+                        wind_speed_kt=(
+                            self.pfd.wind_speed_kt
+                        ),
                         wind_from_deg=(
                             self.pfd.wind_direction_deg
                         ),
@@ -363,8 +410,10 @@ class BlakePfdDemo(QWidget):
                         ),
                     )
                 )
-                
-                advice = self.emergency_airport_state.advice
+
+                advice = (
+                    self.emergency_airport_state.advice
+                )
 
                 self.landing_site_status = (
                     self.landing_site_monitor.evaluate(
@@ -411,31 +460,79 @@ class BlakePfdDemo(QWidget):
                         emergency_active=False,
                     )
                 )
-                
+
+            if self.pfd.position_valid:
+                self.terrain_awareness_state = (
+                    self.terrain_awareness_manager.update(
+                        aircraft_lat_deg=(
+                            self.pfd.latitude_deg
+                        ),
+                        aircraft_lon_deg=(
+                            self.pfd.longitude_deg
+                        ),
+                        course_deg=(
+                            self.pfd.track_deg
+                        ),
+                        aircraft_altitude_ft=(
+                            self.pfd.pressure_alt_ft
+                        ),
+                        vertical_speed_fpm=(
+                            self.pfd.vsi_fpm
+                        ),
+                        ground_speed_kt=(
+                            self.pfd.ground_speed_kt
+                        ),
+                        position_valid=True,
+                    )
+                )
+
+            else:
+                self.terrain_awareness_manager.clear()
+
+                self.terrain_awareness_state = (
+                    self.terrain_awareness_manager.state
+                )
+
             selected_site_distance_nm = getattr(
                 self.emergency_landing_plan,
-                    "distance_nm",
-                    None,
+                "distance_nm",
+                None,
             )
 
             glide_range_nm = getattr(
                 self.emergency_airport_state.result,
-                    "glide_range_nm",
-                    None,
+                "glide_range_nm",
+                None,
             )
+
+            terrain_elevation_ft = 0.0
+
+            if self.terrain_awareness_state.valid:
+                profile_points = (
+                    self.terrain_awareness_state
+                    .profile
+                    .points
+                )
+
+                if profile_points:
+                    terrain_elevation_ft = (
+                        profile_points[0].elevation_ft
+                    )
 
             self.energy_state = (
                 self.energy_state_calculator.calculate(
                     altitude_ft=(
                         self.pfd.pressure_alt_ft
                     ),
-                    terrain_elevation_ft=0.0,
+                    terrain_elevation_ft=(
+                        terrain_elevation_ft
+                    ),
                     airspeed_kt=(
                         self.pfd.ias_kt
                     ),
                     timestamp_s=monotonic(),
                     selected_site_distance_nm=(
-                    selected_site_distance_nm
+                        selected_site_distance_nm
                     ),
                     glide_range_nm=glide_range_nm,
                     target_altitude_ft=None,
