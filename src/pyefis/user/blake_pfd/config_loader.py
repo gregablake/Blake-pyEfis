@@ -91,7 +91,22 @@ class SyntheticVisionConfig:
     terrain_database_path: str = ""
     obstacle_database_path: str = ""
     airport_database_path: str = ""
-
+    
+@dataclass
+class TerrainConfig:
+    source: str = "fallback"
+    srtm_directory: str = ""
+    sample_distances_nm: tuple[
+        float,
+        ...,
+    ] = (
+        1.0,
+        2.0,
+        3.0,
+        5.0,
+        8.0,
+        10.0,
+    )
 
 @dataclass
 class StratuxConfig:
@@ -110,6 +125,7 @@ class BlakePfdConfig:
     performance: AircraftPerformanceConfig
     altitude: AltitudeConfig
     synthetic_vision: SyntheticVisionConfig
+    terrain: TerrainConfig
     stratux: StratuxConfig
     route: RouteConfig
     navigation_scaling: NavigationScalingConfig
@@ -197,9 +213,30 @@ def load_config(path: Path = CONFIG_PATH) -> BlakePfdConfig:
                 {},
             )
         ),
-        altitude=AltitudeConfig(**raw.get("altitude", {})),
-        synthetic_vision=SyntheticVisionConfig(**raw.get("synthetic_vision", {})),
-        stratux=StratuxConfig(**raw.get("stratux", {})),
+        altitude=AltitudeConfig(
+            **raw.get(
+                "altitude",
+                {},
+            )
+        ),
+        synthetic_vision=SyntheticVisionConfig(
+            **raw.get(
+                "synthetic_vision",
+                {},
+            )
+        ),
+        terrain=TerrainConfig(
+            **raw.get(
+                "terrain",
+                {},
+            )
+        ),
+        stratux=StratuxConfig(
+            **raw.get(
+                "stratux",
+                {},
+            )
+        ),
         route=RouteConfig(**raw.get("route", {})),
         navigation_scaling=NavigationScalingConfig(**raw.get("navigation_scaling", {})),
         vnav=VnavConfig(**raw.get("vnav", {})),
