@@ -79,8 +79,8 @@ from pyefis.user.blake_pfd.core.energy_state_calculator import (
     EnergyStateCalculator,
 )
 
-from pyefis.user.blake_pfd.core.terrain_sampler import (
-    TerrainSampler,
+from pyefis.user.blake_pfd.core.terrain_source_factory import (
+    build_terrain_source,
 )
 from pyefis.user.blake_pfd.core.terrain_profile_provider import (
     TerrainProfileProvider,
@@ -162,20 +162,36 @@ class BlakePfdDemo(QWidget):
         self.moving_map = MovingMapComputer()
         self.terrain = TerrainComputer()
 
-        self.terrain_sampler = TerrainSampler(
-            terrain=self.terrain,
+        self.terrain_source_bundle = (
+            build_terrain_source(
+                terrain_config=self.config.terrain,
+                fallback_terrain=self.terrain,
+            )
         )
-        
+
+        self.terrain_sampler = (
+            self.terrain_source_bundle.sampler
+        )
+
+        self.terrain_source_name = (
+            self.terrain_source_bundle.source_name
+        )
+
+        self.real_terrain_enabled = (
+            self.terrain_source_bundle
+            .real_terrain_enabled
+        )
+
+        self.terrain_source_message = (
+            self.terrain_source_bundle.message
+        )
+
         self.terrain_profile_provider = (
             TerrainProfileProvider(
                 elevation_sampler=self.terrain_sampler,
-                sample_distances_nm=(
-                    1.0,
-                    2.0,
-                    3.0,
-                    5.0,
-                    8.0,
-                    10.0,
+                sample_distances_nm=tuple(
+                    self.config.terrain
+                    .sample_distances_nm
                 ),
             )
         )
@@ -1868,7 +1884,17 @@ class BlakePfdDemo(QWidget):
 
         painter.setFont(QFont("Arial", 12, QFont.Weight.Bold))
         painter.setPen(color)
-        painter.drawText(box_x + 10, box_y + 25, "TERRAIN")
+        source_label = (
+            "SRTM"
+            if self.real_terrain_enabled
+            else "FALLBACK"
+        )
+
+        painter.drawText(
+            box_x + 10,
+            box_y + 25,
+            f"TERRAIN [{source_label}]",
+        )
 
         painter.setPen(QColor(255, 255, 255))
         painter.drawText(box_x + 10, box_y + 52, f"ELEV {terrain_state.terrain_elevation_ft:.0f} FT")
