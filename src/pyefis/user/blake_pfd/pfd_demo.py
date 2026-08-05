@@ -100,6 +100,9 @@ from pyefis.user.blake_pfd.core.cfit_manager import (
     CfitManager,
 )
 
+from pyefis.user.blake_pfd.core.terrain_warning_presenter import (
+    TerrainWarningPresenter,
+)
 class BlakePfdDemo(QWidget):
     def __init__(self, use_hardware: bool = False, replay_log: str | None = None) -> None:
         super().__init__()
@@ -249,6 +252,19 @@ class BlakePfdDemo(QWidget):
         
         self.cfit_manager = CfitManager()
         self.cfit_state = self.cfit_manager.state
+        
+        self.terrain_warning_presenter = (
+            TerrainWarningPresenter()
+        )
+
+        self.terrain_warning_presentation = (
+            self.terrain_warning_presenter.build(
+                terrain_alert_state=(
+                    self.terrain_alert_state
+                ),
+                cfit_state=self.cfit_state,
+            )
+        )
 
         self.obstacles = ObstacleComputer()
         self.weather = WeatherReader()
@@ -616,6 +632,15 @@ class BlakePfdDemo(QWidget):
                 self.cfit_state = (
                     self.cfit_manager.state
                 )
+                
+            self.terrain_warning_presentation = (
+                self.terrain_warning_presenter.build(
+                    terrain_alert_state=(
+                        self.terrain_alert_state
+                    ),
+                    cfit_state=self.cfit_state,
+                )
+            )
 
             selected_site_distance_nm = getattr(
                 self.emergency_landing_plan,
@@ -803,6 +828,78 @@ class BlakePfdDemo(QWidget):
         self.flight_computer.config = self.config
 
         print(f"EMS test mode: {next_mode}")
+        
+    def draw_terrain_warning_banner(
+        self,
+        painter,
+        width: int,
+        height: int,
+    ) -> None:
+
+        presentation = (
+            self.terrain_warning_presentation
+        )
+
+        if not presentation.visible:
+            return
+
+        if presentation.priority == "CRITICAL":
+            color = QColor(220, 0, 0)
+
+        elif presentation.priority == "WARNING":
+            color = QColor(190, 30, 30)
+
+        else:
+            color = QColor(255, 180, 0)
+
+        box_height = 72
+
+        painter.fillRect(
+            0,
+            0,
+            width,
+            box_height,
+            color,
+        )
+
+        painter.setPen(Qt.GlobalColor.white)
+
+        font = painter.font()
+
+        font.setBold(True)
+       font.setPointSize(22)
+
+        painter.setFont(font)
+
+        painter.drawText(
+            20,
+            28,
+            presentation.title,
+        )
+
+        font.setPointSize(18)
+
+        painter.setFont(font)
+
+        painter.drawText(
+            20,
+            55,
+            presentation.message,
+        )
+
+        if presentation.detail:
+
+            font.setBold(False)
+            font.setPointSize(11)
+
+            painter.setFont(font)
+
+            painter.drawText(
+                width - 250,
+                55,
+                presentation.detail,
+            )
+        
 
     def draw_warning_strip(self, painter: QPainter, width: int) -> None:
         self.warning_manager.draw(painter, width)
@@ -901,7 +998,11 @@ class BlakePfdDemo(QWidget):
                 aircraft_lon=-84.5120,
             )
             self.draw_terrain_status_box(painter, terrain_state, width, height)
-            self.draw_terrain_alert(painter, terrain_state, width, height)
+            self.draw_terrain_warning_banner(
+                painter,
+                width,
+                height,
+            )
 
         if features.show_obstacles:
             obstacle_state = self.obstacles.update(
