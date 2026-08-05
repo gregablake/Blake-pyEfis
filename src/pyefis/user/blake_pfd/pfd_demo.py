@@ -89,6 +89,13 @@ from pyefis.user.blake_pfd.core.terrain_awareness_manager import (
     TerrainAwarenessManager,
 )
 
+from pyefis.user.blake_pfd.core.terrain_startup_validator import (
+    TerrainStartupValidator,
+)
+from pyefis.user.blake_pfd.core.terrain_alert_gate import (
+    TerrainAlertGate,
+)
+
 class BlakePfdDemo(QWidget):
     def __init__(self, use_hardware: bool = False, replay_log: str | None = None) -> None:
         super().__init__()
@@ -206,6 +213,34 @@ class BlakePfdDemo(QWidget):
 
         self.terrain_awareness_state = (
             self.terrain_awareness_manager.state
+        )
+        
+        self.terrain_startup_validator = (
+            TerrainStartupValidator()
+        )
+
+        self.terrain_startup_status = (
+            self.terrain_startup_validator.validate(
+                terrain_config=self.config.terrain,
+            )
+        )
+
+        self.terrain_alert_gate = (
+            TerrainAlertGate()
+        )
+
+        self.terrain_alert_state = (
+            self.terrain_alert_gate.evaluate(
+                startup_status=(
+                    self.terrain_startup_status
+                ),
+                terrain_awareness_state=(
+                    self.terrain_awareness_state
+                ),
+                real_terrain_enabled=(
+                    self.real_terrain_enabled
+                ),
+            )
         )
 
         self.obstacles = ObstacleComputer()
@@ -478,6 +513,20 @@ class BlakePfdDemo(QWidget):
                 )
 
             if self.pfd.position_valid:
+                self.terrain_startup_status = (
+                    self.terrain_startup_validator.validate(
+                        terrain_config=(
+                            self.config.terrain
+                        ),
+                        aircraft_lat_deg=(
+                            self.pfd.latitude_deg
+                        ),
+                        aircraft_lon_deg=(
+                            self.pfd.longitude_deg
+                        ),
+                    )
+                )
+
                 self.terrain_awareness_state = (
                     self.terrain_awareness_manager.update(
                         aircraft_lat_deg=(
@@ -508,6 +557,20 @@ class BlakePfdDemo(QWidget):
                 self.terrain_awareness_state = (
                     self.terrain_awareness_manager.state
                 )
+
+            self.terrain_alert_state = (
+                self.terrain_alert_gate.evaluate(
+                    startup_status=(
+                        self.terrain_startup_status
+                    ),
+                    terrain_awareness_state=(
+                        self.terrain_awareness_state
+                    ),
+                    real_terrain_enabled=(
+                        self.real_terrain_enabled
+                    ),
+                )
+            )
 
             selected_site_distance_nm = getattr(
                 self.emergency_landing_plan,
