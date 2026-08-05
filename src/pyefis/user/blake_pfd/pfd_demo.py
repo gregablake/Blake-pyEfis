@@ -96,6 +96,10 @@ from pyefis.user.blake_pfd.core.terrain_alert_gate import (
     TerrainAlertGate,
 )
 
+from pyefis.user.blake_pfd.core.cfit_manager import (
+    CfitManager,
+)
+
 class BlakePfdDemo(QWidget):
     def __init__(self, use_hardware: bool = False, replay_log: str | None = None) -> None:
         super().__init__()
@@ -242,6 +246,9 @@ class BlakePfdDemo(QWidget):
                 ),
             )
         )
+        
+        self.cfit_manager = CfitManager()
+        self.cfit_state = self.cfit_manager.state
 
         self.obstacles = ObstacleComputer()
         self.weather = WeatherReader()
@@ -571,6 +578,44 @@ class BlakePfdDemo(QWidget):
                     ),
                 )
             )
+            
+            terrain_profile = (
+                self.terrain_awareness_state.profile
+            )
+
+            cfit_inputs_valid = (
+                self.pfd.position_valid
+                and self.real_terrain_enabled
+                and (
+                    self.terrain_startup_status
+                    .predictive_alerts_enabled
+                )
+                and self.terrain_awareness_state.valid
+                and bool(terrain_profile.points)
+            )
+
+            if cfit_inputs_valid:
+                self.cfit_state = (
+                    self.cfit_manager.update(
+                        aircraft_altitude_ft=(
+                            self.pfd.pressure_alt_ft
+                        ),
+                        vertical_speed_fpm=(
+                            self.pfd.vsi_fpm
+                        ),
+                        ground_speed_kt=(
+                            self.pfd.ground_speed_kt
+                        ),
+                        terrain_profile=(
+                            terrain_profile
+                        ),
+                    )
+                )
+            else:
+                self.cfit_manager.clear()
+                self.cfit_state = (
+                    self.cfit_manager.state
+                )
 
             selected_site_distance_nm = getattr(
                 self.emergency_landing_plan,
