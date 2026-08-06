@@ -108,6 +108,10 @@ from pyefis.user.blake_pfd.core.flight_path_marker import (
     FlightPathMarker,
 )
 
+from pyefis.user.blake_pfd.core.hits_guidance import (
+    HitsGuidance,
+)
+
 class BlakePfdDemo(QWidget):
     def __init__(self, use_hardware: bool = False, replay_log: str | None = None) -> None:
         super().__init__()
@@ -187,6 +191,19 @@ class BlakePfdDemo(QWidget):
                 vertical_speed_fpm=0.0,
             )
         )
+        
+        self.hits_guidance = HitsGuidance(
+            box_count=6,
+        )
+
+        self.hits_guidance_state = (
+            self.hits_guidance.calculate(
+                cdi=0.0,
+                vdi=0.0,
+                navigation_valid=False,
+            )
+        )
+        
         self.safe_taxi = SafeTaxiComputer()
         self.moving_map = MovingMapComputer()
         self.terrain = TerrainComputer()
@@ -465,6 +482,16 @@ class BlakePfdDemo(QWidget):
                     ),
                     vertical_speed_fpm=(
                         self.pfd.vsi_fpm
+                    ),
+                )
+            )
+            
+            self.hits_guidance_state = (
+                self.hits_guidance.calculate(
+                    cdi=self.pfd.cdi,
+                    vdi=self.pfd.vdi,
+                    navigation_valid=(
+                        self.pfd.position_valid
                     ),
                 )
             )
@@ -928,6 +955,97 @@ class BlakePfdDemo(QWidget):
                 presentation.detail,
             )
             
+    def draw_hits_guidance(
+        self,
+        painter: QPainter,
+        width: int,
+        height: int,
+    ) -> None:
+        state = self.hits_guidance_state
+
+        if not state.valid:
+            return
+
+        if not state.boxes:
+            return
+
+        painter.save()
+
+        painter.setBrush(
+            Qt.BrushStyle.NoBrush
+        )
+
+        for box in reversed(
+            state.boxes
+        ):
+            center_x = (
+                box.center_x_fraction
+                * width
+            )
+
+            center_y = (
+                box.center_y_fraction
+                * height
+            )
+
+            box_width = (
+                box.width_fraction
+                * width
+            )
+
+            box_height = (
+                box.height_fraction
+                * height
+            )
+
+            left = (
+                center_x
+                - box_width / 2.0
+            )
+
+            top = (
+                center_y
+                - box_height / 2.0
+            )
+
+            line_width = (
+                3.0
+                - box.depth_fraction
+                * 1.5
+            )
+
+            opacity = int(
+                255
+                - box.depth_fraction
+                * 100
+            )
+
+            painter.setPen(
+                QPen(
+                    QColor(
+                        255,
+                        0,
+                        255,
+                        opacity,
+                    ),
+                    max(
+                        1.0,
+                        line_width,
+                    ),
+                )
+            )
+
+            painter.drawRect(
+                QRectF(
+                    left,
+                    top,
+                    box_width,
+                    box_height,
+                )
+            )
+
+        painter.restore()
+            
     def draw_flight_path_marker(
         self,
         painter: QPainter,
@@ -1072,9 +1190,19 @@ class BlakePfdDemo(QWidget):
             self.draw_synthetic_vision(painter, self.pfd, width, height)
 
         if features.show_attitude:
-            self.draw_attitude(painter, self.pfd, width, height)
-            
-        if features.show_attitude:
+            self.draw_attitude(
+                painter,
+                self.pfd,
+                width,
+                height,
+            )
+
+            self.draw_hits_guidance(
+                painter,
+                width,
+                height,
+            )
+
             self.draw_flight_path_marker(
                 painter,
                 width,
