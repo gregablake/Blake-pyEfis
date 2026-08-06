@@ -103,6 +103,11 @@ from pyefis.user.blake_pfd.core.cfit_manager import (
 from pyefis.user.blake_pfd.core.terrain_warning_presenter import (
     TerrainWarningPresenter,
 )
+
+from pyefis.user.blake_pfd.core.flight_path_marker import (
+    FlightPathMarker,
+)
+
 class BlakePfdDemo(QWidget):
     def __init__(self, use_hardware: bool = False, replay_log: str | None = None) -> None:
         super().__init__()
@@ -172,6 +177,16 @@ class BlakePfdDemo(QWidget):
         self.route_manager = RouteManager()
         self.flight_computer = FlightComputer()
         self.synthetic_vision = SyntheticVisionComputer()
+        self.flight_path_marker = FlightPathMarker()
+
+        self.flight_path_marker_state = (
+            self.flight_path_marker.calculate(
+                track_deg=0.0,
+                heading_deg=0.0,
+                ground_speed_kt=0.0,
+                vertical_speed_fpm=0.0,
+            )
+        )
         self.safe_taxi = SafeTaxiComputer()
         self.moving_map = MovingMapComputer()
         self.terrain = TerrainComputer()
@@ -439,6 +454,19 @@ class BlakePfdDemo(QWidget):
             self.flight_state = self.flight_state_manager.update(
                 self.pfd,
                 engine=engine,
+            )
+            
+            self.flight_path_marker_state = (
+                self.flight_path_marker.calculate(
+                    track_deg=self.pfd.track_deg,
+                    heading_deg=self.pfd.heading_deg,
+                    ground_speed_kt=(
+                        self.pfd.ground_speed_kt
+                    ),
+                    vertical_speed_fpm=(
+                        self.pfd.vsi_fpm
+                    ),
+                )
             )
             
             self.emergency_status = (
@@ -899,6 +927,115 @@ class BlakePfdDemo(QWidget):
                 55,
                 presentation.detail,
             )
+            
+    def draw_flight_path_marker(
+        self,
+        painter: QPainter,
+        width: int,
+        height: int,
+    ) -> None:
+        marker = self.flight_path_marker_state
+
+        if not marker.valid:
+            return
+
+        pixels_per_degree = 8.0
+
+        center_x = width / 2.0
+        center_y = height / 2.0
+
+        marker_x = (
+            center_x
+            + marker.x_offset_deg
+            * pixels_per_degree
+        )
+
+        marker_y = (
+            center_y
+            + marker.y_offset_deg
+            * pixels_per_degree
+        )
+
+        marker_x = max(
+            35.0,
+            min(
+                width - 35.0,
+                marker_x,
+            ),
+        )
+
+        marker_y = max(
+            85.0,
+            min(
+                height - 85.0,
+                marker_y,
+            ),
+        )
+
+        radius = 10.0
+        wing_length = 14.0
+        tail_length = 10.0
+
+        painter.save()
+
+        painter.setBrush(
+            Qt.BrushStyle.NoBrush
+        )
+
+        painter.setPen(
+            QPen(
+                QColor(
+                    0,
+                    255,
+                    120,
+                ),
+                3,
+            )
+        )
+
+        painter.drawEllipse(
+            QPointF(
+                marker_x,
+                marker_y,
+            ),
+            radius,
+            radius,
+        )
+
+        painter.drawLine(
+            QPointF(
+                marker_x - radius - wing_length,
+                marker_y,
+            ),
+            QPointF(
+                marker_x - radius,
+                marker_y,
+            ),
+        )
+
+        painter.drawLine(
+            QPointF(
+                marker_x + radius,
+                marker_y,
+            ),
+            QPointF(
+                marker_x + radius + wing_length,
+                marker_y,
+            ),
+        )
+
+        painter.drawLine(
+            QPointF(
+                marker_x,
+                marker_y + radius,
+            ),
+            QPointF(
+                marker_x,
+                marker_y + radius + tail_length,
+            ),
+        )
+
+        painter.restore()
         
 
     def draw_warning_strip(self, painter: QPainter, width: int) -> None:
@@ -936,6 +1073,13 @@ class BlakePfdDemo(QWidget):
 
         if features.show_attitude:
             self.draw_attitude(painter, self.pfd, width, height)
+            
+        if features.show_attitude:
+            self.draw_flight_path_marker(
+                painter,
+                width,
+                height,
+            )
 
         if features.show_airspeed:
             self.draw_airspeed_tape(painter, self.pfd, width, height)
