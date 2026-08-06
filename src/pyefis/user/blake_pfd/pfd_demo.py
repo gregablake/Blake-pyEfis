@@ -867,7 +867,7 @@ class BlakePfdDemo(QWidget):
         font = painter.font()
 
         font.setBold(True)
-       font.setPointSize(22)
+        font.setPointSize(22)
 
         painter.setFont(font)
 
