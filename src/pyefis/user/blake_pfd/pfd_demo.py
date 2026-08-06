@@ -507,6 +507,7 @@ class BlakePfdDemo(QWidget):
                     vdi=self.pfd.vdi,
                     navigation_valid=(
                         self.pfd.position_valid
+                        and self.config.guidance.hits_enabled
                     ),
                 )
             )
@@ -518,7 +519,10 @@ class BlakePfdDemo(QWidget):
                     navigation_valid=(
                         self.pfd.position_valid
                     ),
-                    enabled=True,
+                    enabled=(
+                        self.config.guidance
+                        .flight_director_enabled
+                    ),
                 )
             )
             

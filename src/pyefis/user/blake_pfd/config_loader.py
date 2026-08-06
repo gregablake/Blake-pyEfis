@@ -93,6 +93,12 @@ class SyntheticVisionConfig:
     airport_database_path: str = ""
     
 @dataclass
+class GuidanceConfig:
+    hits_enabled: bool = True
+    flight_director_enabled: bool = True   
+    
+     
+@dataclass
 class TerrainConfig:
     source: str = "fallback"
     srtm_directory: str = ""
@@ -125,6 +131,7 @@ class BlakePfdConfig:
     performance: AircraftPerformanceConfig
     altitude: AltitudeConfig
     synthetic_vision: SyntheticVisionConfig
+    guidance: GuidanceConfig
     terrain: TerrainConfig
     stratux: StratuxConfig
     route: RouteConfig
@@ -222,6 +229,12 @@ def load_config(path: Path = CONFIG_PATH) -> BlakePfdConfig:
         synthetic_vision=SyntheticVisionConfig(
             **raw.get(
                 "synthetic_vision",
+                {},
+            )
+        ),  
+        guidance=GuidanceConfig(
+            **raw.get(
+                "guidance",
                 {},
             )
         ),

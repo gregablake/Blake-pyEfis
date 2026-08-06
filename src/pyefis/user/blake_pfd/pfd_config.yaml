@@ -62,7 +62,10 @@ synthetic_vision:
   terrain_database_path: ''
   obstacle_database_path: ''
   airport_database_path: ''
-
+guidance:
+  hits_enabled: true
+  flight_director_enabled: true
+  
 terrain:
   source: fallback
   srtm_directory: ''
