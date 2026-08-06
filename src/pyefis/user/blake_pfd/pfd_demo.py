@@ -112,6 +112,10 @@ from pyefis.user.blake_pfd.core.hits_guidance import (
     HitsGuidance,
 )
 
+from pyefis.user.blake_pfd.core.flight_director import (
+    FlightDirector,
+)
+
 class BlakePfdDemo(QWidget):
     def __init__(self, use_hardware: bool = False, replay_log: str | None = None) -> None:
         super().__init__()
@@ -201,6 +205,17 @@ class BlakePfdDemo(QWidget):
                 cdi=0.0,
                 vdi=0.0,
                 navigation_valid=False,
+            )
+        )
+        
+        self.flight_director = FlightDirector()
+
+        self.flight_director_state = (
+            self.flight_director.calculate(
+                cdi=0.0,
+                vdi=0.0,
+                navigation_valid=False,
+                enabled=False,
             )
         )
         
@@ -493,6 +508,17 @@ class BlakePfdDemo(QWidget):
                     navigation_valid=(
                         self.pfd.position_valid
                     ),
+                )
+            )
+            
+            self.flight_director_state = (
+                self.flight_director.calculate(
+                    cdi=self.pfd.cdi,
+                    vdi=self.pfd.vdi,
+                    navigation_valid=(
+                        self.pfd.position_valid
+                    ),
+                    enabled=True,
                 )
             )
             
@@ -1044,8 +1070,135 @@ class BlakePfdDemo(QWidget):
                 )
             )
 
-        painter.restore()
-            
+    painter.restore()
+         
+    def draw_flight_director(
+        self,
+        painter: QPainter,
+        width: int,
+        height: int,
+    ) -> None:
+        state = self.flight_director_state
+
+        if not state.valid or not state.active:
+            return
+
+        pixels_per_degree = 6.0
+
+        center_x = width / 2.0
+        center_y = height / 2.0
+
+        roll_offset_px = (
+            state.roll_command_deg
+            * pixels_per_degree
+        )
+
+        pitch_offset_px = (
+            state.pitch_command_deg
+            * pixels_per_degree
+        )
+
+        command_x = (
+            center_x
+            + roll_offset_px
+        )
+
+        command_y = (
+            center_y
+            - pitch_offset_px
+        )
+
+        command_x = max(
+            80.0,
+            min(
+                width - 80.0,
+                command_x,
+            ),
+        )
+
+        command_y = max(
+            100.0,
+            min(
+                height - 100.0,
+                command_y,
+            ),
+        )
+
+        horizontal_bar_half_width = 55.0
+        vertical_bar_half_height = 42.0
+        center_gap = 12.0
+
+        painter.save()
+
+        painter.setBrush(
+            Qt.BrushStyle.NoBrush
+        )
+
+        painter.setPen(
+            QPen(
+                QColor(
+                    255,
+                    0,
+                    255,
+                ),
+                6,
+            )
+        )
+
+        painter.drawLine(
+            QPointF(
+                command_x
+                - horizontal_bar_half_width,
+                command_y,
+            ),
+            QPointF(
+                command_x
+                - center_gap,
+                command_y,
+            ),
+        )
+
+        painter.drawLine(
+            QPointF(
+                command_x
+                + center_gap,
+                command_y,
+            ),
+            QPointF(
+                command_x
+                + horizontal_bar_half_width,
+                command_y,
+            ),
+        )
+
+        painter.drawLine(
+            QPointF(
+                command_x,
+                command_y
+                - vertical_bar_half_height,
+            ),
+            QPointF(
+                command_x,
+                command_y
+                - center_gap,
+            ),
+        )
+
+        painter.drawLine(
+            QPointF(
+                command_x,
+                command_y
+                + center_gap,
+            ),
+            QPointF(
+                command_x,
+                command_y
+                + vertical_bar_half_height,
+            ),
+        )
+
+    painter.restore()   
+    
     def draw_flight_path_marker(
         self,
         painter: QPainter,
@@ -1198,6 +1351,12 @@ class BlakePfdDemo(QWidget):
             )
 
             self.draw_hits_guidance(
+                painter,
+                width,
+                height,
+            )
+
+            self.draw_flight_director(
                 painter,
                 width,
                 height,
