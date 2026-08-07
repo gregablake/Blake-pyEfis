@@ -116,6 +116,11 @@ from pyefis.user.blake_pfd.core.flight_director import (
     FlightDirector,
 )
 
+from pyefis.user.blake_pfd.core.touch_guidance_menu import (
+    GuidanceTouchSettings,
+    TouchGuidanceMenu,
+)
+
 class BlakePfdDemo(QWidget):
     def __init__(self, use_hardware: bool = False, replay_log: str | None = None) -> None:
         super().__init__()
@@ -217,6 +222,32 @@ class BlakePfdDemo(QWidget):
                 navigation_valid=False,
                 enabled=False,
             )
+        )
+        
+        self.touch_guidance_menu = (
+            TouchGuidanceMenu()
+        )
+
+        self.guidance_touch_settings = (
+            GuidanceTouchSettings(
+                hits_enabled=(
+                    self.config.guidance
+                    .hits_enabled
+                ),
+                flight_director_enabled=(
+                    self.config.guidance
+                    .flight_director_enabled
+                ),
+                flight_path_marker_enabled=True,
+                synthetic_vision_enabled=(
+                    self.config.features
+                    .show_synthetic_vision
+                ),
+            )
+        )
+
+        self.touch_guidance_menu_state = (
+            self.touch_guidance_menu.state
         )
         
         self.safe_taxi = SafeTaxiComputer()
@@ -507,7 +538,10 @@ class BlakePfdDemo(QWidget):
                     vdi=self.pfd.vdi,
                     navigation_valid=(
                         self.pfd.position_valid
-                        and self.config.guidance.hits_enabled
+                        and (
+                            self.guidance_touch_settings
+                            .hits_enabled
+                        )
                     ),
                 )
             )
@@ -520,7 +554,7 @@ class BlakePfdDemo(QWidget):
                         self.pfd.position_valid
                     ),
                     enabled=(
-                        self.config.guidance
+                        self.guidance_touch_settings
                         .flight_director_enabled
                     ),
                 )
@@ -858,6 +892,90 @@ class BlakePfdDemo(QWidget):
             )
 
         self.update()
+        
+    def mousePressEvent(
+        self,
+        event,
+    ) -> None:  # noqa: N802
+        position = event.position()
+
+        touch_x = position.x()
+        touch_y = position.y()
+
+        button_width = 150.0
+        button_height = 52.0
+        margin = 16.0
+
+        guidance_button_x = (
+            self.width()
+            - button_width
+            - margin
+        )
+
+        guidance_button_y = (
+            self.height()
+            - button_height
+            - margin
+        )
+
+        guidance_button = QRectF(
+            guidance_button_x,
+            guidance_button_y,
+            button_width,
+            button_height,
+        )
+
+        if guidance_button.contains(
+            QPointF(
+                touch_x,
+                touch_y,
+            )
+        ):
+            self.touch_guidance_menu_state = (
+                self.touch_guidance_menu
+                .toggle_visibility(
+                    screen_width=self.width(),
+                    screen_height=self.height(),
+                    settings=(
+                        self.guidance_touch_settings
+                    ),
+                )
+            )
+
+            self.update()
+            event.accept()
+            return
+
+        if self.touch_guidance_menu_state.visible:
+            previous_settings = (
+                self.guidance_touch_settings
+            )
+
+            self.touch_guidance_menu_state = (
+                self.touch_guidance_menu
+                .handle_touch(
+                    point_x=touch_x,
+                    point_y=touch_y,
+                )
+            )
+
+            self.guidance_touch_settings = (
+                self.touch_guidance_menu_state
+                .settings
+            )
+
+            if (
+                self.guidance_touch_settings
+                != previous_settings
+            ):
+                self.update()
+
+            event.accept()
+            return
+
+        super().mousePressEvent(
+            event
+        )
 
     def keyPressEvent(self, event) -> None:  # noqa: N802
         self.event_manager.handle_key(event)
@@ -1312,7 +1430,164 @@ class BlakePfdDemo(QWidget):
 
         painter.restore()
         
+    def draw_guidance_touch_controls(
+        self,
+        painter: QPainter,
+        width: int,
+        height: int,
+    ) -> None:
+        button_width = 150.0
+        button_height = 52.0
+        margin = 16.0
 
+        button_x = (
+            width
+            - button_width
+            - margin
+        )
+
+        button_y = (
+            height
+            - button_height
+            - margin
+        )
+
+        painter.save()
+
+        painter.setPen(
+            QPen(
+                QColor(
+                    255,
+                    255,
+                    255,
+                ),
+                2,
+            )
+        )
+
+        painter.setBrush(
+            QBrush(
+                QColor(
+                    35,
+                    35,
+                    45,
+                    230,
+                )
+            )
+        )
+
+        painter.drawRoundedRect(
+            QRectF(
+                button_x,
+                button_y,
+                button_width,
+                button_height,
+            ),
+            8.0,
+            8.0,
+        )
+
+        font = painter.font()
+        font.setBold(True)
+        font.setPointSize(14)
+        painter.setFont(font)
+
+        painter.drawText(
+            QRectF(
+                button_x,
+                button_y,
+                button_width,
+                button_height,
+            ),
+            Qt.AlignmentFlag.AlignCenter,
+            "GUIDANCE",
+        )
+
+        if not self.touch_guidance_menu_state.visible:
+            painter.restore()
+            return
+
+        for button in (
+            self.touch_guidance_menu_state.buttons
+        ):
+            if button.enabled:
+                fill_color = QColor(
+                    0,
+                    125,
+                    80,
+                    235,
+                )
+                state_text = "ON"
+            else:
+                fill_color = QColor(
+                    70,
+                    70,
+                    80,
+                    235,
+                )
+                state_text = "OFF"
+
+            painter.setBrush(
+                QBrush(
+                    fill_color
+                )
+            )
+
+            painter.setPen(
+                QPen(
+                    QColor(
+                        255,
+                        255,
+                        255,
+                    ),
+                    2,
+                )
+            )
+
+            painter.drawRoundedRect(
+                QRectF(
+                    button.bounds.x,
+                    button.bounds.y,
+                    button.bounds.width,
+                    button.bounds.height,
+                ),
+                10.0,
+                10.0,
+            )
+
+            font.setPointSize(13)
+            font.setBold(True)
+            painter.setFont(font)
+
+            painter.drawText(
+                QRectF(
+                    button.bounds.x + 16.0,
+                    button.bounds.y,
+                    button.bounds.width - 90.0,
+                    button.bounds.height,
+                ),
+                Qt.AlignmentFlag.AlignVCenter,
+                button.label,
+            )
+
+            painter.drawText(
+                QRectF(
+                    button.bounds.x
+                    + button.bounds.width
+                    - 70.0,
+                    button.bounds.y,
+                    55.0,
+                    button.bounds.height,
+                ),
+                (
+                    Qt.AlignmentFlag.AlignVCenter
+                    | Qt.AlignmentFlag.AlignRight
+                ),
+                state_text,
+            )
+
+        painter.restore()
+    
     def draw_warning_strip(self, painter: QPainter, width: int) -> None:
         self.warning_manager.draw(painter, width)
 
@@ -1343,8 +1618,19 @@ class BlakePfdDemo(QWidget):
             painter.end()
             return
 
-        if features.show_synthetic_vision:
-            self.draw_synthetic_vision(painter, self.pfd, width, height)
+        if (
+            features.show_synthetic_vision
+            and (
+                self.guidance_touch_settings
+                .synthetic_vision_enabled
+            )
+        ):
+            self.draw_synthetic_vision(
+                painter,
+                self.pfd,
+                width,
+                height,
+            )
 
         if features.show_attitude:
             self.draw_attitude(
@@ -1366,12 +1652,15 @@ class BlakePfdDemo(QWidget):
                 height,
             )
 
-            self.draw_flight_path_marker(
-                painter,
-                width,
-                height,
-            )
-
+            if (
+                self.guidance_touch_settings
+                .flight_path_marker_enabled
+            ):
+                self.draw_flight_path_marker(
+                    painter,
+                    width,
+                    height,
+                )
         if features.show_airspeed:
             self.draw_airspeed_tape(painter, self.pfd, width, height)
 
@@ -1464,8 +1753,11 @@ class BlakePfdDemo(QWidget):
             height,
         )
 
-        self.draw_warning_strip(painter, width)
-        painter.end()
+        self.draw_guidance_touch_controls(
+            painter,
+            width,
+            height,
+        )
 
     def draw_background(self, painter: QPainter, width: int, height: int) -> None:
         painter.fillRect(0, 0, width, height, QColor(5, 5, 8))
