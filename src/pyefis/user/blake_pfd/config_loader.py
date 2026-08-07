@@ -51,6 +51,7 @@ class FeatureConfig:
     show_vdi: bool = True
     show_hsi: bool = True
     show_synthetic_vision: bool = False
+    show_flight_path_marker: bool = True
     show_terrain: bool = True
     show_highway_in_sky: bool = False
     show_safe_taxi: bool = False

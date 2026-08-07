@@ -126,6 +126,10 @@ from pyefis.user.blake_pfd.core.touch_guidance_menu import (
     TouchGuidanceMenu,
 )
 
+from pyefis.user.blake_pfd.core.guidance_settings_store import (
+    save_guidance_touch_settings,
+)
+
 class BlakePfdDemo(QWidget):
     def __init__(self, use_hardware: bool = False, replay_log: str | None = None) -> None:
         super().__init__()
@@ -243,7 +247,10 @@ class BlakePfdDemo(QWidget):
                     self.config.guidance
                     .flight_director_enabled
                 ),
-                flight_path_marker_enabled=True,
+                flight_path_marker_enabled=(
+                    self.config.features
+                    .show_flight_path_marker
+                ),
                 synthetic_vision_enabled=(
                     self.config.features
                     .show_synthetic_vision
@@ -999,6 +1006,10 @@ class BlakePfdDemo(QWidget):
                 self.guidance_touch_settings
                 != previous_settings
             ):
+                save_guidance_touch_settings(
+                    self.guidance_touch_settings
+                )
+
                 self.update()
 
             event.accept()
