@@ -121,6 +121,11 @@ from pyefis.user.blake_pfd.core.touch_guidance_menu import (
     TouchGuidanceMenu,
 )
 
+from pyefis.user.blake_pfd.core.touch_guidance_menu import (
+    GuidanceTouchSettings,
+    TouchGuidanceMenu,
+)
+
 class BlakePfdDemo(QWidget):
     def __init__(self, use_hardware: bool = False, replay_log: str | None = None) -> None:
         super().__init__()
@@ -250,6 +255,32 @@ class BlakePfdDemo(QWidget):
             self.touch_guidance_menu.state
         )
         
+        self.touch_guidance_menu = (
+            TouchGuidanceMenu()
+        )
+        
+        self.guidance_touch_settings = (
+            GuidanceTouchSettings(
+                hits_enabled=(
+                    self.config.guidance
+                    .hits_enabled
+                ),
+                flight_director_enabled=(
+                    self.config.guidance
+                    .flight_director_enabled
+                ),
+                flight_path_marker_enabled=True,
+                synthetic_vision_enabled=(
+                    self.config.features
+                    .show_synthetic_vision
+                ),
+            )
+        )
+
+        self.touch_guidance_menu_state = (
+            self.touch_guidance_menu.state
+        )
+
         self.safe_taxi = SafeTaxiComputer()
         self.moving_map = MovingMapComputer()
         self.terrain = TerrainComputer()
@@ -1614,6 +1645,11 @@ class BlakePfdDemo(QWidget):
         taxi_state = self.safe_taxi.update(self.pfd)
         if features.show_safe_taxi and taxi_state.active:
             self.draw_safe_taxi_map(painter, taxi_state, width, height)
+            self.draw_guidance_touch_controls(
+                painter,
+                width,
+                height,
+            )
             self.draw_warning_strip(painter, width)
             painter.end()
             return
@@ -1652,15 +1688,15 @@ class BlakePfdDemo(QWidget):
                 height,
             )
 
-            if (
-                self.guidance_touch_settings
-                .flight_path_marker_enabled
-            ):
-                self.draw_flight_path_marker(
-                    painter,
-                    width,
-                    height,
-                )
+        if (
+            self.guidance_touch_settings
+            .flight_path_marker_enabled
+        ):
+            self.draw_flight_path_marker(
+                painter,
+                width,
+                height,
+            )
         if features.show_airspeed:
             self.draw_airspeed_tape(painter, self.pfd, width, height)
 
