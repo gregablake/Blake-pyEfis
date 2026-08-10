@@ -127,17 +127,16 @@ from pyefis.user.blake_pfd.core.touch_guidance_menu import (
     TouchGuidanceMenu,
 )
 
-from pyefis.user.blake_pfd.core.touch_guidance_menu import (
-    GuidanceTouchSettings,
-    TouchGuidanceMenu,
-)
-
 from pyefis.user.blake_pfd.core.touch_navigation import (
     TouchNavigation,
 )
 
 from pyefis.user.blake_pfd.core.touch_settings import (
     TouchSettings,
+)
+
+from pyefis.user.blake_pfd.core.touch_map_controls import (
+    TouchMapControls,
 )
 
 from pyefis.user.blake_pfd.core.guidance_settings_store import (
@@ -306,6 +305,21 @@ class BlakePfdDemo(QWidget):
             )
         )
         
+        self.touch_map_controls = (
+            TouchMapControls()
+        )
+
+        self.touch_map_state = (
+            self.touch_map_controls.layout(
+                screen_width=(
+                    self.config.display.width
+                ),
+                screen_height=(
+                    self.config.display.height
+                ),
+            )
+        )
+        
         self.touch_guidance_menu = (
             TouchGuidanceMenu()
         )
@@ -334,6 +348,11 @@ class BlakePfdDemo(QWidget):
 
         self.safe_taxi = SafeTaxiComputer()
         self.moving_map = MovingMapComputer()
+
+        self.map_range_nm = float(
+            self.config.moving_map.range_nm
+        )
+
         self.terrain = TerrainComputer()
 
         self.terrain_source_bundle = (
@@ -1030,6 +1049,50 @@ class BlakePfdDemo(QWidget):
         
         if (
             self.page_manager.current()
+            == "MAP"
+        ):
+            self.touch_map_state = (
+                self.touch_map_controls.layout(
+                    screen_width=self.width(),
+                    screen_height=self.height(),
+                )
+            )
+
+            map_action = (
+                self.touch_map_controls
+                .action_for_touch(
+                    point_x=touch_x,
+                    point_y=touch_y,
+                )
+            )
+
+            if map_action == "zoom_in":
+                self.map_range_nm = max(
+                    2.0,
+                    self.map_range_nm / 2.0,
+                )
+
+                self.update()
+                event.accept()
+                return
+
+            if map_action == "zoom_out":
+                self.map_range_nm = min(
+                    200.0,
+                    self.map_range_nm * 2.0,
+                )
+
+                self.update()
+                event.accept()
+                return
+
+            if map_action == "center":
+                self.update()
+                event.accept()
+                return
+        
+        if (
+            self.page_manager.current()
             == "SETTINGS"
         ):
             self.touch_settings_state = (
@@ -1622,6 +1685,75 @@ class BlakePfdDemo(QWidget):
 
         painter.restore()
         
+        def draw_touch_map_controls(
+            self,
+            painter: QPainter,
+            width: int,
+            height: int,
+        ) -> None:
+            self.touch_map_state = (
+                self.touch_map_controls.layout(
+                    screen_width=width,
+                    screen_height=height,
+                )
+            )
+
+            painter.save()
+
+            font = painter.font()
+            font.setBold(True)
+            font.setPointSize(18)
+            painter.setFont(font)
+
+            for button in (
+                self.touch_map_state.buttons
+            ):
+                painter.setBrush(
+                    QBrush(
+                        QColor(
+                            35,
+                            35,
+                            45,
+                            235,
+                        )
+                    )
+                )
+
+                painter.setPen(
+                    QPen(
+                        QColor(
+                            255,
+                            255,
+                            255,
+                        ),
+                        2,
+                    )
+                )
+
+                painter.drawRoundedRect(
+                    QRectF(
+                        button.bounds.x,
+                        button.bounds.y,
+                        button.bounds.width,
+                        button.bounds.height,
+                    ),
+                    8.0,
+                    8.0,
+                )
+
+                painter.drawText(
+                    QRectF(
+                        button.bounds.x,
+                        button.bounds.y,
+                        button.bounds.width,
+                        button.bounds.height,
+                    ),
+                    Qt.AlignmentFlag.AlignCenter,
+                    button.label,
+                )
+
+            painter.restore()
+        
     def draw_touch_navigation(
         self,
         painter: QPainter,
@@ -1973,7 +2105,7 @@ class BlakePfdDemo(QWidget):
                 database=self.database,
                 aircraft_lat=39.1031,
                 aircraft_lon=-84.5120,
-                range_nm=self.config.moving_map.range_nm,
+                range_nm=self.map_range_nm,
             )
             self.draw_moving_map_overlay(painter, map_state, width, height)
 
@@ -2052,7 +2184,7 @@ class BlakePfdDemo(QWidget):
                 database=self.database,
                 aircraft_lat=39.1031,
                 aircraft_lon=-84.5120,
-                range_nm=self.config.moving_map.range_nm,
+                range_nm=self.map_range_nm,
             )
             self.draw_moving_map_overlay(painter, map_state, width, height)
 

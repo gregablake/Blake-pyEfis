@@ -60,3 +60,9 @@ class MapPage:
             width,
             height,
         )
+        
+        app.draw_touch_map_controls(
+            painter,
+            width,
+            height,
+        )
