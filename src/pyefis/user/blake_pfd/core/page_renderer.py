@@ -28,6 +28,12 @@ class PageRenderer:
                 height,
             )
 
+            self.app.draw_touch_navigation(
+                painter,
+                width,
+                height,
+            )
+
             self.app.warning_manager.draw(
                 painter,
                 width,
@@ -39,6 +45,12 @@ class PageRenderer:
             self.app.settings_page.draw(
                 painter,
                 self.app,
+                width,
+                height,
+            )
+
+            self.app.draw_touch_navigation(
+                painter,
                 width,
                 height,
             )
@@ -58,7 +70,17 @@ class PageRenderer:
                 width,
                 height,
             )
-            self.app.warning_manager.draw(painter, width)
+            self.app.draw_touch_navigation(
+                painter,
+                width,
+                height,
+            )
+
+            self.app.warning_manager.draw(
+                painter,
+                width,
+            )
+
             return True
 
         if current_page == "AIRPORT":
@@ -69,7 +91,17 @@ class PageRenderer:
                 width,
                 height,
             )
-            self.app.warning_manager.draw(painter, width)
+            self.app.draw_touch_navigation(
+                painter,
+                width,
+                height,
+            )
+
+            self.app.warning_manager.draw(
+                painter,
+                width,
+            )
+
             return True
 
         if current_page == "NEAREST":
@@ -85,7 +117,17 @@ class PageRenderer:
                 width,
                 height,
             )
-            self.app.warning_manager.draw(painter, width)
+            self.app.draw_touch_navigation(
+                painter,
+                width,
+                height,
+            )
+
+            self.app.warning_manager.draw(
+                painter,
+                width,
+            )
+
             return True
 
         if current_page == "EMS":
@@ -97,7 +139,17 @@ class PageRenderer:
                 checklist=self.app.engine_checklist_page,
                 aircraft_recommendation=self.app.aircraft_recommendation,
             )   
-            self.app.warning_manager.draw(painter, width)
+            self.app.draw_touch_navigation(
+                painter,
+                width,
+                height,
+            )
+
+            self.app.warning_manager.draw(
+                painter,
+                width,
+            )
+
             return True
 
         if current_page == "EMS_TREND":
@@ -106,7 +158,17 @@ class PageRenderer:
                 width,
                 height,
             )
-            self.app.warning_manager.draw(painter, width)
+            self.app.draw_touch_navigation(
+                painter,
+                width,
+                height,
+            )
+
+            self.app.warning_manager.draw(
+                painter,
+                width,
+            )
+
             return True
 
         if current_page == "EMS_ALERTS":
@@ -115,7 +177,17 @@ class PageRenderer:
                 width,
                 height,
             )
-            self.app.warning_manager.draw(painter, width)
+            self.app.draw_touch_navigation(
+                painter,
+                width,
+                height,
+            )
+
+            self.app.warning_manager.draw(
+                painter,
+                width,
+            )
+
             return True
 
         if current_page == "ENGINE_CHECKLIST":
@@ -124,7 +196,17 @@ class PageRenderer:
                 width,
                 height,
             )
-            self.app.warning_manager.draw(painter, width)
+            self.app.draw_touch_navigation(
+                painter,
+                width,
+                height,
+            )
+
+            self.app.warning_manager.draw(
+                painter,
+                width,
+            )
+
             return True
 
         return False

@@ -1,5 +1,5 @@
 from __future__ import annotations
-
+from dataclasses import replace
 import argparse
 import sys
 from time import monotonic
@@ -134,6 +134,10 @@ from pyefis.user.blake_pfd.core.touch_guidance_menu import (
 
 from pyefis.user.blake_pfd.core.touch_navigation import (
     TouchNavigation,
+)
+
+from pyefis.user.blake_pfd.core.touch_settings import (
+    TouchSettings,
 )
 
 from pyefis.user.blake_pfd.core.guidance_settings_store import (
@@ -283,6 +287,22 @@ class BlakePfdDemo(QWidget):
                     self.config.display.height
                 ),
                 current_page="PFD",
+            )
+        )
+        
+        self.touch_settings = TouchSettings()
+
+        self.touch_settings_state = (
+            self.touch_settings.layout(
+                screen_width=(
+                    self.config.display.width
+                ),
+                screen_height=(
+                    self.config.display.height
+                ),
+                values=(
+                    self.guidance_touch_settings
+                ),
             )
         )
         
@@ -1007,6 +1027,63 @@ class BlakePfdDemo(QWidget):
             self.update()
             event.accept()
             return
+        
+        if (
+            self.page_manager.current()
+            == "SETTINGS"
+        ):
+            self.touch_settings_state = (
+                self.touch_settings.layout(
+                    screen_width=self.width(),
+                    screen_height=self.height(),
+                    values=(
+                        self.guidance_touch_settings
+                    ),
+                )
+            )
+
+            settings_key = (
+                self.touch_settings.key_for_touch(
+                    point_x=touch_x,
+                    point_y=touch_y,
+                )
+            )
+
+            if settings_key is not None:
+                current_value = bool(
+                    getattr(
+                        self.guidance_touch_settings,
+                        settings_key,
+                    )
+                )
+
+
+                self.guidance_touch_settings = replace(
+                    self.guidance_touch_settings,
+                    **{
+                        settings_key: (
+                            not current_value
+                        ),
+                    },
+                )
+
+                save_guidance_touch_settings(
+                    self.guidance_touch_settings
+                )
+
+                self.touch_settings_state = (
+                    self.touch_settings.layout(
+                        screen_width=self.width(),
+                        screen_height=self.height(),
+                        values=(
+                            self.guidance_touch_settings
+                        ),
+                    )
+                )
+
+                self.update()
+                event.accept()
+                return
 
         button_width = 150.0
         button_height = 52.0
@@ -1811,11 +1888,6 @@ class BlakePfdDemo(QWidget):
         taxi_state = self.safe_taxi.update(self.pfd)
         if features.show_safe_taxi and taxi_state.active:
             self.draw_safe_taxi_map(painter, taxi_state, width, height)
-            self.draw_guidance_touch_controls(
-                painter,
-                width,
-                height,
-            )
             
             self.draw_touch_navigation(
                 painter,

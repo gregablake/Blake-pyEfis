@@ -30,6 +30,7 @@ def test_page_renderer_draw_page_uses_page_specific_drawer() -> None:
         ems_alert_history=SimpleNamespace(draw=lambda *args, **kwargs: None),
         engine_checklist_page=SimpleNamespace(draw=lambda *args, **kwargs: None),
         warning_manager=SimpleNamespace(draw=lambda *args, **kwargs: None),
+        draw_touch_navigation=lambda *args, **kwargs: None,
     )
 
     renderer = PageRenderer(app)
