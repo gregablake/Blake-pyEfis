@@ -964,7 +964,7 @@ class BlakePfdDemo(QWidget):
             )
 
         self.update()
-        
+
     def mousePressEvent(
         self,
         event,
@@ -973,7 +973,7 @@ class BlakePfdDemo(QWidget):
 
         touch_x = position.x()
         touch_y = position.y()
-        
+
         self.touch_navigation_state = (
             self.touch_navigation.layout(
                 screen_width=self.width(),
@@ -1087,8 +1087,13 @@ class BlakePfdDemo(QWidget):
             event
         )
 
-    def keyPressEvent(self, event) -> None:  # noqa: N802
-        self.event_manager.handle_key(event)
+    def keyPressEvent(
+        self,
+        event,
+    ) -> None:  # noqa: N802
+        self.event_manager.handle_key(
+            event
+        )
         self.update()
 
     def page_name_from_key(self, key: Qt.Key) -> str | None:
