@@ -31,6 +31,12 @@ from pyefis.user.blake_pfd.log_replay import LogReplaySource
 from pyefis.user.blake_pfd.master_warning import draw_master_warning_strip
 from pyefis.user.blake_pfd.moving_map import MovingMapComputer
 from pyefis.user.blake_pfd.nearest_page import NearestPage
+from pyefis.user.blake_pfd.pages.map_page import (
+    MapPage,
+)
+from pyefis.user.blake_pfd.pages.settings_page import (
+    SettingsPage,
+)
 from pyefis.user.blake_pfd.obstacles import ObstacleComputer
 from pyefis.user.blake_pfd.route_manager import RouteManager
 from pyefis.user.blake_pfd.safe_taxi import SafeTaxiComputer
@@ -124,6 +130,10 @@ from pyefis.user.blake_pfd.core.touch_guidance_menu import (
 from pyefis.user.blake_pfd.core.touch_guidance_menu import (
     GuidanceTouchSettings,
     TouchGuidanceMenu,
+)
+
+from pyefis.user.blake_pfd.core.touch_navigation import (
+    TouchNavigation,
 )
 
 from pyefis.user.blake_pfd.core.guidance_settings_store import (
@@ -262,6 +272,20 @@ class BlakePfdDemo(QWidget):
             self.touch_guidance_menu.state
         )
         
+        self.touch_navigation = TouchNavigation()
+
+        self.touch_navigation_state = (
+            self.touch_navigation.layout(
+                screen_width=(
+                    self.config.display.width
+                ),
+                screen_height=(
+                    self.config.display.height
+                ),
+                current_page="PFD",
+            )
+        )
+        
         self.touch_guidance_menu = (
             TouchGuidanceMenu()
         )
@@ -394,6 +418,8 @@ class BlakePfdDemo(QWidget):
         self.fms_page = FmsPage()
         self.airport_info_page = AirportInfoPage()
         self.nearest_page = NearestPage()
+        self.map_page = MapPage()
+        self.settings_page = SettingsPage()
         self.ems_page = EmsPage()
         self.ems_trend_page = EmsTrendPage()
         self.ems_alert_history = EmsAlertHistory()
@@ -470,6 +496,10 @@ class BlakePfdDemo(QWidget):
 
     def register_pages(self) -> None:
         self.page_manager.register("PFD", "P")
+        self.page_manager.register(
+            "MAP",
+            "M",
+        )
         self.page_manager.register("FMS", "F")
         self.page_manager.register("AIRPORT", "A")
         self.page_manager.register("NEAREST", "N")
@@ -477,6 +507,10 @@ class BlakePfdDemo(QWidget):
         self.page_manager.register("EMS_TREND", "T")
         self.page_manager.register("EMS_ALERTS", "H")
         self.page_manager.register("ENGINE_CHECKLIST", "C")
+        self.page_manager.register(
+            "SETTINGS",
+            "S",
+        )
         
     def update_engine_state(self) -> None:
         self.engine_data = self.sensor_manager.read_engine()
@@ -939,6 +973,40 @@ class BlakePfdDemo(QWidget):
 
         touch_x = position.x()
         touch_y = position.y()
+        
+        self.touch_navigation_state = (
+            self.touch_navigation.layout(
+                screen_width=self.width(),
+                screen_height=self.height(),
+                current_page=(
+                    self.page_manager.current()
+                ),
+            )
+        )
+
+        selected_page = (
+            self.touch_navigation.page_for_touch(
+                point_x=touch_x,
+                point_y=touch_y,
+            )
+        )
+
+        if selected_page is not None:
+            self.page_manager.set_page(
+                selected_page
+            )
+
+            self.touch_navigation_state = (
+                self.touch_navigation.layout(
+                    screen_width=self.width(),
+                    screen_height=self.height(),
+                    current_page=selected_page,
+                )
+            )
+
+            self.update()
+            event.accept()
+            return
 
         button_width = 150.0
         button_height = 52.0
@@ -1472,6 +1540,88 @@ class BlakePfdDemo(QWidget):
 
         painter.restore()
         
+    def draw_touch_navigation(
+        self,
+        painter: QPainter,
+        width: int,
+        height: int,
+    ) -> None:
+        self.touch_navigation_state = (
+            self.touch_navigation.layout(
+                screen_width=width,
+                screen_height=height,
+                current_page=(
+                    self.page_manager.current()
+                ),
+            )
+        )
+
+        painter.save()
+
+        font = painter.font()
+        font.setBold(True)
+        font.setPointSize(12)
+        painter.setFont(font)
+
+        for button in (
+            self.touch_navigation_state.buttons
+        ):
+            if button.selected:
+                fill_color = QColor(
+                    0,
+                    110,
+                    165,
+                    240,
+                )
+            else:
+                fill_color = QColor(
+                    35,
+                    35,
+                    45,
+                    235,
+                )
+
+            painter.setBrush(
+                QBrush(
+                    fill_color
+                )
+            )
+
+            painter.setPen(
+                QPen(
+                    QColor(
+                        255,
+                        255,
+                        255,
+                    ),
+                    2,
+                )
+            )
+
+            painter.drawRoundedRect(
+                QRectF(
+                    button.bounds.x,
+                    button.bounds.y,
+                    button.bounds.width,
+                    button.bounds.height,
+                ),
+                8.0,
+                8.0,
+            )
+
+            painter.drawText(
+                QRectF(
+                    button.bounds.x,
+                    button.bounds.y,
+                    button.bounds.width,
+                    button.bounds.height,
+                ),
+                Qt.AlignmentFlag.AlignCenter,
+                button.label,
+            )
+
+        painter.restore()
+        
     def draw_guidance_touch_controls(
         self,
         painter: QPainter,
@@ -1657,6 +1807,12 @@ class BlakePfdDemo(QWidget):
         if features.show_safe_taxi and taxi_state.active:
             self.draw_safe_taxi_map(painter, taxi_state, width, height)
             self.draw_guidance_touch_controls(
+                painter,
+                width,
+                height,
+            )
+            
+            self.draw_touch_navigation(
                 painter,
                 width,
                 height,

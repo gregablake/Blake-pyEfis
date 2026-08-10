@@ -19,6 +19,36 @@ class PageRenderer:
 
     def draw(self, painter: QPainter, width: int, height: int) -> bool:
         current_page = self.app.page_manager.current()
+        
+        if current_page == "MAP":
+            self.app.map_page.draw(
+                painter,
+                self.app,
+                width,
+                height,
+            )
+
+            self.app.warning_manager.draw(
+                painter,
+                width,
+            )
+
+            return True
+
+        if current_page == "SETTINGS":
+            self.app.settings_page.draw(
+                painter,
+                self.app,
+                width,
+                height,
+            )
+
+            self.app.warning_manager.draw(
+                painter,
+                width,
+            )
+
+            return True
 
         if current_page == "FMS":
             self.app.fms_page.draw(
