@@ -110,3 +110,4 @@ def test_constructor_rejects_bad_limit() -> None:
     with pytest.raises(ValueError):
         MapViewport(
             maximum_offset_px=-1.0,
+        )

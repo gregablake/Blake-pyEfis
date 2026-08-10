@@ -54,13 +54,50 @@ class MapPage:
         if app.pfd is None:
             return
 
+        painter.save()
+
+        painter.translate(
+            app.map_viewport_state.offset_x_px,
+            app.map_viewport_state.offset_y_px,
+        )
+
         app.draw_moving_map(
             painter,
             app.pfd,
             width,
             height,
         )
+
+        painter.restore()
         
+        if not app.map_viewport_state.centered:
+            painter.setPen(
+                QPen(
+                    QColor(
+                        255,
+                        191,
+                        0,
+                    ),
+                    2,
+                )
+            )
+
+            font = painter.font()
+            font.setBold(True)
+            font.setPointSize(12)
+            painter.setFont(font)
+
+            painter.drawText(
+                QRectF(
+                    20,
+                    60,
+                    220,
+                    30,
+                ),
+                Qt.AlignmentFlag.AlignLeft,
+                "MAP PAN — TAP CTR",
+            )
+
         app.draw_touch_map_controls(
             painter,
             width,

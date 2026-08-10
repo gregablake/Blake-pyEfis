@@ -139,6 +139,10 @@ from pyefis.user.blake_pfd.core.touch_map_controls import (
     TouchMapControls,
 )
 
+from pyefis.user.blake_pfd.core.map_viewport import (
+    MapViewport,
+)
+
 from pyefis.user.blake_pfd.core.guidance_settings_store import (
     save_guidance_touch_settings,
 )
@@ -352,6 +356,16 @@ class BlakePfdDemo(QWidget):
         self.map_range_nm = float(
             self.config.moving_map.range_nm
         )
+        
+        self.map_viewport = MapViewport()
+
+        self.map_viewport_state = (
+            self.map_viewport.state
+        )
+
+        self.map_drag_active = False
+        self.map_drag_last_x = 0.0
+        self.map_drag_last_y = 0.0
 
         self.terrain = TerrainComputer()
 
@@ -1087,7 +1101,19 @@ class BlakePfdDemo(QWidget):
                 return
 
             if map_action == "center":
+                self.map_viewport_state = (
+                    self.map_viewport.center()
+                )
+
                 self.update()
+                event.accept()
+                return
+            
+            if map_action is None:
+                self.map_drag_active = True
+                self.map_drag_last_x = touch_x
+                self.map_drag_last_y = touch_y
+
                 event.accept()
                 return
         
@@ -1226,7 +1252,77 @@ class BlakePfdDemo(QWidget):
         super().mousePressEvent(
             event
         )
+        
+    def mouseMoveEvent(
+        self,
+        event,
+    ) -> None:  # noqa: N802
+        if (
+            not self.map_drag_active
+            or self.page_manager.current()
+            != "MAP"
+        ):
+            super().mouseMoveEvent(
+                event
+            )
+            return
 
+        position = event.position()
+
+        touch_x = position.x()
+        touch_y = position.y()
+
+        delta_x = (
+            touch_x
+            - self.map_drag_last_x
+        )
+
+        delta_y = (
+            touch_y
+            - self.map_drag_last_y
+        )
+
+        self.map_drag_last_x = touch_x
+        self.map_drag_last_y = touch_y
+
+        self.map_viewport_state = (
+            self.map_viewport.pan_by(
+                delta_x_px=delta_x,
+                delta_y_px=delta_y,
+            )
+        )
+
+        self.update()
+        event.accept()
+        
+    def mouseReleaseEvent(
+        self,
+        event,
+    ) -> None:  # noqa: N802
+        if self.map_drag_active:
+            self.map_drag_active = False
+
+            event.accept()
+            return
+
+        super().mouseReleaseEvent(
+            event
+        )
+        
+    def mouseReleaseEvent(
+        self,
+        event,
+    ) -> None:  # noqa: N802
+        if self.map_drag_active:
+            self.map_drag_active = False
+
+            event.accept()
+            return
+
+        super().mouseReleaseEvent(
+            event
+        )
+        
     def keyPressEvent(
         self,
         event,
