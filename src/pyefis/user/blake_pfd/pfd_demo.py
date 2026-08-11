@@ -143,6 +143,10 @@ from pyefis.user.blake_pfd.core.map_viewport import (
     MapViewport,
 )
 
+from pyefis.user.blake_pfd.core.map_orientation import (
+    MapOrientation,
+)
+
 from pyefis.user.blake_pfd.core.guidance_settings_store import (
     save_guidance_touch_settings,
 )
@@ -358,6 +362,16 @@ class BlakePfdDemo(QWidget):
         )
         
         self.map_viewport = MapViewport()
+        
+        self.map_orientation = (
+            MapOrientation(
+                mode="NORTH_UP",
+            )
+        )
+
+        self.map_orientation_state = (
+            self.map_orientation.state
+        )
 
         self.map_viewport_state = (
             self.map_viewport.state
@@ -1104,6 +1118,25 @@ class BlakePfdDemo(QWidget):
                 self.map_viewport_state = (
                     self.map_viewport.center()
                 )
+
+                self.update()
+                event.accept()
+                return
+            
+            if map_action == "orientation":
+                self.map_orientation_state = (
+                    self.map_orientation.toggle()
+                )
+
+                if self.pfd is not None:
+                    self.map_orientation_state = (
+                        self.map_orientation
+                        .update_reference(
+                            track_deg=(
+                                self.pfd.track_deg
+                            ),
+                        )
+                    )
 
                 self.update()
                 event.accept()
@@ -2087,6 +2120,41 @@ class BlakePfdDemo(QWidget):
                 ),
                 state_text,
             )
+            
+        if (
+            self.map_orientation_state.mode
+            == "TRACK_UP"
+        ):
+            orientation_text = "TRK UP"
+        else:
+            orientation_text = "NORTH UP"
+
+        painter.setPen(
+            QColor(
+                255,
+                255,
+                255,
+            )
+        )
+
+        font = painter.font()
+        font.setPointSize(11)
+        font.setBold(True)
+        painter.setFont(font)
+
+        painter.drawText(
+            QRectF(
+                width - 170.0,
+                55.0,
+                150.0,
+                28.0,
+            ),
+            (
+                Qt.AlignmentFlag.AlignRight
+                | Qt.AlignmentFlag.AlignVCenter
+            ),
+            orientation_text,
+        )
 
         painter.restore()
     
@@ -2935,11 +3003,25 @@ class BlakePfdDemo(QWidget):
         )
 
         glide_range_nm = 0.0
-
+        
         emergency_state = getattr(
             self,
             "emergency_airport_state",
             None,
+        )
+        
+        track_deg = 0.0
+
+        if self.pfd is not None:
+            track_deg = (
+                self.pfd.track_deg
+            )
+
+        self.map_orientation_state = (
+            self.map_orientation
+            .update_reference(
+                track_deg=track_deg,
+            )
         )
 
         if emergency_state is not None:
@@ -3019,8 +3101,21 @@ class BlakePfdDemo(QWidget):
                 / map_state.range_nm
             )
 
+            relative_bearing_deg = (
+                self.map_orientation
+                .relative_bearing_deg(
+                    bearing_deg=(
+                        airport.bearing_deg
+                    ),
+                )
+            )
+
+            if relative_bearing_deg is None:
+                continue
+
             angle = radians(
-                airport.bearing_deg - 90
+                relative_bearing_deg
+                - 90.0
             )
 
             airport_x = center_x + int(

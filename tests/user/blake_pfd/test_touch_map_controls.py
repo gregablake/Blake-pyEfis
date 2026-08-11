@@ -13,7 +13,7 @@ def test_map_controls_create_three_buttons() -> None:
         screen_height=600,
     )
 
-    assert len(state.buttons) == 3
+    assert len(state.buttons) == 4
 
     assert [
         button.label
@@ -22,6 +22,7 @@ def test_map_controls_create_three_buttons() -> None:
         "+",
         "-",
         "CTR",
+        "N/TRK",
     ]
 
 
@@ -141,3 +142,26 @@ def test_constructor_rejects_bad_values() -> None:
         TouchMapControls(
             spacing=-1.0,
         )
+        
+def test_orientation_touch() -> None:
+    controls = TouchMapControls()
+
+    state = controls.layout(
+        screen_width=1024,
+        screen_height=600,
+    )
+
+    button = state.buttons[3]
+
+    action = controls.action_for_touch(
+        point_x=(
+            button.bounds.x
+            + button.bounds.width / 2.0
+        ),
+        point_y=(
+            button.bounds.y
+            + button.bounds.height / 2.0
+        ),
+    )
+
+    assert action == "orientation"

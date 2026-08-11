@@ -51,6 +51,10 @@ class TouchMapControls:
             "center",
             "CTR",
         ),
+        (
+            "orientation",
+            "N/TRK",
+        ),
     )
 
     def __init__(
