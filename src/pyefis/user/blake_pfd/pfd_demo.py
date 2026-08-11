@@ -147,6 +147,11 @@ from pyefis.user.blake_pfd.core.map_orientation import (
     MapOrientation,
 )
 
+from pyefis.user.blake_pfd.core.map_airport_selector import (
+    MapAirportMarker,
+    MapAirportSelector,
+)
+
 from pyefis.user.blake_pfd.core.guidance_settings_store import (
     save_guidance_touch_settings,
 )
@@ -360,6 +365,18 @@ class BlakePfdDemo(QWidget):
         self.map_range_nm = float(
             self.config.moving_map.range_nm
         )
+        
+        self.map_airport_selector = (
+            MapAirportSelector(
+                touch_radius_px=35.0,
+            )
+        )
+
+        self.map_airport_selection = (
+            self.map_airport_selector.selection
+        )
+
+        self.map_airport_markers = []
         
         self.map_viewport = MapViewport()
         
@@ -1143,6 +1160,26 @@ class BlakePfdDemo(QWidget):
                 return
             
             if map_action is None:
+                selection = (
+                    self.map_airport_selector
+                    .select_at(
+                        point_x=touch_x,
+                        point_y=touch_y,
+                        markers=(
+                            self.map_airport_markers
+                        ),
+                    )
+                )
+
+                self.map_airport_selection = (
+                    selection
+                )
+
+                if selection.selected:
+                    self.update()
+                    event.accept()
+                    return
+
                 self.map_drag_active = True
                 self.map_drag_last_x = touch_x
                 self.map_drag_last_y = touch_y
@@ -1814,74 +1851,220 @@ class BlakePfdDemo(QWidget):
 
         painter.restore()
         
-        def draw_touch_map_controls(
-            self,
-            painter: QPainter,
-            width: int,
-            height: int,
-        ) -> None:
-            self.touch_map_state = (
-                self.touch_map_controls.layout(
-                    screen_width=width,
-                    screen_height=height,
+    def draw_map_airport_selection(
+        self,
+        painter: QPainter,
+        width: int,
+        height: int,
+    ) -> None:
+        selection = (
+            self.map_airport_selection
+        )
+
+        if not selection.selected:
+            return
+
+        card_x = 350.0
+        card_y = 95.0
+        card_width = 360.0
+        card_height = 145.0
+
+        painter.save()
+
+        painter.setBrush(
+            QBrush(
+                QColor(
+                    15,
+                    20,
+                    28,
+                    240,
+                )
+            )
+        )
+
+        painter.setPen(
+            QPen(
+                QColor(
+                    0,
+                    220,
+                    255,
+                ),
+                2,
+            )
+        )
+
+        painter.drawRoundedRect(
+            QRectF(
+                card_x,
+                card_y,
+                card_width,
+                card_height,
+            ),
+            10.0,
+            10.0,
+        )
+
+        font = painter.font()
+        font.setBold(True)
+        font.setPointSize(17)
+        painter.setFont(font)
+
+        painter.setPen(
+            QColor(
+                0,
+                220,
+                255,
+            )
+        )
+
+        painter.drawText(
+            QRectF(
+                card_x + 15.0,
+                card_y + 10.0,
+                card_width - 30.0,
+                32.0,
+            ),
+            Qt.AlignmentFlag.AlignLeft,
+            selection.identifier or "",
+        )
+
+        font.setPointSize(11)
+        painter.setFont(font)
+
+        painter.setPen(
+            QColor(
+                255,
+                255,
+                255,
+            )
+        )
+
+        painter.drawText(
+            QRectF(
+                card_x + 15.0,
+                card_y + 45.0,
+                card_width - 30.0,
+                26.0,
+            ),
+            Qt.AlignmentFlag.AlignLeft,
+            selection.name,
+        )
+
+        distance_nm = (
+            selection.distance_nm
+            if selection.distance_nm is not None
+            else 0.0
+        )
+
+        bearing_deg = (
+            selection.bearing_deg
+            if selection.bearing_deg is not None
+            else 0.0
+        )
+
+        painter.drawText(
+            QRectF(
+                card_x + 15.0,
+                card_y + 78.0,
+                card_width - 30.0,
+                26.0,
+            ),
+            Qt.AlignmentFlag.AlignLeft,
+            (
+                f"DIST {distance_nm:.1f} NM    "
+                f"BRG {bearing_deg:.0f}°"
+            ),
+        )
+
+        painter.setPen(
+            QColor(
+                180,
+                180,
+                180,
+            )
+        )
+
+        painter.drawText(
+            QRectF(
+                card_x + 15.0,
+                card_y + 108.0,
+                card_width - 30.0,
+                24.0,
+            ),
+            Qt.AlignmentFlag.AlignLeft,
+            "AIRPORT SELECTED",
+        )
+
+        painter.restore()
+        
+    def draw_touch_map_controls(
+        self,
+        painter: QPainter,
+        width: int,
+        height: int,
+    ) -> None:
+        self.touch_map_state = (
+            self.touch_map_controls.layout(
+                screen_width=width,
+                screen_height=height,
+            )
+        )
+
+        painter.save()
+
+        font = painter.font()
+        font.setBold(True)
+        font.setPointSize(18)
+        painter.setFont(font)
+
+        for button in (
+            self.touch_map_state.buttons
+        ):
+            painter.setBrush(
+                QBrush(
+                    QColor(
+                        35,
+                        35,
+                        45,
+                        235,
+                    )
                 )
             )
 
-            painter.save()
-
-            font = painter.font()
-            font.setBold(True)
-            font.setPointSize(18)
-            painter.setFont(font)
-
-            for button in (
-                self.touch_map_state.buttons
-            ):
-                painter.setBrush(
-                    QBrush(
-                        QColor(
-                            35,
-                            35,
-                            45,
-                            235,
-                        )
-                    )
-                )
-
-                painter.setPen(
-                    QPen(
-                        QColor(
-                            255,
-                            255,
-                            255,
-                        ),
-                        2,
-                    )
-                )
-
-                painter.drawRoundedRect(
-                    QRectF(
-                        button.bounds.x,
-                        button.bounds.y,
-                        button.bounds.width,
-                        button.bounds.height,
+            painter.setPen(
+                QPen(
+                    QColor(
+                        255,
+                        255,
+                        255,
                     ),
-                    8.0,
-                    8.0,
+                    2,
                 )
+            )
 
-                painter.drawText(
-                    QRectF(
-                        button.bounds.x,
-                        button.bounds.y,
-                        button.bounds.width,
-                        button.bounds.height,
-                    ),
-                    Qt.AlignmentFlag.AlignCenter,
-                    button.label,
-                )
+            painter.drawRoundedRect(
+                QRectF(
+                    button.bounds.x,
+                    button.bounds.y,
+                    button.bounds.width,
+                    button.bounds.height,
+                ),
+                8.0,
+                8.0,
+            )
 
-            painter.restore()
+            painter.drawText(
+                QRectF(
+                    button.bounds.x,
+                    button.bounds.y,
+                    button.bounds.width,
+                    button.bounds.height,
+                ),
+                Qt.AlignmentFlag.AlignCenter,
+                button.label,
+            )
+
+        painter.restore()
         
     def draw_touch_navigation(
         self,
@@ -3091,6 +3274,12 @@ class BlakePfdDemo(QWidget):
                 QFont.Weight.Bold,
             )
         )
+        
+        if (
+            self.page_manager.current()
+            == "MAP"
+        ):
+            self.map_airport_markers = []
 
         for airport in map_state.airports:
             if airport.distance_nm > map_state.range_nm:
@@ -3128,11 +3317,47 @@ class BlakePfdDemo(QWidget):
                 * radius
                 * scale
             )
+            
+            if (
+                self.page_manager.current()
+                == "MAP"
+            ):
+                self.map_airport_markers.append(
+                    MapAirportMarker(
+                        identifier=airport.ident,
+                        name=airport.name,
+                        distance_nm=(
+                            airport.distance_nm
+                        ),
+                        bearing_deg=(
+                            airport.bearing_deg
+                        ),
+                        screen_x=(
+                            airport_x
+                            + self.map_viewport_state
+                            .offset_x_px
+                        ),
+                        screen_y=(
+                            airport_y
+                            + self.map_viewport_state
+                            .offset_y_px
+                        ),
+                    )
+                )
 
             is_selected = (
                 selected_airport is not None
                 and airport.ident.upper()
                 == selected_airport
+            )
+            
+            is_touch_selected = (
+                self.map_airport_selection.selected
+                and (
+                    self.map_airport_selection
+                    .identifier
+                    == airport.ident.upper()
+                )
             )
 
             is_reachable = (
@@ -3147,6 +3372,12 @@ class BlakePfdDemo(QWidget):
                     0,
                     0,
                 )
+            elif is_touch_selected:
+                airport_color = QColor(
+                    0,
+                    220,
+                    255,
+                )
             elif is_reachable:
                 airport_color = QColor(
                     0,
@@ -3158,6 +3389,31 @@ class BlakePfdDemo(QWidget):
                     130,
                     130,
                     130,
+                )
+                
+            if is_touch_selected:
+                painter.setPen(
+                    QPen(
+                        QColor(
+                            0,
+                            220,
+                            255,
+                        ),
+                        3,
+                    )
+                )
+
+                painter.setBrush(
+                    QBrush(
+                        Qt.BrushStyle.NoBrush
+                    )
+                )
+
+                painter.drawEllipse(
+                    airport_x - 11,
+                    airport_y - 11,
+                    22,
+                    22,
                 )
 
             if is_selected:

@@ -69,7 +69,7 @@ class MapPage:
         )
 
         painter.restore()
-        
+
         if not app.map_viewport_state.centered:
             painter.setPen(
                 QPen(
@@ -97,6 +97,12 @@ class MapPage:
                 Qt.AlignmentFlag.AlignLeft,
                 "MAP PAN — TAP CTR",
             )
+
+        app.draw_map_airport_selection(
+            painter,
+            width,
+            height,
+        )
 
         app.draw_touch_map_controls(
             painter,
