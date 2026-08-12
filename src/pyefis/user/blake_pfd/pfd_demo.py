@@ -3993,7 +3993,7 @@ class BlakePfdDemo(QWidget):
             painter.drawText(box_x + 10, box_y + 52, "NO SENSOR STATUS")
             return
 
-        def ok_text(label: str, ok: bool) -> str:
+    def ok_text(label: str, ok: bool) -> str:
             return f"{label}:{'OK' if ok else 'OFF'}"
 
         painter.setPen(QColor(255, 255, 255))
@@ -4423,48 +4423,181 @@ class BlakePfdDemo(QWidget):
             action[:28],
         )
 
-def point(x: float, y: float) -> QPointF:
-    return QPointF(float(x), float(y))
+    def point(x: float, y: float) -> QPointF:
+        return QPointF(float(x), float(y))
 
 
-def heading_label(heading: int) -> str:
-    heading = heading % 360
+    def heading_label(heading: int) -> str:
+        heading = heading % 360
 
-    if heading == 0:
-        return "N"
-    if heading == 90:
-        return "E"
-    if heading == 180:
-        return "S"
-    if heading == 270:
-        return "W"
+        if heading == 0:
+            return "N"
+        if heading == 90:
+            return "E"
+        if heading == 180:
+            return "S"
+        if heading == 270:
+            return "W"
 
-    return f"{heading // 10:02d}"
-
-
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Blake PFD visual demo")
-
-    mode_group = parser.add_mutually_exclusive_group()
-    mode_group.add_argument("--sim", action="store_true", help="Run using simulated sensor data")
-    mode_group.add_argument("--hardware", action="store_true", help="Run using real hardware sensor readers")
-
-    parser.add_argument("--replay-log", help="Replay a recorded flight log CSV")
-
-    return parser.parse_args()
+        return f"{heading // 10:02d}"
 
 
-def main() -> None:
-    args = parse_args()
+    def parse_args() -> argparse.Namespace:
+        parser = argparse.ArgumentParser(description="Blake PFD visual demo")
 
-    app = QApplication(sys.argv)
-    window = BlakePfdDemo(
-        use_hardware=args.hardware,
-        replay_log=args.replay_log,
-    )
-    window.show()
-    sys.exit(app.exec())
+        mode_group = parser.add_mutually_exclusive_group()
+        mode_group.add_argument("--sim", action="store_true", help="Run using simulated sensor data")
+        mode_group.add_argument("--hardware", action="store_true", help="Run using real hardware sensor readers")
+
+        parser.add_argument("--replay-log", help="Replay a recorded flight log CSV")
+
+        return parser.parse_args()
 
 
-if __name__ == "__main__":
-    main()
+    def main() -> None:
+        args = parse_args()
+
+        app = QApplication(sys.argv)
+        window = BlakePfdDemo(
+            use_hardware=args.hardware,
+            replay_log=args.replay_log,
+        )
+        window.show()
+        sys.exit(app.exec())
+
+
+    if __name__ == "__main__":
+        main()
+        
+    def draw_direct_to_guidance_box(
+            self,
+            painter: QPainter,
+            width: int,
+            height: int,
+        ) -> None:
+            state = self.direct_to_guidance_state
+
+            if not state.active:
+                return
+
+            box_w = 300
+            box_h = 95
+            box_x = width // 2 - box_w // 2
+            box_y = 245
+
+            painter.fillRect(
+                box_x,
+                box_y,
+                box_w,
+                box_h,
+                QColor(
+                    0,
+                    0,
+                    0,
+                ),
+            )
+
+            painter.setPen(
+                QPen(
+                    QColor(
+                        255,
+                        0,
+                        255,
+                    ),
+                    2,
+                )
+            )
+
+            painter.drawRect(
+                box_x,
+                box_y,
+                box_w,
+                box_h,
+            )
+
+            painter.setFont(
+                QFont(
+                    "Arial",
+                    12,
+                    QFont.Weight.Bold,
+                )
+            )
+
+            ident = (
+                state.identifier
+                or ""
+            )
+
+            bearing = (
+                state.bearing_deg
+                if state.bearing_deg is not None
+                else 0.0
+            )
+
+            distance = (
+                state.distance_nm
+                if state.distance_nm is not None
+                else 0.0
+            )
+
+            error = (
+                state.course_error_deg
+                if state.course_error_deg is not None
+                else 0.0
+            )
+
+            painter.setPen(
+                QColor(
+                    255,
+                    0,
+                    255,
+                )
+            )
+
+            painter.drawText(
+                box_x + 10,
+                box_y + 24,
+                f"DTO {ident}",
+            )
+
+            painter.setPen(
+                QColor(
+                    255,
+                    255,
+                    255,
+                )
+            )
+
+            painter.drawText(
+                box_x + 10,
+                box_y + 50,
+                (
+                    f"BRG {bearing:.0f}°   "
+                    f"DIS {distance:.1f} NM"
+                ),
+            )
+
+            if abs(error) < 1.0:
+                correction_text = "ON COURSE"
+            elif error > 0.0:
+                correction_text = (
+                    f"RIGHT {abs(error):.0f}°"
+                )
+            else:
+                correction_text = (
+                    f"LEFT {abs(error):.0f}°"
+                )
+
+            painter.setPen(
+                QColor(
+                    0,
+                    255,
+                    120,
+                )
+            )
+
+            painter.drawText(
+                box_x + 10,
+                box_y + 76,
+                correction_text,
+            )
