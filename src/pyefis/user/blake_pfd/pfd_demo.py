@@ -789,6 +789,7 @@ class BlakePfdDemo(QWidget):
                 self.direct_to_guidance.clear()
             )
 
+        if self.pfd is not None:
             # ---------------------------------------------------------
             # Emergency airport analysis
             # ---------------------------------------------------------
