@@ -2708,6 +2708,12 @@ class BlakePfdDemo(QWidget):
 
         if declutter_level <= 1:
             self.draw_navigation_status_box(painter, self.pfd, width, height)
+            
+        self.draw_direct_to_guidance_box(
+            painter,
+            width,
+            height,
+        )
 
         if declutter_level <= 1 and self.config.vnav.enabled:
             self.draw_vnav_info_box(painter, self.pfd, width, height)
@@ -3993,10 +3999,22 @@ class BlakePfdDemo(QWidget):
             painter.drawText(box_x + 10, box_y + 52, "NO SENSOR STATUS")
             return
 
-    def ok_text(label: str, ok: bool) -> str:
-            return f"{label}:{'OK' if ok else 'OFF'}"
+        def ok_text(
+            label: str,
+            ok: bool,
+        ) -> str:
+            return (
+                f"{label}:"
+                f"{'OK' if ok else 'OFF'}"
+            )
 
-        painter.setPen(QColor(255, 255, 255))
+        painter.setPen(
+            QColor(
+                255,
+                255,
+                255,
+            )
+        )
         painter.drawText(
             box_x + 10,
             box_y + 52,
