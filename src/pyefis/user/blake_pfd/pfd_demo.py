@@ -3335,21 +3335,37 @@ class BlakePfdDemo(QWidget):
 
         painter.drawText(QRectF(0, 0, width, 55), Qt.AlignmentFlag.AlignCenter, "    ".join(parts))
 
-    def draw_bottom_data_bar(self, painter: QPainter, pfd: FlightData, width: int, height: int) -> None:
-        painter.fillRect(0, height - 35, width, 35, QColor(0, 0, 0))
-        painter.setPen(QColor(255, 255, 255))
-        painter.setFont(QFont("Arial", 12, QFont.Weight.Bold))
+    def draw_bottom_data_bar(
+        self,
+        painter: QPainter,
+        pfd: FlightData,
+        width: int,
+        height: int,
+    ) -> None:
+        painter.fillRect(
+            0,
+            height - 35,
+            width,
+            35,
+            QColor(0, 0, 0),
+        )
 
-        parts = [
-            f"TRK {pfd.track_deg:.0f}°",
-            f"BRG {pfd.bearing_deg:.0f}°",
-            f"DTK {pfd.desired_track_deg:.0f}°",
-            f"OBS {self.config.obs.selected_course_deg:.0f}°" if self.config.obs.enabled else "",
-            (
-                f"{cdi_source} CDI "
-                f"{displayed_cdi:+.2f}"
-            ),
-        ]
+        painter.setPen(
+            QColor(
+                255,
+                255,
+                255,
+            )
+        )
+
+        painter.setFont(
+            QFont(
+                "Arial",
+                12,
+                QFont.Weight.Bold,
+            )
+        )
+
         if (
             self.direct_to_lateral_guidance_state.active
         ):
@@ -3363,12 +3379,47 @@ class BlakePfdDemo(QWidget):
                 pfd.cdi
             )
             cdi_source = "NAV"
-        parts = [part for part in parts if part]
 
-        if self.config.features.show_vdi and self.config.vnav.enabled:
-            parts.append(f"VDI {pfd.vdi:+.2f}°")
+        parts = [
+            f"TRK {pfd.track_deg:.0f}°",
+            f"BRG {pfd.bearing_deg:.0f}°",
+            f"DTK {pfd.desired_track_deg:.0f}°",
+            (
+                f"OBS "
+                f"{self.config.obs.selected_course_deg:.0f}°"
+                if self.config.obs.enabled
+                else ""
+            ),
+            (
+                f"{cdi_source} CDI "
+                f"{displayed_cdi:+.2f}"
+            ),
+        ]
 
-        painter.drawText(QRectF(0, height - 35, width, 35), Qt.AlignmentFlag.AlignCenter, "    ".join(parts))
+        parts = [
+            part
+            for part in parts
+            if part
+        ]
+
+        if (
+            self.config.features.show_vdi
+            and self.config.vnav.enabled
+        ):
+            parts.append(
+                f"VDI {pfd.vdi:+.2f}°"
+            )
+
+        painter.drawText(
+            QRectF(
+                0,
+                height - 35,
+                width,
+                35,
+            ),
+            Qt.AlignmentFlag.AlignCenter,
+            "    ".join(parts),
+        )
 
     def draw_vnav_info_box(self, painter: QPainter, pfd: FlightData, width: int, height: int) -> None:
         box_x = width - 250
