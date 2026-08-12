@@ -802,14 +802,14 @@ class BlakePfdDemo(QWidget):
             self.direct_to_guidance_state = (
                 self.direct_to_guidance.clear()
             )
-            
-            self.direct_to_lateral_guidance_state = (
-                self.direct_to_lateral_guidance.update(
-                    guidance_state=(
-                        self.direct_to_guidance_state
-                    ),
-                )
+
+        self.direct_to_lateral_guidance_state = (
+            self.direct_to_lateral_guidance.update(
+                guidance_state=(
+                    self.direct_to_guidance_state
+                ),
             )
+        )
 
         if self.pfd is not None:
             # ---------------------------------------------------------
