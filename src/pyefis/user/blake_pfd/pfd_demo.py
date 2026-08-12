@@ -156,6 +156,9 @@ from pyefis.user.blake_pfd.core.direct_to import (
     DirectToManager,
 )
 
+from pyefis.user.blake_pfd.core.direct_to_guidance import (
+    DirectToGuidance,
+)
 
 from pyefis.user.blake_pfd.core.guidance_settings_store import (
     save_guidance_touch_settings,
@@ -415,6 +418,14 @@ class BlakePfdDemo(QWidget):
 
         self.direct_to_state = (
             self.direct_to_manager.state
+        )
+        
+        self.direct_to_guidance = (
+            DirectToGuidance()
+        )
+
+        self.direct_to_guidance_state = (
+            self.direct_to_guidance.state
         )
 
         self.terrain_source_bundle = (
@@ -757,6 +768,25 @@ class BlakePfdDemo(QWidget):
                         self.pfd.longitude_deg
                     ),
                 )
+            )
+            
+        if (
+            self.pfd is not None
+            and self.pfd.position_valid
+        ):
+            self.direct_to_guidance_state = (
+                self.direct_to_guidance.update(
+                    direct_to_state=(
+                        self.direct_to_state
+                    ),
+                    aircraft_track_deg=(
+                        self.pfd.track_deg
+                    ),
+                )
+            )
+        else:
+            self.direct_to_guidance_state = (
+                self.direct_to_guidance.clear()
             )
 
             # ---------------------------------------------------------
@@ -1206,6 +1236,10 @@ class BlakePfdDemo(QWidget):
             ):
                 self.direct_to_state = (
                     self.direct_to_manager.clear()
+                )
+                
+                self.direct_to_guidance_state = (
+                    self.direct_to_guidance.clear()
                 )
 
                 self.update()
@@ -3784,6 +3818,59 @@ class BlakePfdDemo(QWidget):
                 ]
             )
         )
+        
+        if self.direct_to_guidance_state.active:
+            guidance_ident = (
+                self.direct_to_guidance_state
+                .identifier
+                or ""
+            )
+
+            course_error_deg = (
+                self.direct_to_guidance_state
+                .course_error_deg
+            )
+
+            if course_error_deg is None:
+                course_error_deg = 0.0
+
+            if abs(course_error_deg) < 1.0:
+                correction_text = "ON COURSE"
+            elif course_error_deg > 0.0:
+                correction_text = (
+                    f"TURN RIGHT "
+                    f"{abs(course_error_deg):.0f}°"
+                )
+            else:
+                correction_text = (
+                    f"TURN LEFT "
+                    f"{abs(course_error_deg):.0f}°"
+                )
+
+            painter.setFont(
+                QFont(
+                    "Arial",
+                    9,
+                    QFont.Weight.Bold,
+                )
+            )
+
+            painter.setPen(
+                QColor(
+                    255,
+                    0,
+                    255,
+                )
+            )
+
+            painter.drawText(
+                box_x + 10,
+                box_y + box_h - 30,
+                (
+                    f"DTO {guidance_ident}  "
+                    f"{correction_text}"
+                ),
+            )
 
         if (
             emergency_plan is not None
