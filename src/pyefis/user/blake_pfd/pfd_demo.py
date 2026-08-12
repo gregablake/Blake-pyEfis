@@ -744,20 +744,6 @@ class BlakePfdDemo(QWidget):
                 )
             )
             
-            self.flight_director_state = (
-                self.flight_director.calculate(
-                    cdi=self.pfd.cdi,
-                    vdi=self.pfd.vdi,
-                    navigation_valid=(
-                        self.pfd.position_valid
-                    ),
-                    enabled=(
-                        self.guidance_touch_settings
-                        .flight_director_enabled
-                    ),
-                )
-            )
-            
             self.emergency_status = (
                 self.emergency_detection.evaluate(
                     engine_state=self.engine_state,
@@ -810,6 +796,33 @@ class BlakePfdDemo(QWidget):
                 ),
             )
         )
+        
+        if self.pfd is not None:
+            if (
+                self.direct_to_lateral_guidance_state.active
+            ):
+                flight_director_cdi = (
+                    self.direct_to_lateral_guidance_state
+                    .lateral_error
+                )
+            else:
+                flight_director_cdi = (
+                    self.pfd.cdi
+                )
+
+            self.flight_director_state = (
+                self.flight_director.calculate(
+                    cdi=flight_director_cdi,
+                    vdi=self.pfd.vdi,
+                    navigation_valid=(
+                        self.pfd.position_valid
+                    ),
+                    enabled=(
+                        self.guidance_touch_settings
+                        .flight_director_enabled
+                    ),
+                )
+            )
 
         if self.pfd is not None:
             # ---------------------------------------------------------
