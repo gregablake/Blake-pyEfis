@@ -152,6 +152,11 @@ from pyefis.user.blake_pfd.core.map_airport_selector import (
     MapAirportSelector,
 )
 
+from pyefis.user.blake_pfd.core.direct_to import (
+    DirectToManager,
+)
+
+
 from pyefis.user.blake_pfd.core.guidance_settings_store import (
     save_guidance_touch_settings,
 )
@@ -206,6 +211,8 @@ class BlakePfdDemo(QWidget):
                 emergency_active=False,
             )
         )
+        
+        self.direct_to_button_rect = QRectF()
 
         self.reachable_airport_pipeline = (
             self.aircraft_systems.reachable_airport_pipeline
@@ -399,6 +406,14 @@ class BlakePfdDemo(QWidget):
         self.map_drag_last_y = 0.0
 
         self.terrain = TerrainComputer()
+        
+        self.direct_to_manager = (
+            DirectToManager()
+        )
+
+        self.direct_to_state = (
+            self.direct_to_manager.state
+        )
 
         self.terrain_source_bundle = (
             build_terrain_source(
@@ -722,6 +737,22 @@ class BlakePfdDemo(QWidget):
                     flight_state=self.flight_state,
                     pilot_selected=(
                         self.pilot_emergency_selected
+                    ),
+                )
+            )
+            
+        if (
+            self.direct_to_state.active
+            and self.pfd is not None
+            and self.pfd.position_valid
+        ):
+            self.direct_to_state = (
+                self.direct_to_manager.update(
+                    aircraft_lat_deg=(
+                        self.pfd.latitude_deg
+                    ),
+                    aircraft_lon_deg=(
+                        self.pfd.longitude_deg
                     ),
                 )
             )
@@ -1156,6 +1187,60 @@ class BlakePfdDemo(QWidget):
                     )
 
                 self.update()
+                event.accept()
+                return
+            
+            if (
+                self.map_airport_selection.selected
+                and self.direct_to_button_rect.contains(
+                    QPointF(
+                        touch_x,
+                        touch_y,
+                    )
+                )
+            ):
+                identifier = (
+                    self.map_airport_selection
+                    .identifier
+                )
+
+                airport = (
+                    self.database.get_airport(
+                        identifier
+                    )
+                    if identifier
+                    else None
+                )
+
+                if (
+                    airport is not None
+                    and self.pfd is not None
+                ):
+                    self.direct_to_state = (
+                        self.direct_to_manager.activate(
+                            aircraft_lat_deg=(
+                                self.pfd.latitude_deg
+                            ),
+                            aircraft_lon_deg=(
+                                self.pfd.longitude_deg
+                            ),
+                            target_identifier=(
+                                airport.ident
+                            ),
+                            target_name=(
+                                airport.name
+                            ),
+                            target_lat_deg=(
+                                airport.lat_deg
+                            ),
+                            target_lon_deg=(
+                                airport.lon_deg
+                            ),
+                        )
+                    )
+
+                    self.update()
+
                 event.accept()
                 return
             
@@ -1867,7 +1952,7 @@ class BlakePfdDemo(QWidget):
         card_x = 350.0
         card_y = 95.0
         card_width = 360.0
-        card_height = 145.0
+        card_height = 205.0
 
         painter.save()
 
@@ -1995,6 +2080,97 @@ class BlakePfdDemo(QWidget):
             "AIRPORT SELECTED",
         )
 
+        direct_button_x = (
+            card_x + 15.0
+        )
+        direct_button_y = (
+            card_y + 145.0
+        )
+        direct_button_width = (
+            card_width - 30.0
+        )
+        direct_button_height = 45.0
+
+        painter.setBrush(
+            QBrush(
+                QColor(
+                    0,
+                    95,
+                    160,
+                    245,
+                )
+            )
+        )
+
+        painter.setPen(
+            QPen(
+                QColor(
+                    255,
+                    255,
+                    255,
+                ),
+                2,
+            )
+        )
+
+        painter.drawRoundedRect(
+            QRectF(
+                direct_button_x,
+                direct_button_y,
+                direct_button_width,
+                direct_button_height,
+            ),
+            8.0,
+            8.0,
+        )
+
+        font.setPointSize(13)
+        font.setBold(True)
+        painter.setFont(font)
+
+        painter.drawText(
+            QRectF(
+                direct_button_x,
+                direct_button_y,
+                direct_button_width,
+                direct_button_height,
+            ),
+            Qt.AlignmentFlag.AlignCenter,
+            "DIRECT TO",
+        )
+        
+        self.direct_to_button_rect = QRectF(
+            direct_button_x,
+            direct_button_y,
+            direct_button_width,
+            direct_button_height,
+        )
+        
+        if self.direct_to_state.active:
+            dto_ident = (
+                self.direct_to_state.identifier
+                or ""
+            )
+
+            painter.setPen(
+                QColor(
+                    0,
+                    255,
+                    120,
+                )
+            )
+
+            painter.drawText(
+                QRectF(
+                    card_x + 15.0,
+                    card_y + 132.0,
+                    card_width - 30.0,
+                    20.0,
+                ),
+                Qt.AlignmentFlag.AlignLeft,
+                f"DTO ACTIVE → {dto_ident}",
+            )
+        
         painter.restore()
         
     def draw_touch_map_controls(
