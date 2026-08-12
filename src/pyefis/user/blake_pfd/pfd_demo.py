@@ -3172,7 +3172,28 @@ class BlakePfdDemo(QWidget):
         dtk_relative = (desired_track - heading + 360) % 360
         dtk_angle = radians(dtk_relative - 90)
 
-        cdi_offset = max(-1.0, min(1.0, pfd.cdi)) * 35
+        if (
+            self.direct_to_lateral_guidance_state.active
+        ):
+            displayed_cdi = (
+                self.direct_to_lateral_guidance_state
+                .lateral_error
+            )
+        else:
+            displayed_cdi = (
+                pfd.cdi
+            )
+
+        cdi_offset = (
+            max(
+                -1.0,
+                min(
+                    1.0,
+                    displayed_cdi,
+                ),
+            )
+            * 35
+        )
         offset_angle = dtk_angle + radians(90)
         offset_x = int(cos(offset_angle) * cdi_offset)
         offset_y = int(sin(offset_angle) * cdi_offset)
@@ -3258,7 +3279,28 @@ class BlakePfdDemo(QWidget):
             painter.setPen(QPen(QColor(255, 255, 255), 2))
             painter.drawLine(center_x - 125, cdi_y, center_x + 125, cdi_y)
 
-            cdi_x = center_x + int(max(-1.0, min(1.0, pfd.cdi)) * 100)
+            if (
+                self.direct_to_lateral_guidance_state.active
+            ):
+                displayed_cdi = (
+                    self.direct_to_lateral_guidance_state
+                    .lateral_error
+                )
+            else:
+                displayed_cdi = (
+                    pfd.cdi
+                )
+
+            cdi_x = center_x + int(
+                max(
+                    -1.0,
+                    min(
+                        1.0,
+                        displayed_cdi,
+                    ),
+                )
+                * 100
+            )
             painter.setBrush(QBrush(QColor(255, 0, 255)))
             painter.setPen(QPen(QColor(255, 0, 255), 2))
             painter.drawRect(cdi_x - 6, cdi_y - 28, 12, 56)
@@ -3303,9 +3345,24 @@ class BlakePfdDemo(QWidget):
             f"BRG {pfd.bearing_deg:.0f}°",
             f"DTK {pfd.desired_track_deg:.0f}°",
             f"OBS {self.config.obs.selected_course_deg:.0f}°" if self.config.obs.enabled else "",
-            f"CDI {pfd.cdi:+.2f} NM",
+            (
+                f"{cdi_source} CDI "
+                f"{displayed_cdi:+.2f}"
+            ),
         ]
-
+        if (
+            self.direct_to_lateral_guidance_state.active
+        ):
+            displayed_cdi = (
+                self.direct_to_lateral_guidance_state
+                .lateral_error
+            )
+            cdi_source = "DTO"
+        else:
+            displayed_cdi = (
+                pfd.cdi
+            )
+            cdi_source = "NAV"
         parts = [part for part in parts if part]
 
         if self.config.features.show_vdi and self.config.vnav.enabled:
