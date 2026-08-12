@@ -213,6 +213,8 @@ class BlakePfdDemo(QWidget):
         )
         
         self.direct_to_button_rect = QRectF()
+        
+        self.cancel_direct_to_button_rect = QRectF()
 
         self.reachable_airport_pipeline = (
             self.aircraft_systems.reachable_airport_pipeline
@@ -1191,6 +1193,26 @@ class BlakePfdDemo(QWidget):
                 return
             
             if (
+                self.direct_to_state.active
+                and (
+                    self.cancel_direct_to_button_rect
+                    .contains(
+                        QPointF(
+                            touch_x,
+                            touch_y,
+                        )
+                    )
+                )
+            ):
+                self.direct_to_state = (
+                    self.direct_to_manager.clear()
+                )
+
+                self.update()
+                event.accept()
+                return
+            
+            if (
                 self.map_airport_selection.selected
                 and self.direct_to_button_rect.contains(
                     QPointF(
@@ -1947,12 +1969,14 @@ class BlakePfdDemo(QWidget):
         )
 
         if not selection.selected:
+            self.direct_to_button_rect = QRectF()
+            self.cancel_direct_to_button_rect = QRectF()
             return
 
         card_x = 350.0
         card_y = 95.0
         card_width = 360.0
-        card_height = 205.0
+        card_height = 255.0
 
         painter.save()
 
@@ -2080,16 +2104,41 @@ class BlakePfdDemo(QWidget):
             "AIRPORT SELECTED",
         )
 
+        if self.direct_to_state.active:
+            dto_ident = (
+                self.direct_to_state.identifier
+                or ""
+            )
+
+            painter.setPen(
+                QColor(
+                    0,
+                    255,
+                    120,
+                )
+            )
+
+            painter.drawText(
+                QRectF(
+                    card_x + 15.0,
+                    card_y + 130.0,
+                    card_width - 30.0,
+                    22.0,
+                ),
+                Qt.AlignmentFlag.AlignLeft,
+                f"DTO ACTIVE → {dto_ident}",
+            )
+
         direct_button_x = (
             card_x + 15.0
         )
         direct_button_y = (
-            card_y + 145.0
+            card_y + 155.0
         )
         direct_button_width = (
             card_width - 30.0
         )
-        direct_button_height = 45.0
+        direct_button_height = 42.0
 
         painter.setBrush(
             QBrush(
@@ -2138,71 +2187,35 @@ class BlakePfdDemo(QWidget):
             Qt.AlignmentFlag.AlignCenter,
             "DIRECT TO",
         )
-        
+
         self.direct_to_button_rect = QRectF(
             direct_button_x,
             direct_button_y,
             direct_button_width,
             direct_button_height,
         )
-        
+
         if self.direct_to_state.active:
-            dto_ident = (
-                self.direct_to_state.identifier
-                or ""
+            cancel_button_x = (
+                direct_button_x
             )
-
-            painter.setPen(
-                QColor(
-                    0,
-                    255,
-                    120,
-                )
+            cancel_button_y = (
+                direct_button_y
+                + direct_button_height
+                + 8.0
             )
-
-            painter.drawText(
-                QRectF(
-                    card_x + 15.0,
-                    card_y + 132.0,
-                    card_width - 30.0,
-                    20.0,
-                ),
-                Qt.AlignmentFlag.AlignLeft,
-                f"DTO ACTIVE → {dto_ident}",
+            cancel_button_width = (
+                direct_button_width
             )
-        
-        painter.restore()
-        
-    def draw_touch_map_controls(
-        self,
-        painter: QPainter,
-        width: int,
-        height: int,
-    ) -> None:
-        self.touch_map_state = (
-            self.touch_map_controls.layout(
-                screen_width=width,
-                screen_height=height,
-            )
-        )
+            cancel_button_height = 40.0
 
-        painter.save()
-
-        font = painter.font()
-        font.setBold(True)
-        font.setPointSize(18)
-        painter.setFont(font)
-
-        for button in (
-            self.touch_map_state.buttons
-        ):
             painter.setBrush(
                 QBrush(
                     QColor(
+                        110,
                         35,
                         35,
-                        45,
-                        235,
+                        245,
                     )
                 )
             )
@@ -2220,10 +2233,10 @@ class BlakePfdDemo(QWidget):
 
             painter.drawRoundedRect(
                 QRectF(
-                    button.bounds.x,
-                    button.bounds.y,
-                    button.bounds.width,
-                    button.bounds.height,
+                    cancel_button_x,
+                    cancel_button_y,
+                    cancel_button_width,
+                    cancel_button_height,
                 ),
                 8.0,
                 8.0,
@@ -2231,13 +2244,27 @@ class BlakePfdDemo(QWidget):
 
             painter.drawText(
                 QRectF(
-                    button.bounds.x,
-                    button.bounds.y,
-                    button.bounds.width,
-                    button.bounds.height,
+                    cancel_button_x,
+                    cancel_button_y,
+                    cancel_button_width,
+                    cancel_button_height,
                 ),
                 Qt.AlignmentFlag.AlignCenter,
-                button.label,
+                "CANCEL DTO",
+            )
+
+            self.cancel_direct_to_button_rect = (
+                QRectF(
+                    cancel_button_x,
+                    cancel_button_y,
+                    cancel_button_width,
+                    cancel_button_height,
+                )
+            )
+
+        else:
+            self.cancel_direct_to_button_rect = (
+                QRectF()
             )
 
         painter.restore()
@@ -3431,6 +3458,86 @@ class BlakePfdDemo(QWidget):
                 int(glide_radius * 2),
                 int(glide_radius * 2),
             )
+            
+        if (
+            self.direct_to_state.active
+            and self.direct_to_state.bearing_deg
+            is not None
+            and self.direct_to_state.distance_nm
+            is not None
+            and map_state.range_nm > 0.0
+        ):
+            dto_relative_bearing = (
+                self.map_orientation
+                .relative_bearing_deg(
+                    bearing_deg=(
+                        self.direct_to_state
+                        .bearing_deg
+                    ),
+                )
+            )
+
+            if dto_relative_bearing is not None:
+                dto_scale = min(
+                    1.0,
+                    (
+                        self.direct_to_state
+                        .distance_nm
+                        / map_state.range_nm
+                    ),
+                )
+
+                dto_angle = radians(
+                    dto_relative_bearing
+                    - 90.0
+                )
+
+                dto_x = center_x + int(
+                    cos(dto_angle)
+                    * radius
+                    * dto_scale
+                )
+
+                dto_y = center_y + int(
+                    sin(dto_angle)
+                    * radius
+                    * dto_scale
+                )
+
+                painter.setPen(
+                    QPen(
+                        QColor(
+                            255,
+                            0,
+                            255,
+                        ),
+                        3,
+                    )
+                )
+
+                painter.drawLine(
+                    center_x,
+                    center_y,
+                    dto_x,
+                    dto_y,
+                )
+
+                painter.setBrush(
+                    QBrush(
+                        QColor(
+                            255,
+                            0,
+                            255,
+                        )
+                    )
+                )
+
+                painter.drawEllipse(
+                    dto_x - 5,
+                    dto_y - 5,
+                    10,
+                    10,
+                )
 
         selected_airport = None
 
