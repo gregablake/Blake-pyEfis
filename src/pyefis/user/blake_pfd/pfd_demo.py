@@ -160,6 +160,10 @@ from pyefis.user.blake_pfd.core.direct_to_guidance import (
     DirectToGuidance,
 )
 
+from pyefis.user.blake_pfd.core.direct_to_lateral_guidance import (
+    DirectToLateralGuidance,
+)
+
 from pyefis.user.blake_pfd.core.guidance_settings_store import (
     save_guidance_touch_settings,
 )
@@ -426,6 +430,16 @@ class BlakePfdDemo(QWidget):
 
         self.direct_to_guidance_state = (
             self.direct_to_guidance.state
+        )
+        
+        self.direct_to_lateral_guidance = (
+            DirectToLateralGuidance(
+                full_scale_error_deg=20.0,
+            )
+        )
+
+        self.direct_to_lateral_guidance_state = (
+            self.direct_to_lateral_guidance.state
         )
 
         self.terrain_source_bundle = (
@@ -787,6 +801,14 @@ class BlakePfdDemo(QWidget):
         else:
             self.direct_to_guidance_state = (
                 self.direct_to_guidance.clear()
+            )
+            
+            self.direct_to_lateral_guidance_state = (
+                self.direct_to_lateral_guidance.update(
+                    guidance_state=(
+                        self.direct_to_guidance_state
+                    ),
+                )
             )
 
         if self.pfd is not None:
@@ -1241,6 +1263,10 @@ class BlakePfdDemo(QWidget):
                 
                 self.direct_to_guidance_state = (
                     self.direct_to_guidance.clear()
+                )
+                
+                self.direct_to_lateral_guidance_state = (
+                    self.direct_to_lateral_guidance.clear()
                 )
 
                 self.update()
