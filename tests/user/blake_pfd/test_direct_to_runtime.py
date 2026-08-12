@@ -73,3 +73,4 @@ def test_clear_ends_direct_to() -> None:
     state = manager.clear()
 
     assert state.active is False
+    assert state.identifier is None
