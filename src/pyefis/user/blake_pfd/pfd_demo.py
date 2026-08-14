@@ -3051,9 +3051,27 @@ class BlakePfdDemo(QWidget):
         center_x = strip_x + strip_w // 2
 
         heading = pfd.heading_deg
-        bearing = pfd.bearing_deg
-        desired_track = pfd.desired_track_deg
-        pixels_per_deg = 6.0
+
+        if (
+            self.direct_to_guidance_state.active
+            and self.direct_to_guidance_state.bearing_deg
+            is not None
+        ):
+            desired_track = (
+                self.direct_to_guidance_state
+                .bearing_deg
+            )
+            bearing = (
+                self.direct_to_guidance_state
+                .bearing_deg
+            )
+        else:
+            desired_track = (
+                pfd.desired_track_deg
+            )
+            bearing = (
+                pfd.bearing_deg
+            )
 
         painter.fillRect(strip_x, strip_y, strip_w, strip_h, QColor(15, 15, 20))
         painter.setPen(QPen(QColor(220, 220, 220), 2))
