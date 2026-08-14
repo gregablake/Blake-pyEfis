@@ -3477,51 +3477,271 @@ class BlakePfdDemo(QWidget):
         painter.drawText(box_x + 10, box_y + 75, f"ALT ERR {pfd.glidepath_alt_error_ft:+.0f}")
         painter.drawText(box_x + 10, box_y + 100, f"GP {self.config.vnav.glidepath_angle_deg:.1f}°")
 
-    def draw_waypoint_info_box(self, painter: QPainter, pfd: FlightData, width: int, height: int) -> None:
+    def draw_waypoint_info_box(
+        self,
+        painter: QPainter,
+        pfd: FlightData,
+        width: int,
+        height: int,
+    ) -> None:
         box_x = width // 2 - 120
         box_y = 60
         box_w = 240
         box_h = 85
-        waypoint_id = self.config.navigation.selected_waypoint_id
 
-        painter.fillRect(box_x, box_y, box_w, box_h, QColor(0, 0, 0))
-        painter.setPen(QPen(QColor(255, 255, 255), 2))
-        painter.drawRect(box_x, box_y, box_w, box_h)
+        if self.direct_to_guidance_state.active:
+            waypoint_id = (
+                self.direct_to_guidance_state.identifier
+                or ""
+            )
 
-        painter.setFont(QFont("Arial", 13, QFont.Weight.Bold))
-        painter.setPen(QColor(255, 255, 255))
-        painter.drawText(box_x + 10, box_y + 25, f"WPT {waypoint_id}")
+            bearing_deg = (
+                self.direct_to_guidance_state.bearing_deg
+                if self.direct_to_guidance_state.bearing_deg
+                is not None
+                else 0.0
+            )
 
-        painter.setFont(QFont("Arial", 11, QFont.Weight.Bold))
-        painter.drawText(box_x + 10, box_y + 52, f"BRG {pfd.bearing_deg:.0f}°")
-        painter.drawText(box_x + 120, box_y + 52, f"DIS {pfd.distance_to_waypoint_nm:.1f}NM")
-        painter.drawText(box_x + 10, box_y + 75, f"CRS ERR {pfd.course_error_deg:+.0f}°")
+            distance_nm = (
+                self.direct_to_guidance_state.distance_nm
+                if self.direct_to_guidance_state.distance_nm
+                is not None
+                else 0.0
+            )
 
-    def draw_navigation_status_box(self, painter: QPainter, pfd: FlightData, width: int, height: int) -> None:
-        active_leg = self.route_manager.get_active_leg()
-        waypoint_id = self.config.navigation.selected_waypoint_id
+            course_error_deg = (
+                self.direct_to_guidance_state.course_error_deg
+                if self.direct_to_guidance_state.course_error_deg
+                is not None
+                else 0.0
+            )
+        else:
+            waypoint_id = (
+                self.config.navigation.selected_waypoint_id
+            )
+
+            bearing_deg = (
+                pfd.bearing_deg
+            )
+
+            distance_nm = (
+                pfd.distance_to_waypoint_nm
+            )
+
+            course_error_deg = (
+                pfd.course_error_deg
+            )
+
+        painter.fillRect(
+            box_x,
+            box_y,
+            box_w,
+            box_h,
+            QColor(0, 0, 0),
+        )
+
+        painter.setPen(
+            QPen(
+                QColor(255, 255, 255),
+                2,
+            )
+        )
+
+        painter.drawRect(
+            box_x,
+            box_y,
+            box_w,
+            box_h,
+        )
+
+        painter.setFont(
+            QFont(
+                "Arial",
+                13,
+                QFont.Weight.Bold,
+            )
+        )
+
+        painter.setPen(
+            QColor(
+                255,
+                255,
+                255,
+            )
+        )
+
+        painter.drawText(
+            box_x + 10,
+            box_y + 25,
+            f"WPT {waypoint_id}",
+        )
+
+        painter.setFont(
+            QFont(
+                "Arial",
+                11,
+                QFont.Weight.Bold,
+            )
+        )
+
+        painter.drawText(
+            box_x + 10,
+            box_y + 52,
+            f"BRG {bearing_deg:.0f}°",
+        )
+
+        painter.drawText(
+            box_x + 120,
+            box_y + 52,
+            f"DIS {distance_nm:.1f}NM",
+        )
+
+        painter.drawText(
+            box_x + 10,
+            box_y + 75,
+            f"CRS ERR {course_error_deg:+.0f}°",
+        )
+
+    def draw_navigation_status_box(
+        self,
+        painter: QPainter,
+        pfd: FlightData,
+        width: int,
+        height: int,
+    ) -> None:
+        active_leg = (
+            self.route_manager.get_active_leg()
+        )
 
         box_x = width // 2 - 150
         box_y = 150
         box_w = 300
         box_h = 90
 
-        painter.fillRect(box_x, box_y, box_w, box_h, QColor(0, 0, 0))
-        painter.setPen(QPen(QColor(0, 255, 0), 2))
-        painter.drawRect(box_x, box_y, box_w, box_h)
+        if self.direct_to_guidance_state.active:
+            waypoint_id = (
+                self.direct_to_guidance_state.identifier
+                or ""
+            )
 
-        painter.setFont(QFont("Arial", 12, QFont.Weight.Bold))
-        painter.setPen(QColor(0, 255, 0))
+            bearing_deg = (
+                self.direct_to_guidance_state.bearing_deg
+                if self.direct_to_guidance_state.bearing_deg
+                is not None
+                else 0.0
+            )
 
-        if active_leg is not None:
-            painter.drawText(box_x + 10, box_y + 25, f"ACTIVE LEG {active_leg.from_ident} → {active_leg.to_ident}")
+            desired_track_deg = (
+                bearing_deg
+            )
+
+            distance_nm = (
+                self.direct_to_guidance_state.distance_nm
+                if self.direct_to_guidance_state.distance_nm
+                is not None
+                else 0.0
+            )
+
+            nav_title = (
+                f"DIRECT TO {waypoint_id}"
+            )
         else:
-            painter.drawText(box_x + 10, box_y + 25, f"DIRECT TO {waypoint_id}")
+            waypoint_id = (
+                self.config.navigation.selected_waypoint_id
+            )
 
-        painter.setPen(QColor(255, 255, 255))
-        painter.drawText(box_x + 10, box_y + 52, f"DTK {pfd.desired_track_deg:.0f}°")
-        painter.drawText(box_x + 120, box_y + 52, f"BRG {pfd.bearing_deg:.0f}°")
-        painter.drawText(box_x + 10, box_y + 76, f"DIS {pfd.distance_to_waypoint_nm:.1f} NM")
+            bearing_deg = (
+                pfd.bearing_deg
+            )
+
+            desired_track_deg = (
+                pfd.desired_track_deg
+            )
+
+            distance_nm = (
+                pfd.distance_to_waypoint_nm
+            )
+
+            if active_leg is not None:
+                nav_title = (
+                    f"ACTIVE LEG "
+                    f"{active_leg.from_ident} → "
+                    f"{active_leg.to_ident}"
+                )
+            else:
+                nav_title = (
+                    f"DIRECT TO {waypoint_id}"
+                )
+
+        painter.fillRect(
+            box_x,
+            box_y,
+            box_w,
+            box_h,
+            QColor(0, 0, 0),
+        )
+
+        painter.setPen(
+            QPen(
+                QColor(0, 255, 0),
+                2,
+            )
+        )
+
+        painter.drawRect(
+            box_x,
+            box_y,
+            box_w,
+            box_h,
+        )
+
+        painter.setFont(
+            QFont(
+                "Arial",
+                12,
+                QFont.Weight.Bold,
+            )
+        )
+
+        painter.setPen(
+            QColor(
+                0,
+                255,
+                0,
+            )
+        )
+
+        painter.drawText(
+            box_x + 10,
+            box_y + 25,
+            nav_title,
+        )
+
+        painter.setPen(
+            QColor(
+                255,
+                255,
+                255,
+            )
+        )
+
+        painter.drawText(
+            box_x + 10,
+            box_y + 52,
+            f"DTK {desired_track_deg:.0f}°",
+        )
+
+        painter.drawText(
+            box_x + 120,
+            box_y + 52,
+            f"BRG {bearing_deg:.0f}°",
+        )
+
+        painter.drawText(
+            box_x + 10,
+            box_y + 76,
+            f"DIS {distance_nm:.1f} NM",
+        )
 
     def draw_nearest_airports_overlay(self, painter: QPainter, pfd: FlightData, width: int, height: int) -> None:
         nearest = self.database.nearest_airports(39.1031, -84.5120, max_results=5)
