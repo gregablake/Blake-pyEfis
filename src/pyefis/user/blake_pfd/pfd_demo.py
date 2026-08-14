@@ -3397,11 +3397,32 @@ class BlakePfdDemo(QWidget):
                 pfd.cdi
             )
             cdi_source = "NAV"
-
+            
+        if (
+            self.direct_to_guidance_state.active
+            and self.direct_to_guidance_state.bearing_deg
+            is not None
+        ):
+            displayed_bearing = (
+                self.direct_to_guidance_state
+                .bearing_deg
+            )
+            displayed_desired_track = (
+                self.direct_to_guidance_state
+                .bearing_deg
+            )
+        else:
+            displayed_bearing = (
+                pfd.bearing_deg
+            )
+            displayed_desired_track = (
+                pfd.desired_track_deg
+            )
+            
         parts = [
             f"TRK {pfd.track_deg:.0f}°",
-            f"BRG {pfd.bearing_deg:.0f}°",
-            f"DTK {pfd.desired_track_deg:.0f}°",
+            f"BRG {displayed_bearing:.0f}°",
+            f"DTK {displayed_desired_track:.0f}°",
             (
                 f"OBS "
                 f"{self.config.obs.selected_course_deg:.0f}°"
