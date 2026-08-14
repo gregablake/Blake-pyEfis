@@ -3021,34 +3021,101 @@ class BlakePfdDemo(QWidget):
             f"{alt:.0f}",
         )
 
-    def draw_vsi(self, painter: QPainter, pfd: FlightData, width: int, height: int) -> None:
+    def draw_vsi(
+        self,
+        painter: QPainter,
+        pfd: FlightData,
+        width: int,
+        height: int,
+    ) -> None:
         x = width - 180
         y = 120
         h = height - 240
         center_y = y + h // 2
 
-        painter.setPen(QPen(QColor(200, 200, 200), 2))
-        painter.drawLine(x, y, x, y + h)
-
-        clamped_vsi = max(-2000.0, min(2000.0, pfd.vsi_fpm))
-        pointer_y = center_y - int((clamped_vsi / 2000.0) * (h / 2))
-
-        painter.setBrush(QBrush(QColor(0, 255, 255)))
-        painter.setPen(QPen(QColor(0, 255, 255), 2))
-        painter.drawPolygon(
-            QPolygonF([
-                point(x - 18, pointer_y),
-                point(x - 38, pointer_y - 10),
-                point(x - 38, pointer_y + 10),
-            ])
+        painter.setPen(
+            QPen(
+                QColor(
+                    200,
+                    200,
+                    200,
+                ),
+                2,
+            )
         )
 
+        painter.drawLine(
+            x,
+            y,
+            x,
+            y + h,
+        )
+
+        clamped_vsi = max(
+            -2000.0,
+            min(
+                2000.0,
+                pfd.vsi_fpm,
+            ),
+        )
+
+        pointer_y = center_y - int(
+            (
+                clamped_vsi
+                / 2000.0
+            )
+            * (
+                h
+                / 2
+            )
+        )
+
+        painter.setBrush(
+            QBrush(
+                QColor(
+                    0,
+                    255,
+                    255,
+                )
+            )
+        )
+
+        painter.setPen(
+            QPen(
+                QColor(
+                    0,
+                    255,
+                    255,
+                ),
+                2,
+            )
+        )
+
+        painter.drawPolygon(
+            QPolygonF(
+                [
+                    QPointF(
+                        x - 18,
+                        pointer_y,
+                    ),
+                    QPointF(
+                        x - 38,
+                        pointer_y - 10,
+                    ),
+                    QPointF(
+                        x - 38,
+                        pointer_y + 10,
+                    ),
+                ]
+            )
+        )
     def draw_heading_strip(self, painter: QPainter, pfd: FlightData, width: int, height: int) -> None:
         strip_w = 500
         strip_h = 70
         strip_x = width // 2 - strip_w // 2
         strip_y = height - 95
         center_x = strip_x + strip_w // 2
+        pixels_per_deg = 5.0
 
         heading = pfd.heading_deg
 
@@ -3085,7 +3152,11 @@ class BlakePfdDemo(QWidget):
             x = center_x + int((hdg - heading) * pixels_per_deg)
             if strip_x < x < strip_x + strip_w:
                 painter.drawLine(x, strip_y + 5, x, strip_y + 25)
-                painter.drawText(x - 18, strip_y + 50, heading_label(normalized))
+                painter.drawText(
+                    x - 18,
+                    strip_y + 50,
+                    f"{normalized // 10:02d}",
+                )
 
         self.draw_heading_pointer(painter, center_x, strip_y)
         self.draw_bearing_pointer(painter, bearing, heading, center_x, strip_x, strip_y, strip_w, strip_h, pixels_per_deg)
@@ -3096,9 +3167,9 @@ class BlakePfdDemo(QWidget):
         painter.setPen(QPen(QColor(255, 220, 0), 2))
         painter.drawPolygon(
             QPolygonF([
-                point(center_x, strip_y + 5),
-                point(center_x - 10, strip_y + 25),
-                point(center_x + 10, strip_y + 25),
+                QPointF(center_x, strip_y + 5),
+                QPointF(center_x - 10, strip_y + 25),
+                QPointF(center_x + 10, strip_y + 25),
             ])
         )
 
@@ -3122,9 +3193,9 @@ class BlakePfdDemo(QWidget):
             painter.setPen(QPen(QColor(255, 0, 255), 2))
             painter.drawPolygon(
                 QPolygonF([
-                    point(bearing_x, strip_y + strip_h - 5),
-                    point(bearing_x - 10, strip_y + strip_h - 25),
-                    point(bearing_x + 10, strip_y + strip_h - 25),
+                    QPointF(bearing_x, strip_y + strip_h - 5),
+                    QPointF(bearing_x - 10, strip_y + strip_h - 25),
+                    QPointF(bearing_x + 10, strip_y + strip_h - 25),
                 ])
             )
             painter.setFont(QFont("Arial", 10, QFont.Weight.Bold))
@@ -3149,9 +3220,9 @@ class BlakePfdDemo(QWidget):
             painter.setPen(QPen(QColor(0, 255, 0), 2))
             painter.drawPolygon(
                 QPolygonF([
-                    point(dtk_x, strip_y + 5),
-                    point(dtk_x - 10, strip_y + 25),
-                    point(dtk_x + 10, strip_y + 25),
+                    QPointF(dtk_x, strip_y + 5),
+                    QPointF(dtk_x - 10, strip_y + 25),
+                    QPointF(dtk_x + 10, strip_y + 25),
                 ])
             )
             painter.setFont(QFont("Arial", 10, QFont.Weight.Bold))
@@ -3185,7 +3256,7 @@ class BlakePfdDemo(QWidget):
             label_x = center_x + int(cos(angle) * (radius - 25))
             label_y = center_y + int(sin(angle) * (radius - 25))
 
-            painter.drawText(label_x - 10, label_y + 5, heading_label(deg))
+            painter.drawText(label_x - 10, label_y + 5, f"{deg // 10:02d}")
 
         dtk_relative = (desired_track - heading + 360) % 360
         dtk_angle = radians(dtk_relative - 90)
@@ -3252,9 +3323,9 @@ class BlakePfdDemo(QWidget):
         painter.setPen(QPen(QColor(255, 220, 0), 2))
         painter.drawPolygon(
             QPolygonF([
-                point(center_x, center_y - 12),
-                point(center_x - 8, center_y + 10),
-                point(center_x + 8, center_y + 10),
+                QPointF(center_x, center_y - 12),
+                QPointF(center_x - 8, center_y + 10),
+                QPointF(center_x + 8, center_y + 10),
             ])
         )
 
@@ -3331,9 +3402,9 @@ class BlakePfdDemo(QWidget):
             painter.setPen(QPen(QColor(0, 255, 0), 2))
             painter.drawPolygon(
                 QPolygonF([
-                    point(vdi_x, vdi_y),
-                    point(vdi_x + 22, vdi_y - 12),
-                    point(vdi_x + 22, vdi_y + 12),
+                    QPointF(vdi_x, vdi_y),
+                    QPointF(vdi_x + 22, vdi_y - 12),
+                    QPointF(vdi_x + 22, vdi_y + 12),
                 ])
             )
 
@@ -4216,15 +4287,15 @@ class BlakePfdDemo(QWidget):
         painter.drawPolygon(
             QPolygonF(
                 [
-                    point(
+                    QPointF(
                         center_x,
                         center_y - 12,
                     ),
-                    point(
+                    QPointF(
                         center_x - 8,
                         center_y + 10,
                     ),
-                    point(
+                    QPointF(
                         center_x + 8,
                         center_y + 10,
                     ),
