@@ -1794,7 +1794,7 @@ class BlakePfdDemo(QWidget):
                 )
             )
 
-    painter.restore()
+        painter.restore()
          
     def draw_flight_director(
         self,
@@ -1921,7 +1921,7 @@ class BlakePfdDemo(QWidget):
             ),
         )
 
-    painter.restore()   
+        painter.restore()   
     
     def draw_flight_path_marker(
         self,
