@@ -168,6 +168,10 @@ from pyefis.user.blake_pfd.core.guidance_settings_store import (
     save_guidance_touch_settings,
 )
 
+from pyefis.user.blake_pfd.core.sensor_watchdog import (
+    SensorWatchdog,
+)
+
 class BlakePfdDemo(QWidget):
     def __init__(self, use_hardware: bool = False, replay_log: str | None = None) -> None:
         super().__init__()
@@ -227,6 +231,15 @@ class BlakePfdDemo(QWidget):
             self.aircraft_systems.reachable_airport_pipeline
         )
         self.startup_status = run_startup_check()
+        
+        self.sensor_watchdog = SensorWatchdog()
+
+        self.sensor_watchdog_state = (
+            self.sensor_watchdog.evaluate(
+                flight_data_available=False,
+                position_valid=False,
+            )
+        )
 
         self.database = AviationDatabase()
         self.database.load_all()
@@ -704,6 +717,54 @@ class BlakePfdDemo(QWidget):
     def update_data(self) -> None:
         self.pfd = self.sensor_manager.read_flight()
         self.update_engine_state()
+
+        if self.use_hardware:
+            hardware_status = getattr(
+                self.sensor_manager.flight_sensor_source,
+                "status",
+                None,
+            )
+
+            if hardware_status is not None:
+                attitude_valid = (
+                    hardware_status.bno085_ok
+                )
+
+                air_data_valid = (
+                    hardware_status.baro_ok
+                    and hardware_status.airspeed_ok
+                )
+
+                position_valid = (
+                    hardware_status.gps_ok
+                    and self.pfd is not None
+                    and self.pfd.position_valid
+                )
+            else:
+                attitude_valid = False
+                air_data_valid = False
+                position_valid = False
+
+        else:
+            attitude_valid = True
+            air_data_valid = True
+
+            position_valid = (
+                self.pfd.position_valid
+                if self.pfd is not None
+                else False
+            )
+
+        self.sensor_watchdog_state = (
+            self.sensor_watchdog.evaluate(
+                flight_data_available=(
+                    self.pfd is not None
+                ),
+                position_valid=position_valid,
+                attitude_valid=attitude_valid,
+                air_data_valid=air_data_valid,
+            )
+        )
 
         engine = self.engine_state.data
 
@@ -2800,6 +2861,107 @@ class BlakePfdDemo(QWidget):
             width,
             height,
         )
+        
+        self.draw_sensor_watchdog_banner(
+            painter,
+            width,
+            height,
+        )
+        
+    def draw_sensor_watchdog_banner(
+        self,
+        painter: QPainter,
+        width: int,
+        height: int,
+    ) -> None:
+        state = self.sensor_watchdog_state
+
+        if (
+            not state.failed
+            and not state.degraded
+        ):
+            return
+
+        banner_width = 420.0
+        banner_height = 52.0
+
+        banner_x = (
+            (width - banner_width)
+            / 2.0
+        )
+
+        banner_y = 82.0
+
+        if state.failed:
+            background_color = QColor(
+                180,
+                0,
+                0,
+                235,
+            )
+        else:
+            background_color = QColor(
+                190,
+                120,
+                0,
+                235,
+            )
+
+        painter.save()
+
+        painter.setBrush(
+            QBrush(
+                background_color
+            )
+        )
+
+        painter.setPen(
+            QPen(
+                QColor(
+                    255,
+                    255,
+                    255,
+                ),
+                2,
+            )
+        )
+
+        painter.drawRoundedRect(
+            QRectF(
+                banner_x,
+                banner_y,
+                banner_width,
+                banner_height,
+            ),
+            8.0,
+            8.0,
+        )
+
+        font = painter.font()
+        font.setBold(True)
+        font.setPointSize(15)
+        painter.setFont(font)
+
+        painter.setPen(
+            QColor(
+                255,
+                255,
+                255,
+            )
+        )
+
+        painter.drawText(
+            QRectF(
+                banner_x,
+                banner_y,
+                banner_width,
+                banner_height,
+            ),
+            Qt.AlignmentFlag.AlignCenter,
+            state.message,
+        )
+
+        painter.restore()
 
     def draw_background(self, painter: QPainter, width: int, height: int) -> None:
         painter.fillRect(0, 0, width, height, QColor(5, 5, 8))

@@ -81,3 +81,67 @@ def test_pfd_demo_renders_offscreen(
         widget.close()
         widget.deleteLater()
         qapp.processEvents()
+        
+def test_pfd_demo_renders_sensor_failure_banner(
+    qapp: QApplication,
+) -> None:
+    widget = BlakePfdDemo(
+        use_hardware=False,
+    )
+
+    widget.timer.stop()
+
+    widget.resize(
+        1280,
+        720,
+    )
+
+    image = QImage(
+        1280,
+        720,
+        QImage.Format.Format_ARGB32,
+    )
+
+    image.fill(0)
+
+    painter = QPainter(
+        image
+    )
+
+    try:
+        widget.update_data()
+
+        widget.sensor_watchdog_state = (
+            widget.sensor_watchdog.evaluate(
+                flight_data_available=True,
+                position_valid=False,
+                attitude_valid=False,
+                air_data_valid=False,
+            )
+        )
+
+        assert (
+            widget.sensor_watchdog_state.degraded
+            is True
+        )
+
+        assert (
+            widget.sensor_watchdog_state.message
+            == "DEGRADED: ATTITUDE / AIR DATA / GPS"
+        )
+
+        widget.render(
+            painter,
+        )
+
+        assert image.isNull() is False
+
+    finally:
+        painter.end()
+
+        if widget.timer.isActive():
+            widget.timer.stop()
+
+        widget.close()
+        widget.deleteLater()
+        qapp.processEvents()
