@@ -172,6 +172,10 @@ from pyefis.user.blake_pfd.core.sensor_watchdog import (
     SensorWatchdog,
 )
 
+from pyefis.user.blake_pfd.core.data_freshness import (
+    DataFreshnessMonitor,
+)
+
 class BlakePfdDemo(QWidget):
     def __init__(self, use_hardware: bool = False, replay_log: str | None = None) -> None:
         super().__init__()
@@ -233,6 +237,32 @@ class BlakePfdDemo(QWidget):
         self.startup_status = run_startup_check()
         
         self.sensor_watchdog = SensorWatchdog()
+        
+        self.sensor_fault_message = ""
+        
+        self.bno085_freshness = (
+            DataFreshnessMonitor(
+                stale_after_s=0.5,
+            )
+        )
+
+        self.baro_freshness = (
+            DataFreshnessMonitor(
+                stale_after_s=1.0,
+            )
+        )
+
+        self.airspeed_freshness = (
+            DataFreshnessMonitor(
+                stale_after_s=1.0,
+            )
+        )
+
+        self.gps_freshness = (
+            DataFreshnessMonitor(
+                stale_after_s=2.5,
+            )
+        )
 
         self.sensor_watchdog_state = (
             self.sensor_watchdog.evaluate(
@@ -717,6 +747,8 @@ class BlakePfdDemo(QWidget):
     def update_data(self) -> None:
         self.pfd = self.sensor_manager.read_flight()
         self.update_engine_state()
+        
+        sensor_faults: list[str] = []
 
         if self.use_hardware:
             hardware_status = getattr(
@@ -726,24 +758,131 @@ class BlakePfdDemo(QWidget):
             )
 
             if hardware_status is not None:
+                now_s = monotonic()
+
+                if (
+                    hardware_status.bno085_last_success_s
+                    is not None
+                ):
+                    self.bno085_freshness.mark_update(
+                        hardware_status
+                        .bno085_last_success_s
+                    )
+
+                if (
+                    hardware_status.baro_last_success_s
+                    is not None
+                ):
+                    self.baro_freshness.mark_update(
+                        hardware_status
+                        .baro_last_success_s
+                    )
+
+                if (
+                    hardware_status.airspeed_last_success_s
+                    is not None
+                ):
+                    self.airspeed_freshness.mark_update(
+                        hardware_status
+                        .airspeed_last_success_s
+                    )
+
+                if (
+                    hardware_status.gps_last_success_s
+                    is not None
+                ):
+                    self.gps_freshness.mark_update(
+                        hardware_status
+                        .gps_last_success_s
+                    )
+
+                self.bno085_freshness_state = (
+                    self.bno085_freshness.evaluate(
+                        now_s
+                    )
+                )
+
+                self.baro_freshness_state = (
+                    self.baro_freshness.evaluate(
+                        now_s
+                    )
+                )
+
+                self.airspeed_freshness_state = (
+                    self.airspeed_freshness.evaluate(
+                        now_s
+                    )
+                )
+
+                self.gps_freshness_state = (
+                    self.gps_freshness.evaluate(
+                        now_s
+                    )
+                )
+                
+                if not hardware_status.bno085_ok:
+                    sensor_faults.append(
+                        "AHRS FAIL"
+                    )
+                elif self.bno085_freshness_state.stale:
+                    sensor_faults.append(
+                        "AHRS DATA STALE"
+                    )
+
+                if not hardware_status.baro_ok:
+                    sensor_faults.append(
+                        "BARO FAIL"
+                    )
+                elif self.baro_freshness_state.stale:
+                    sensor_faults.append(
+                        "BARO DATA STALE"
+                    )
+
+                if not hardware_status.airspeed_ok:
+                    sensor_faults.append(
+                        "AIRSPEED FAIL"
+                    )
+                elif self.airspeed_freshness_state.stale:
+                    sensor_faults.append(
+                        "AIRSPEED DATA STALE"
+                    )
+
+                if not hardware_status.gps_ok:
+                    sensor_faults.append(
+                        "GPS FAIL"
+                    )
+                elif self.gps_freshness_state.stale:
+                    sensor_faults.append(
+                        "GPS DATA STALE"
+                    )
+
                 attitude_valid = (
                     hardware_status.bno085_ok
+                    and self.bno085_freshness_state.fresh
                 )
 
                 air_data_valid = (
                     hardware_status.baro_ok
                     and hardware_status.airspeed_ok
+                    and self.baro_freshness_state.fresh
+                    and self.airspeed_freshness_state.fresh
                 )
 
                 position_valid = (
                     hardware_status.gps_ok
+                    and self.gps_freshness_state.fresh
                     and self.pfd is not None
                     and self.pfd.position_valid
                 )
+
             else:
                 attitude_valid = False
                 air_data_valid = False
                 position_valid = False
+                
+                sensor_faults.append(
+                    "SENSOR STATUS LOST"
+                )
 
         else:
             attitude_valid = True
@@ -765,6 +904,15 @@ class BlakePfdDemo(QWidget):
                 air_data_valid=air_data_valid,
             )
         )
+        
+        if sensor_faults:
+            self.sensor_fault_message = (
+                " / ".join(
+                    sensor_faults
+                )
+            )
+        else:
+            self.sensor_fault_message = ""
 
         engine = self.engine_state.data
 
@@ -2958,7 +3106,10 @@ class BlakePfdDemo(QWidget):
                 banner_height,
             ),
             Qt.AlignmentFlag.AlignCenter,
-            state.message,
+            (
+                self.sensor_fault_message
+                or state.message
+            ),
         )
 
         painter.restore()

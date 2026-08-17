@@ -145,3 +145,39 @@ def test_pfd_demo_renders_sensor_failure_banner(
         widget.close()
         widget.deleteLater()
         qapp.processEvents()
+        
+def test_pfd_demo_sensor_fault_message(
+    qapp: QApplication,
+) -> None:
+    widget = BlakePfdDemo(
+        use_hardware=False,
+    )
+
+    widget.timer.stop()
+
+    try:
+        widget.sensor_fault_message = (
+            "AHRS DATA STALE"
+        )
+
+        assert (
+            widget.sensor_fault_message
+            == "AHRS DATA STALE"
+        )
+
+        widget.sensor_fault_message = (
+            "AHRS DATA STALE / GPS FAIL"
+        )
+
+        assert (
+            widget.sensor_fault_message
+            == "AHRS DATA STALE / GPS FAIL"
+        )
+
+    finally:
+        if widget.timer.isActive():
+            widget.timer.stop()
+
+        widget.close()
+        widget.deleteLater()
+        qapp.processEvents()

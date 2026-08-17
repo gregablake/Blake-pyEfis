@@ -36,6 +36,10 @@ class HardwareStatus:
     airspeed_ok: bool = False
     gps_ok: bool = False
 
+    bno085_last_success_s: float | None = None
+    baro_last_success_s: float | None = None
+    airspeed_last_success_s: float | None = None
+    gps_last_success_s: float | None = None
 
 class Bno085Reader:
     """
@@ -50,6 +54,7 @@ class Bno085Reader:
         self.last_heading_deg = 0.0
         self.last_yaw_deg = 0.0
         self.last_update_s = monotonic()
+        self.last_success_s: float | None = None
         self.sensor = None
 
         try:
@@ -112,7 +117,8 @@ class Bno085Reader:
 
             self.last_yaw_deg = yaw_deg
             self.last_heading_deg = yaw_deg
-            self.last_update_s = now_s
+            
+            self.last_success_s = now_s
 
             # Convert m/s^2 to g.
             accel_x_g = accel_x / 9.80665
@@ -158,6 +164,7 @@ class BaroReader:
     def __init__(self) -> None:
         self.ok = False
         self.sensor = None
+        self.last_success_s: float | None = None
 
         try:
             import board
@@ -194,7 +201,8 @@ class BaroReader:
             temperature_c = float(self.sensor.temperature)
 
             static_pressure_pa = pressure_hpa * 100.0
-
+            self.last_success_s = monotonic()
+            
             return {
                 "static_pressure_pa": static_pressure_pa,
                 "outside_air_temp_c": temperature_c,
@@ -231,6 +239,7 @@ class AirspeedReader:
         self.ok = False
         self.ads = None
         self.channel = None
+        self.last_success_s: float | None = None
 
         # Calibration values.
         # These can be adjusted later after real sensor testing.
@@ -269,6 +278,7 @@ class AirspeedReader:
         try:
             voltage = float(self.channel.voltage)
             differential_pressure_pa = self.voltage_to_pressure_pa(voltage)
+            self.last_success_s = monotonic()
 
             return {
                 "differential_pressure_pa": differential_pressure_pa,
@@ -317,6 +327,7 @@ class GpsReader:
     def __init__(self) -> None:
         self.ok = False
         self.gps_session = None
+        self.last_success_s: float | None = None
         self.last_track_deg = 0.0
         self.last_ground_speed_kt = 0.0
 
@@ -369,6 +380,7 @@ class GpsReader:
 
             self.last_track_deg = track_deg
             self.last_ground_speed_kt = ground_speed_kt
+            self.last_success_s = monotonic()
 
             return {
                 "gps_track_deg": track_deg % 360.0,
@@ -421,6 +433,22 @@ class BlakeHardwareSensorSource:
         self.status.baro_ok = self.baro.ok
         self.status.airspeed_ok = self.airspeed.ok
         self.status.gps_ok = self.gps.ok
+        
+        self.status.bno085_last_success_s = (
+            self.bno085.last_success_s
+        )
+
+        self.status.baro_last_success_s = (
+            self.baro.last_success_s
+        )
+
+        self.status.airspeed_last_success_s = (
+            self.airspeed.last_success_s
+        )
+
+        self.status.gps_last_success_s = (
+            self.gps.last_success_s
+        )
 
         return RawSensorInputs(
             differential_pressure_pa=airspeed["differential_pressure_pa"],
