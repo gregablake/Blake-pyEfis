@@ -307,3 +307,76 @@ def test_pfd_demo_renders_startup_initializing_banner(
         widget.deleteLater()
         qapp.processEvents()
         
+def test_pfd_demo_renders_unclean_restart_banner(
+    qapp: QApplication,
+) -> None:
+    widget = BlakePfdDemo(
+        use_hardware=False,
+    )
+
+    widget.timer.stop()
+
+    widget.resize(
+        1280,
+        720,
+    )
+
+    image = QImage(
+        1280,
+        720,
+        QImage.Format.Format_ARGB32,
+    )
+
+    image.fill(0)
+
+    painter = QPainter(
+        image
+    )
+
+    try:
+        widget.update_data()
+
+        widget.reboot_recovery_state = (
+            widget.reboot_recovery.evaluate(
+                previous_shutdown_clean=False,
+                startup_ready=False,
+                flight_data_valid=False,
+            )
+        )
+
+        assert (
+            widget.reboot_recovery_state
+            .recovery_required
+            is True
+        )
+
+        assert (
+            widget.reboot_recovery_state
+            .inhibit_ready
+            is True
+        )
+
+        assert (
+            widget.reboot_recovery_state.message
+            == (
+                "UNCLEAN RESTART - "
+                "WAITING FOR FLIGHT DATA"
+            )
+        )
+
+        widget.render(
+            painter,
+        )
+
+        assert image.isNull() is False
+
+    finally:
+        painter.end()
+
+        if widget.timer.isActive():
+            widget.timer.stop()
+
+        widget.close()
+        widget.deleteLater()
+        qapp.processEvents()
+        

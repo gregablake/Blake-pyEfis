@@ -3,6 +3,7 @@ from dataclasses import replace
 import argparse
 import sys
 from time import monotonic
+from pathlib import Path
 from math import cos, radians, sin
 from pathlib import Path
 
@@ -180,6 +181,13 @@ from pyefis.user.blake_pfd.core.startup_gate import (
     StartupGate,
 )
 
+from pyefis.user.blake_pfd.core.reboot_recovery import (
+    RebootRecovery,
+)
+from pyefis.user.blake_pfd.core.shutdown_marker import (
+    ShutdownMarker,
+)
+
 
 class BlakePfdDemo(QWidget):
     def __init__(self, use_hardware: bool = False, replay_log: str | None = None) -> None:
@@ -255,6 +263,37 @@ class BlakePfdDemo(QWidget):
                 attitude_valid=False,
                 air_data_valid=False,
                 hardware_mode=use_hardware,
+            )
+        )
+        
+        self.shutdown_marker = ShutdownMarker(
+            Path.home()
+            / ".local"
+            / "state"
+            / "blake_pyefis"
+            / "shutdown.state"
+        )
+
+        self.previous_shutdown_clean = (
+            self.shutdown_marker
+            .previous_shutdown_clean()
+        )
+
+        self.shutdown_marker.mark_running()
+
+        self.reboot_recovery = (
+            RebootRecovery()
+        )
+
+        self.reboot_recovery_state = (
+            self.reboot_recovery.evaluate(
+                previous_shutdown_clean=(
+                    self.previous_shutdown_clean
+                ),
+                startup_ready=(
+                    self.startup_gate_state.ready
+                ),
+                flight_data_valid=False,
             )
         )
         
@@ -941,6 +980,22 @@ class BlakePfdDemo(QWidget):
                 attitude_valid=attitude_valid,
                 air_data_valid=air_data_valid,
                 hardware_mode=self.use_hardware,
+            )
+        )
+        
+        self.reboot_recovery_state = (
+            self.reboot_recovery.evaluate(
+                previous_shutdown_clean=(
+                    self.previous_shutdown_clean
+                ),
+                startup_ready=(
+                    self.startup_gate_state.ready
+                ),
+                flight_data_valid=(
+                    self.pfd is not None
+                    and attitude_valid
+                    and air_data_valid
+                ),
             )
         )
         
@@ -1819,6 +1874,22 @@ class BlakePfdDemo(QWidget):
             return
 
         super().mouseReleaseEvent(
+            event
+        )
+        
+    def closeEvent(
+        self,
+        event,
+    ) -> None:  # noqa: N802
+        if self.timer.isActive():
+            self.timer.stop()
+
+        try:
+            self.shutdown_marker.mark_clean_shutdown()
+        except OSError:
+            pass
+
+        super().closeEvent(
             event
         )
         
@@ -3054,12 +3125,100 @@ class BlakePfdDemo(QWidget):
             width,
             height,
         )
-        
+
+        self.draw_reboot_recovery_banner(
+            painter,
+            width,
+            height,
+        )
+
         self.draw_startup_gate_banner(
             painter,
             width,
             height,
         )
+        
+    def draw_reboot_recovery_banner(
+        self,
+        painter: QPainter,
+        width: int,
+        height: int,
+    ) -> None:
+        state = self.reboot_recovery_state
+
+        if not state.inhibit_ready:
+            return
+
+        banner_width = 520.0
+        banner_height = 52.0
+
+        banner_x = (
+            (width - banner_width)
+            / 2.0
+        )
+
+        banner_y = 140.0
+
+        painter.save()
+
+        painter.setBrush(
+            QBrush(
+                QColor(
+                    170,
+                    45,
+                    0,
+                    240,
+                )
+            )
+        )
+
+        painter.setPen(
+            QPen(
+                QColor(
+                    255,
+                    255,
+                    255,
+                ),
+                2,
+            )
+        )
+
+        painter.drawRoundedRect(
+            QRectF(
+                banner_x,
+                banner_y,
+                banner_width,
+                banner_height,
+            ),
+            8.0,
+            8.0,
+        )
+
+        font = painter.font()
+        font.setBold(True)
+        font.setPointSize(14)
+        painter.setFont(font)
+
+        painter.setPen(
+            QColor(
+                255,
+                255,
+                255,
+            )
+        )
+
+        painter.drawText(
+            QRectF(
+                banner_x,
+                banner_y,
+                banner_width,
+                banner_height,
+            ),
+            Qt.AlignmentFlag.AlignCenter,
+            state.message,
+        )
+
+        painter.restore()
         
     def draw_startup_gate_banner(
         self,
