@@ -188,6 +188,14 @@ from pyefis.user.blake_pfd.core.shutdown_marker import (
     ShutdownMarker,
 )
 
+from pyefis.user.blake_pfd.core.app_heartbeat import (
+    AppHeartbeat,
+)
+
+from pyefis.user.blake_pfd.core.heartbeat_file import (
+    HeartbeatFile,
+)
+
 
 class BlakePfdDemo(QWidget):
     def __init__(self, use_hardware: bool = False, replay_log: str | None = None) -> None:
@@ -294,6 +302,23 @@ class BlakePfdDemo(QWidget):
                     self.startup_gate_state.ready
                 ),
                 flight_data_valid=False,
+            )
+        )
+        
+        self.app_heartbeat = AppHeartbeat(
+            stall_after_s=2.0,
+        )
+        
+        self.heartbeat_file = HeartbeatFile(
+            Path(
+                "/tmp/blake_pyefis/app.heartbeat"
+            ),
+            write_interval_s=0.5,
+        )
+
+        self.app_heartbeat_state = (
+            self.app_heartbeat.evaluate(
+                monotonic()
             )
         )
         
@@ -806,6 +831,26 @@ class BlakePfdDemo(QWidget):
         )
 
     def update_data(self) -> None:
+        heartbeat_now_s = monotonic()
+
+        self.app_heartbeat.beat(
+            heartbeat_now_s
+        )
+        
+        try:
+            self.heartbeat_file.maybe_write(
+                heartbeat_now_s
+            )
+        except OSError:
+            pass
+
+        self.app_heartbeat_state = (
+            self.app_heartbeat.evaluate(
+                heartbeat_now_s
+            )
+        )
+        
+        
         self.pfd = self.sensor_manager.read_flight()
         self.update_engine_state()
         
@@ -955,6 +1000,20 @@ class BlakePfdDemo(QWidget):
                 else False
             )
 
+        if self.use_hardware:
+            attitude_fresh = (
+                self.bno085_freshness_state.fresh
+            )
+
+            air_data_fresh = (
+                self.baro_freshness_state.fresh
+                and self.airspeed_freshness_state.fresh
+            )
+        else:
+            attitude_fresh = True
+            air_data_fresh = True
+
+
         self.sensor_watchdog_state = (
             self.sensor_watchdog.evaluate(
                 flight_data_available=(
@@ -963,6 +1022,8 @@ class BlakePfdDemo(QWidget):
                 position_valid=position_valid,
                 attitude_valid=attitude_valid,
                 air_data_valid=air_data_valid,
+                attitude_fresh=attitude_fresh,
+                air_data_fresh=air_data_fresh,
             )
         )
         
@@ -979,6 +1040,8 @@ class BlakePfdDemo(QWidget):
                 ),
                 attitude_valid=attitude_valid,
                 air_data_valid=air_data_valid,
+                attitude_fresh=attitude_fresh,
+                air_data_fresh=air_data_fresh,
                 hardware_mode=self.use_hardware,
             )
         )
@@ -1888,7 +1951,11 @@ class BlakePfdDemo(QWidget):
             self.shutdown_marker.mark_clean_shutdown()
         except OSError:
             pass
-
+        try:
+            self.heartbeat_file.remove()
+        except OSError:
+            pass
+        
         super().closeEvent(
             event
         )

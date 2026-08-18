@@ -21,6 +21,8 @@ class StartupGate:
         attitude_valid: bool,
         air_data_valid: bool,
         hardware_mode: bool,
+        attitude_fresh: bool = True,
+        air_data_fresh: bool = True,
     ) -> StartupGateState:
         if not config_ok:
             return StartupGateState(
@@ -51,9 +53,13 @@ class StartupGate:
 
             if not attitude_valid:
                 missing.append("AHRS")
+            elif not attitude_fresh:
+                missing.append("AHRS STALE")
 
             if not air_data_valid:
                 missing.append("AIR DATA")
+            elif not air_data_fresh:
+                missing.append("AIR DATA STALE")
 
             if missing:
                 return StartupGateState(

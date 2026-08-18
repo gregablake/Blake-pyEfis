@@ -88,3 +88,36 @@ def test_simulator_does_not_require_real_hardware() -> None:
     )
 
     assert state.ready is True
+    
+def test_hardware_waits_for_fresh_attitude_data() -> None:
+    state = StartupGate().evaluate(
+        config_ok=True,
+        database_ok=True,
+        flight_data_available=True,
+        attitude_valid=True,
+        air_data_valid=True,
+        attitude_fresh=False,
+        air_data_fresh=True,
+        hardware_mode=True,
+    )
+
+    assert state.initializing is True
+    assert state.ready is False
+    assert state.message == "INITIALIZING: AHRS STALE"
+
+
+def test_hardware_waits_for_fresh_air_data() -> None:
+    state = StartupGate().evaluate(
+        config_ok=True,
+        database_ok=True,
+        flight_data_available=True,
+        attitude_valid=True,
+        air_data_valid=True,
+        attitude_fresh=True,
+        air_data_fresh=False,
+        hardware_mode=True,
+    )
+
+    assert state.initializing is True
+    assert state.ready is False
+    assert state.message == "INITIALIZING: AIR DATA STALE"
