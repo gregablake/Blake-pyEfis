@@ -181,3 +181,129 @@ def test_pfd_demo_sensor_fault_message(
         widget.close()
         widget.deleteLater()
         qapp.processEvents()
+        
+def test_pfd_demo_renders_startup_blocked_banner(
+    qapp: QApplication,
+) -> None:
+    widget = BlakePfdDemo(
+        use_hardware=False,
+    )
+
+    widget.timer.stop()
+
+    widget.resize(
+        1280,
+        720,
+    )
+
+    image = QImage(
+        1280,
+        720,
+        QImage.Format.Format_ARGB32,
+    )
+
+    image.fill(0)
+
+    painter = QPainter(
+        image
+    )
+
+    try:
+        widget.update_data()
+
+        widget.startup_gate_state = (
+            widget.startup_gate.evaluate(
+                config_ok=False,
+                database_ok=True,
+                flight_data_available=True,
+                attitude_valid=True,
+                air_data_valid=True,
+                hardware_mode=False,
+            )
+        )
+
+        assert widget.startup_gate_state.blocked is True
+        assert (
+            widget.startup_gate_state.message
+            == "STARTUP BLOCKED: CONFIG"
+        )
+
+        widget.render(
+            painter,
+        )
+
+        assert image.isNull() is False
+
+    finally:
+        painter.end()
+
+        if widget.timer.isActive():
+            widget.timer.stop()
+
+        widget.close()
+        widget.deleteLater()
+        qapp.processEvents()
+
+
+def test_pfd_demo_renders_startup_initializing_banner(
+    qapp: QApplication,
+) -> None:
+    widget = BlakePfdDemo(
+        use_hardware=False,
+    )
+
+    widget.timer.stop()
+
+    widget.resize(
+        1280,
+        720,
+    )
+
+    image = QImage(
+        1280,
+        720,
+        QImage.Format.Format_ARGB32,
+    )
+
+    image.fill(0)
+
+    painter = QPainter(
+        image
+    )
+
+    try:
+        widget.update_data()
+
+        widget.startup_gate_state = (
+            widget.startup_gate.evaluate(
+                config_ok=True,
+                database_ok=True,
+                flight_data_available=True,
+                attitude_valid=False,
+                air_data_valid=False,
+                hardware_mode=True,
+            )
+        )
+
+        assert widget.startup_gate_state.initializing is True
+        assert (
+            widget.startup_gate_state.message
+            == "INITIALIZING: AHRS / AIR DATA"
+        )
+
+        widget.render(
+            painter,
+        )
+
+        assert image.isNull() is False
+
+    finally:
+        painter.end()
+
+        if widget.timer.isActive():
+            widget.timer.stop()
+
+        widget.close()
+        widget.deleteLater()
+        qapp.processEvents()
+        

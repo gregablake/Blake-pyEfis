@@ -176,6 +176,11 @@ from pyefis.user.blake_pfd.core.data_freshness import (
     DataFreshnessMonitor,
 )
 
+from pyefis.user.blake_pfd.core.startup_gate import (
+    StartupGate,
+)
+
+
 class BlakePfdDemo(QWidget):
     def __init__(self, use_hardware: bool = False, replay_log: str | None = None) -> None:
         super().__init__()
@@ -235,6 +240,23 @@ class BlakePfdDemo(QWidget):
             self.aircraft_systems.reachable_airport_pipeline
         )
         self.startup_status = run_startup_check()
+        
+        self.startup_gate = StartupGate()
+
+        self.startup_gate_state = (
+            self.startup_gate.evaluate(
+                config_ok=(
+                    self.startup_status.config_ok
+                ),
+                database_ok=(
+                    self.startup_status.database_ok
+                ),
+                flight_data_available=False,
+                attitude_valid=False,
+                air_data_valid=False,
+                hardware_mode=use_hardware,
+            )
+        )
         
         self.sensor_watchdog = SensorWatchdog()
         
@@ -902,6 +924,23 @@ class BlakePfdDemo(QWidget):
                 position_valid=position_valid,
                 attitude_valid=attitude_valid,
                 air_data_valid=air_data_valid,
+            )
+        )
+        
+        self.startup_gate_state = (
+            self.startup_gate.evaluate(
+                config_ok=(
+                    self.startup_status.config_ok
+                ),
+                database_ok=(
+                    self.startup_status.database_ok
+                ),
+                flight_data_available=(
+                    self.pfd is not None
+                ),
+                attitude_valid=attitude_valid,
+                air_data_valid=air_data_valid,
+                hardware_mode=self.use_hardware,
             )
         )
         
@@ -3015,6 +3054,104 @@ class BlakePfdDemo(QWidget):
             width,
             height,
         )
+        
+        self.draw_startup_gate_banner(
+            painter,
+            width,
+            height,
+        )
+        
+    def draw_startup_gate_banner(
+        self,
+        painter: QPainter,
+        width: int,
+        height: int,
+    ) -> None:
+        state = self.startup_gate_state
+
+        if state.ready:
+            return
+
+        banner_width = 520.0
+        banner_height = 60.0
+
+        banner_x = (
+            (width - banner_width)
+            / 2.0
+        )
+
+        banner_y = 18.0
+
+        if state.blocked:
+            background_color = QColor(
+                190,
+                0,
+                0,
+                245,
+            )
+        else:
+            background_color = QColor(
+                180,
+                110,
+                0,
+                245,
+            )
+
+        painter.save()
+
+        painter.setBrush(
+            QBrush(
+                background_color
+            )
+        )
+
+        painter.setPen(
+            QPen(
+                QColor(
+                    255,
+                    255,
+                    255,
+                ),
+                3,
+            )
+        )
+
+        painter.drawRoundedRect(
+            QRectF(
+                banner_x,
+                banner_y,
+                banner_width,
+                banner_height,
+            ),
+            10.0,
+            10.0,
+        )
+
+        font = painter.font()
+        font.setBold(True)
+        font.setPointSize(17)
+        painter.setFont(font)
+
+        painter.setPen(
+            QColor(
+                255,
+                255,
+                255,
+            )
+        )
+
+        painter.drawText(
+            QRectF(
+                banner_x,
+                banner_y,
+                banner_width,
+                banner_height,
+            ),
+            Qt.AlignmentFlag.AlignCenter,
+            state.message,
+        )
+
+        painter.restore()
         
     def draw_sensor_watchdog_banner(
         self,
