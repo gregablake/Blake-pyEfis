@@ -196,6 +196,10 @@ from pyefis.user.blake_pfd.core.heartbeat_file import (
     HeartbeatFile,
 )
 
+from pyefis.user.blake_pfd.core.advisory_latch import (
+    AdvisoryLatch,
+)
+
 
 class BlakePfdDemo(QWidget):
     def __init__(self, use_hardware: bool = False, replay_log: str | None = None) -> None:
@@ -711,7 +715,22 @@ class BlakePfdDemo(QWidget):
         self.cylinder_analyzer = CylinderAnalyzer()
         self.engine_predictor = EnginePredictor()
         self.engine_advisor = EngineAdvisor()
-        self.aircraft_recommendation = self.aircraft_intelligence.analyze(self.aircraft)
+        self.advisory_latch = AdvisoryLatch(
+            activate_samples=3,
+            clear_samples=5,
+        )
+
+        self.aircraft_recommendation = (
+            self.aircraft_intelligence.analyze(
+                self.aircraft
+            )
+        )
+
+        if self.aircraft_recommendation.severity != "NORMAL":
+            self.aircraft_recommendation = (
+                type(self.aircraft_recommendation)()
+            )
+
         self.last_aircraft_recommendation_key = (
             self.aircraft_recommendation.severity,
             self.aircraft_recommendation.title,
@@ -1464,11 +1483,45 @@ class BlakePfdDemo(QWidget):
                 )
             )
 
-        self.aircraft_recommendation = (
+        raw_recommendation = (
             self.aircraft_intelligence.analyze(
                 self.aircraft
             )
         )
+
+        if raw_recommendation.severity == "NORMAL":
+            latch_key = None
+        else:
+            latch_key = raw_recommendation.title
+
+        latch_state = self.advisory_latch.update(
+            latch_key,
+            raw_recommendation.severity,
+        )
+
+        if latch_state.active_key is None:
+            # Only return to NORMAL after the latch has
+            # satisfied its clear-sample requirement.
+            if raw_recommendation.severity == "NORMAL":
+                self.aircraft_recommendation = (
+                    raw_recommendation
+                )
+
+        elif (
+            latch_state.active_key
+            == raw_recommendation.title
+            and latch_state.active_severity
+            == raw_recommendation.severity
+        ):
+            # The current raw recommendation is now
+            # officially latched and may be displayed.
+            self.aircraft_recommendation = (
+                raw_recommendation
+            )
+
+        # Otherwise keep displaying the previously
+        # latched recommendation while a replacement
+        # or clear condition is still being confirmed.
 
         recommendation_key = (
             self.aircraft_recommendation.severity,

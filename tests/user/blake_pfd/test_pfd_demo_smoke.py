@@ -380,3 +380,392 @@ def test_pfd_demo_renders_unclean_restart_banner(
         widget.deleteLater()
         qapp.processEvents()
         
+def test_transient_ai_caution_does_not_reach_display(
+    qapp: QApplication,
+) -> None:
+    class Recommendation:
+        def __init__(
+            self,
+            severity: str,
+            title: str,
+            message: str,
+        ) -> None:
+            self.severity = severity
+            self.title = title
+            self.message = message
+            self.recommendation = "Monitor."
+            self.urgency_s = None
+            self.confidence = None
+            self.source_priority = 0
+
+    widget = BlakePfdDemo(
+        use_hardware=False,
+    )
+
+    widget.timer.stop()
+
+    try:
+        sequence = iter(
+            [
+                Recommendation(
+                    "CAUTION",
+                    "Engine Caution",
+                    "Transient condition.",
+                ),
+                Recommendation(
+                    "NORMAL",
+                    "Normal",
+                    "Aircraft systems normal.",
+                ),
+            ]
+        )
+
+        widget.aircraft_intelligence.analyze = (
+            lambda aircraft: next(sequence)
+        )
+
+        widget.update_data()
+
+        assert (
+            widget.aircraft_recommendation.severity
+            == "NORMAL"
+        )
+
+        widget.update_data()
+
+        assert (
+            widget.aircraft_recommendation.severity
+            == "NORMAL"
+        )
+
+    finally:
+        if widget.timer.isActive():
+            widget.timer.stop()
+
+        widget.close()
+        widget.deleteLater()
+        qapp.processEvents()
+        
+def test_sustained_ai_caution_reaches_display_after_latch(
+    qapp: QApplication,
+) -> None:
+    class Recommendation:
+        def __init__(
+            self,
+            severity: str,
+            title: str,
+            message: str,
+        ) -> None:
+            self.severity = severity
+            self.title = title
+            self.message = message
+            self.recommendation = "Monitor."
+            self.urgency_s = None
+            self.confidence = None
+            self.source_priority = 0
+
+    widget = BlakePfdDemo(
+        use_hardware=False,
+    )
+
+    widget.timer.stop()
+
+    try:
+        caution = Recommendation(
+            "CAUTION",
+            "Engine Caution",
+            "Persistent condition.",
+        )
+
+        widget.aircraft_intelligence.analyze = (
+            lambda aircraft: caution
+        )
+
+        widget.update_data()
+        assert (
+            widget.aircraft_recommendation.severity
+            == "NORMAL"
+        )
+
+        widget.update_data()
+        assert (
+            widget.aircraft_recommendation.severity
+            == "NORMAL"
+        )
+
+        widget.update_data()
+        assert (
+            widget.aircraft_recommendation.severity
+            == "CAUTION"
+        )
+
+        assert (
+            widget.aircraft_recommendation.title
+            == "Engine Caution"
+        )
+
+    finally:
+        if widget.timer.isActive():
+            widget.timer.stop()
+
+        widget.close()
+        widget.deleteLater()
+        qapp.processEvents()
+        
+def test_latched_caution_clears_after_required_normal_samples(
+    qapp: QApplication,
+) -> None:
+    class Recommendation:
+        def __init__(
+            self,
+            severity: str,
+            title: str,
+            message: str,
+        ) -> None:
+            self.severity = severity
+            self.title = title
+            self.message = message
+            self.recommendation = "Monitor."
+            self.urgency_s = None
+            self.confidence = None
+            self.source_priority = 0
+
+    widget = BlakePfdDemo(
+        use_hardware=False,
+    )
+
+    widget.timer.stop()
+
+    try:
+        caution = Recommendation(
+            "CAUTION",
+            "Engine Caution",
+            "Persistent condition.",
+        )
+
+        normal = Recommendation(
+            "NORMAL",
+            "Normal",
+            "Aircraft systems normal.",
+        )
+
+        sequence = iter(
+            [
+                caution,
+                caution,
+                caution,
+                normal,
+                normal,
+                normal,
+                normal,
+                normal,
+            ]
+        )
+
+        widget.aircraft_intelligence.analyze = (
+            lambda aircraft: next(sequence)
+        )
+
+        # Latch the caution.
+        widget.update_data()
+        widget.update_data()
+        widget.update_data()
+
+        assert (
+            widget.aircraft_recommendation.severity
+            == "CAUTION"
+        )
+
+        # Four clear samples are not enough.
+        widget.update_data()
+        widget.update_data()
+        widget.update_data()
+        widget.update_data()
+
+        assert (
+            widget.aircraft_recommendation.severity
+            == "CAUTION"
+        )
+
+        # Fifth clear sample releases the latch.
+        widget.update_data()
+
+        assert (
+            widget.aircraft_recommendation.severity
+            == "NORMAL"
+        )
+
+        assert (
+            widget.aircraft_recommendation.title
+            == "Normal"
+        )
+
+    finally:
+        if widget.timer.isActive():
+            widget.timer.stop()
+
+        widget.close()
+        widget.deleteLater()
+        qapp.processEvents()
+        
+def test_critical_immediately_replaces_latched_caution(
+    qapp: QApplication,
+) -> None:
+    class Recommendation:
+        def __init__(
+            self,
+            severity: str,
+            title: str,
+            message: str,
+        ) -> None:
+            self.severity = severity
+            self.title = title
+            self.message = message
+            self.recommendation = "Take action."
+            self.urgency_s = None
+            self.confidence = None
+            self.source_priority = 0
+
+    widget = BlakePfdDemo(
+        use_hardware=False,
+    )
+
+    widget.timer.stop()
+
+    try:
+        caution = Recommendation(
+            "CAUTION",
+            "Engine Caution",
+            "Persistent caution.",
+        )
+
+        critical = Recommendation(
+            "CRITICAL",
+            "Oil Pressure",
+            "Oil pressure critically low.",
+        )
+
+        sequence = iter(
+            [
+                caution,
+                caution,
+                caution,
+                critical,
+            ]
+        )
+
+        widget.aircraft_intelligence.analyze = (
+            lambda aircraft: next(sequence)
+        )
+
+        widget.update_data()
+        widget.update_data()
+        widget.update_data()
+
+        assert (
+            widget.aircraft_recommendation.severity
+            == "CAUTION"
+        )
+
+        # Higher severity must replace the caution
+        # on the very next sample.
+        widget.update_data()
+
+        assert (
+            widget.aircraft_recommendation.severity
+            == "CRITICAL"
+        )
+
+        assert (
+            widget.aircraft_recommendation.title
+            == "Oil Pressure"
+        )
+
+    finally:
+        if widget.timer.isActive():
+            widget.timer.stop()
+
+        widget.close()
+        widget.deleteLater()
+        qapp.processEvents()
+        
+def test_latched_caution_survives_brief_clear(
+    qapp: QApplication,
+) -> None:
+    class Recommendation:
+        def __init__(
+            self,
+            severity: str,
+            title: str,
+            message: str,
+        ) -> None:
+            self.severity = severity
+            self.title = title
+            self.message = message
+            self.recommendation = "Monitor."
+            self.urgency_s = None
+            self.confidence = None
+            self.source_priority = 0
+
+    widget = BlakePfdDemo(
+        use_hardware=False,
+    )
+
+    widget.timer.stop()
+
+    try:
+        caution = Recommendation(
+            "CAUTION",
+            "Engine Caution",
+            "Persistent condition.",
+        )
+
+        normal = Recommendation(
+            "NORMAL",
+            "Normal",
+            "Aircraft systems normal.",
+        )
+
+        sequence = iter(
+            [
+                caution,
+                caution,
+                caution,
+                normal,
+            ]
+        )
+
+        widget.aircraft_intelligence.analyze = (
+            lambda aircraft: next(sequence)
+        )
+
+        widget.update_data()
+        widget.update_data()
+        widget.update_data()
+
+        assert (
+            widget.aircraft_recommendation.severity
+            == "CAUTION"
+        )
+
+        # One NORMAL sample must not clear
+        # the already latched caution.
+        widget.update_data()
+
+        assert (
+            widget.aircraft_recommendation.severity
+            == "CAUTION"
+        )
+
+        assert (
+            widget.aircraft_recommendation.title
+            == "Engine Caution"
+        )
+
+    finally:
+        if widget.timer.isActive():
+            widget.timer.stop()
+
+        widget.close()
+        widget.deleteLater()
+        qapp.processEvents() 
