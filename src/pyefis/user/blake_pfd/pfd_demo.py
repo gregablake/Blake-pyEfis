@@ -983,16 +983,12 @@ class BlakePfdDemo(QWidget):
 
                 attitude_valid = (
                     hardware_status.bno085_ok
-                    and self.bno085_freshness_state.fresh
                 )
 
                 air_data_valid = (
                     hardware_status.baro_ok
                     and hardware_status.airspeed_ok
-                    and self.baro_freshness_state.fresh
-                    and self.airspeed_freshness_state.fresh
                 )
-
                 position_valid = (
                     hardware_status.gps_ok
                     and self.gps_freshness_state.fresh
@@ -1000,11 +996,22 @@ class BlakePfdDemo(QWidget):
                     and self.pfd.position_valid
                 )
 
+                attitude_fresh = (
+                    self.bno085_freshness_state.fresh
+                )
+
+                air_data_fresh = (
+                    self.baro_freshness_state.fresh
+                    and self.airspeed_freshness_state.fresh
+                )
+
             else:
                 attitude_valid = False
                 air_data_valid = False
+                attitude_fresh = False
+                air_data_fresh = False
                 position_valid = False
-                
+
                 sensor_faults.append(
                     "SENSOR STATUS LOST"
                 )
@@ -1012,26 +1019,14 @@ class BlakePfdDemo(QWidget):
         else:
             attitude_valid = True
             air_data_valid = True
+            attitude_fresh = True
+            air_data_fresh = True
 
             position_valid = (
                 self.pfd.position_valid
                 if self.pfd is not None
                 else False
             )
-
-        if self.use_hardware:
-            attitude_fresh = (
-                self.bno085_freshness_state.fresh
-            )
-
-            air_data_fresh = (
-                self.baro_freshness_state.fresh
-                and self.airspeed_freshness_state.fresh
-            )
-        else:
-            attitude_fresh = True
-            air_data_fresh = True
-
 
         self.sensor_watchdog_state = (
             self.sensor_watchdog.evaluate(
@@ -1077,10 +1072,11 @@ class BlakePfdDemo(QWidget):
                     self.pfd is not None
                     and attitude_valid
                     and air_data_valid
+                    and attitude_fresh
+                    and air_data_fresh
                 ),
             )
         )
-        
         if sensor_faults:
             self.sensor_fault_message = (
                 " / ".join(

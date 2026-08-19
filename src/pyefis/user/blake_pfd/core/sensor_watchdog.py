@@ -44,14 +44,12 @@ class SensorWatchdog:
 
         if not attitude_valid:
             failures.append("ATTITUDE")
+        elif not attitude_fresh:
+            failures.append("ATTITUDE STALE")
 
         if not air_data_valid:
             failures.append("AIR DATA")
-
-        if not attitude_fresh:
-            failures.append("ATTITUDE STALE")
-
-        if not air_data_fresh:
+        elif not air_data_fresh:
             failures.append("AIR DATA STALE")
 
         if not position_valid:

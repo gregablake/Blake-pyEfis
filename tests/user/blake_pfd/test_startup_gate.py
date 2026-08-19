@@ -121,3 +121,82 @@ def test_hardware_waits_for_fresh_air_data() -> None:
     assert state.initializing is True
     assert state.ready is False
     assert state.message == "INITIALIZING: AIR DATA STALE"
+    
+def test_hardware_stale_attitude_reports_stale() -> None:
+    state = StartupGate().evaluate(
+        config_ok=True,
+        database_ok=True,
+        flight_data_available=True,
+        attitude_valid=True,
+        air_data_valid=True,
+        attitude_fresh=False,
+        air_data_fresh=True,
+        hardware_mode=True,
+    )
+
+    assert state.initializing is True
+    assert state.ready is False
+    assert (
+        state.message
+        == "INITIALIZING: AHRS STALE"
+    )
+
+
+def test_hardware_failed_attitude_reports_ahrs() -> None:
+    state = StartupGate().evaluate(
+        config_ok=True,
+        database_ok=True,
+        flight_data_available=True,
+        attitude_valid=False,
+        air_data_valid=True,
+        attitude_fresh=False,
+        air_data_fresh=True,
+        hardware_mode=True,
+    )
+
+    assert state.initializing is True
+    assert state.ready is False
+    assert (
+        state.message
+        == "INITIALIZING: AHRS"
+    )
+
+
+def test_hardware_stale_air_data_reports_stale() -> None:
+    state = StartupGate().evaluate(
+        config_ok=True,
+        database_ok=True,
+        flight_data_available=True,
+        attitude_valid=True,
+        air_data_valid=True,
+        attitude_fresh=True,
+        air_data_fresh=False,
+        hardware_mode=True,
+    )
+
+    assert state.initializing is True
+    assert state.ready is False
+    assert (
+        state.message
+        == "INITIALIZING: AIR DATA STALE"
+    )
+
+
+def test_hardware_failed_air_data_reports_air_data() -> None:
+    state = StartupGate().evaluate(
+        config_ok=True,
+        database_ok=True,
+        flight_data_available=True,
+        attitude_valid=True,
+        air_data_valid=False,
+        attitude_fresh=True,
+        air_data_fresh=False,
+        hardware_mode=True,
+    )
+
+    assert state.initializing is True
+    assert state.ready is False
+    assert (
+        state.message
+        == "INITIALIZING: AIR DATA"
+    )
