@@ -11,8 +11,10 @@ ExecStartPre=/bin/sh -lc 'mkdir -p /tmp/blake_pyefis && rm -f /tmp/blake_pyefis/
 
 ExecStart=/bin/sh -lc 'exec "$HOME/Blake-pyEfis/.venv/bin/python" -m pyefis.user.blake_pfd.pfd_demo --hardware'
 
+# Keep attempting recovery, but avoid a rapid CPU-intensive
+# restart storm if startup repeatedly fails.
 Restart=always
-RestartSec=1s
+RestartSec=2s
 
 # If the GUI/event loop is truly hung, do not let recovery
 # wait on systemd's much longer default shutdown timeout.
