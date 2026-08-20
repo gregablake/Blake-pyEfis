@@ -1,0 +1,10 @@
+[Unit]
+Description=Check Blake PFD heartbeat
+After=blake-pfd.service
+
+[Service]
+Type=oneshot
+
+ExecCondition=/usr/bin/systemctl --user --quiet is-active blake-pfd.service
+
+ExecStart=/bin/sh -lc '"$HOME/Blake-pyEfis/.venv/bin/python" -m pyefis.user.blake_pfd.watchdog_runner || /usr/bin/systemctl --user restart blake-pfd.service'

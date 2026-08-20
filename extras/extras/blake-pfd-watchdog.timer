@@ -1,0 +1,11 @@
+[Unit]
+Description=Run Blake PFD external watchdog
+
+[Timer]
+OnBootSec=8s
+OnUnitActiveSec=1s
+AccuracySec=100ms
+Unit=blake-pfd-watchdog.service
+
+[Install]
+WantedBy=timers.target

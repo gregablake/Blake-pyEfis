@@ -1,0 +1,18 @@
+[Unit]
+Description=Blake PFD
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+Type=exec
+WorkingDirectory=%h/Blake-pyEfis
+
+ExecStartPre=/bin/sh -lc 'mkdir -p /tmp/blake_pyefis && rm -f /tmp/blake_pyefis/app.heartbeat && "$HOME/Blake-pyEfis/.venv/bin/python" -c "from time import monotonic; from pathlib import Path; Path('/tmp/blake_pyefis/app.started').write_text(f'{monotonic():.6f}', encoding='utf-8')"'
+
+ExecStart=/bin/sh -lc 'exec "$HOME/Blake-pyEfis/.venv/bin/python" -m pyefis.user.blake_pfd.pfd_demo --hardware'
+
+Restart=always
+RestartSec=1s
+
+[Install]
+WantedBy=default.target
