@@ -769,3 +769,24 @@ def test_latched_caution_survives_brief_clear(
         widget.close()
         widget.deleteLater()
         qapp.processEvents() 
+        
+def test_module_help_entrypoint_runs() -> None:
+    import subprocess
+    import sys
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "pyefis.user.blake_pfd.pfd_demo",
+            "--help",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0
+    assert "Blake PFD visual demo" in result.stdout
+    assert "--hardware" in result.stdout
+    assert "--sim" in result.stdout

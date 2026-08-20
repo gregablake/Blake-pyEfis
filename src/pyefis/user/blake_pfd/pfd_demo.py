@@ -5660,35 +5660,7 @@ class BlakePfdDemo(QWidget):
             return "W"
 
         return f"{heading // 10:02d}"
-
-
-    def parse_args() -> argparse.Namespace:
-        parser = argparse.ArgumentParser(description="Blake PFD visual demo")
-
-        mode_group = parser.add_mutually_exclusive_group()
-        mode_group.add_argument("--sim", action="store_true", help="Run using simulated sensor data")
-        mode_group.add_argument("--hardware", action="store_true", help="Run using real hardware sensor readers")
-
-        parser.add_argument("--replay-log", help="Replay a recorded flight log CSV")
-
-        return parser.parse_args()
-
-
-    def main() -> None:
-        args = parse_args()
-
-        app = QApplication(sys.argv)
-        window = BlakePfdDemo(
-            use_hardware=args.hardware,
-            replay_log=args.replay_log,
-        )
-        window.show()
-        sys.exit(app.exec())
-
-
-    if __name__ == "__main__":
-        main()
-        
+    
     def draw_direct_to_guidance_box(
             self,
             painter: QPainter,
@@ -5821,3 +5793,51 @@ class BlakePfdDemo(QWidget):
                 box_y + 76,
                 correction_text,
             )
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Blake PFD visual demo"
+    )
+
+    mode_group = (
+        parser.add_mutually_exclusive_group()
+    )
+
+    mode_group.add_argument(
+        "--sim",
+        action="store_true",
+        help="Run using simulated sensor data",
+    )
+
+    mode_group.add_argument(
+        "--hardware",
+        action="store_true",
+        help="Run using real hardware sensor readers",
+    )
+
+    parser.add_argument(
+        "--replay-log",
+        help="Replay a recorded flight log CSV",
+    )
+
+    return parser.parse_args()
+
+
+def main() -> None:
+    args = parse_args()
+
+    app = QApplication(sys.argv)
+
+    window = BlakePfdDemo(
+        use_hardware=args.hardware,
+        replay_log=args.replay_log,
+    )
+
+    window.show()
+
+    sys.exit(
+        app.exec()
+    )
+
+
+if __name__ == "__main__":
+    main()
