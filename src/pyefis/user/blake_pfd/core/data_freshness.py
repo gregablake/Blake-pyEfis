@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import math
+
 from dataclasses import dataclass
 
 
@@ -45,10 +47,28 @@ class DataFreshnessMonitor:
                 message="NO SENSOR DATA",
             )
 
-        age_s = max(
-            0.0,
-            now_s - self.last_update_s,
+        if (
+            not math.isfinite(now_s)
+            or not math.isfinite(self.last_update_s)
+        ):
+            return DataFreshnessState(
+                fresh=False,
+                stale=True,
+                age_s=0.0,
+                message="SENSOR DATA STALE",
+            )
+
+        age_s = (
+            now_s - self.last_update_s
         )
+
+        if age_s < 0.0:
+            return DataFreshnessState(
+                fresh=False,
+                stale=True,
+                age_s=0.0,
+                message="SENSOR DATA STALE",
+            )
 
         stale = (
             age_s

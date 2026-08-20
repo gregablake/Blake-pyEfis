@@ -53,7 +53,7 @@ def test_old_data_is_stale() -> None:
     assert state.message == "SENSOR DATA STALE"
 
 
-def test_backwards_clock_does_not_create_negative_age() -> None:
+def test_backwards_clock_is_fail_safe_stale() -> None:
     monitor = DataFreshnessMonitor(
         stale_after_s=1.0,
     )
@@ -67,4 +67,92 @@ def test_backwards_clock_does_not_create_negative_age() -> None:
     )
 
     assert state.age_s == 0.0
-    assert state.fresh is True
+    assert state.fresh is False
+    assert state.stale is True
+    assert (
+        state.message
+        == "SENSOR DATA STALE"
+    )
+    
+def test_nan_current_time_is_fail_safe_stale() -> None:
+    monitor = DataFreshnessMonitor(
+        stale_after_s=1.0,
+    )
+
+    monitor.mark_update(
+        10.0
+    )
+
+    state = monitor.evaluate(
+        float("nan")
+    )
+
+    assert state.fresh is False
+    assert state.stale is True
+    assert (
+        state.message
+        == "SENSOR DATA STALE"
+    )
+
+
+def test_infinite_current_time_is_fail_safe_stale() -> None:
+    monitor = DataFreshnessMonitor(
+        stale_after_s=1.0,
+    )
+
+    monitor.mark_update(
+        10.0
+    )
+
+    state = monitor.evaluate(
+        float("inf")
+    )
+
+    assert state.fresh is False
+    assert state.stale is True
+    assert (
+        state.message
+        == "SENSOR DATA STALE"
+    )
+
+
+def test_nan_update_timestamp_is_fail_safe_stale() -> None:
+    monitor = DataFreshnessMonitor(
+        stale_after_s=1.0,
+    )
+
+    monitor.mark_update(
+        float("nan")
+    )
+
+    state = monitor.evaluate(
+        10.0
+    )
+
+    assert state.fresh is False
+    assert state.stale is True
+    assert (
+        state.message
+        == "SENSOR DATA STALE"
+    )
+
+
+def test_infinite_update_timestamp_is_fail_safe_stale() -> None:
+    monitor = DataFreshnessMonitor(
+        stale_after_s=1.0,
+    )
+
+    monitor.mark_update(
+        float("inf")
+    )
+
+    state = monitor.evaluate(
+        10.0
+    )
+
+    assert state.fresh is False
+    assert state.stale is True
+    assert (
+        state.message
+        == "SENSOR DATA STALE"
+    )
