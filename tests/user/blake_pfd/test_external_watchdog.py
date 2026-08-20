@@ -95,18 +95,21 @@ def test_invalid_heartbeat_is_stalled(
     assert state.message == "HEARTBEAT INVALID"
 
 
-def test_backwards_clock_does_not_create_negative_age(
+def test_backwards_clock_fails_safe(
     tmp_path,
 ) -> None:
-    path = tmp_path / "app.heartbeat"
+    heartbeat_path = (
+        tmp_path
+        / "app.heartbeat"
+    )
 
-    path.write_text(
+    heartbeat_path.write_text(
         "10.000000",
         encoding="utf-8",
     )
 
     watchdog = ExternalWatchdog(
-        path,
+        heartbeat_path,
         stale_after_s=2.0,
     )
 
@@ -115,4 +118,134 @@ def test_backwards_clock_does_not_create_negative_age(
     )
 
     assert state.age_s == 0.0
-    assert state.healthy is True
+    assert state.healthy is False
+    assert state.stalled is True
+    assert state.invalid is True
+    assert (
+        state.message
+        == "HEARTBEAT INVALID"
+    )
+
+def test_nan_heartbeat_fails_safe(
+    tmp_path,
+) -> None:
+    heartbeat_path = (
+        tmp_path
+        / "app.heartbeat"
+    )
+
+    heartbeat_path.write_text(
+        "nan",
+        encoding="utf-8",
+    )
+
+    watchdog = ExternalWatchdog(
+        heartbeat_path,
+        stale_after_s=2.0,
+    )
+
+    state = watchdog.evaluate(
+        10.0
+    )
+
+    assert state.healthy is False
+    assert state.stalled is True
+    assert state.invalid is True
+    assert (
+        state.message
+        == "HEARTBEAT INVALID"
+    )
+
+
+def test_infinite_heartbeat_fails_safe(
+    tmp_path,
+) -> None:
+    heartbeat_path = (
+        tmp_path
+        / "app.heartbeat"
+    )
+
+    heartbeat_path.write_text(
+        "inf",
+        encoding="utf-8",
+    )
+
+    watchdog = ExternalWatchdog(
+        heartbeat_path,
+        stale_after_s=2.0,
+    )
+
+    state = watchdog.evaluate(
+        10.0
+    )
+
+    assert state.healthy is False
+    assert state.stalled is True
+    assert state.invalid is True
+    assert (
+        state.message
+        == "HEARTBEAT INVALID"
+    )
+
+def test_nan_current_time_fails_safe(
+    tmp_path,
+) -> None:
+    heartbeat_path = (
+        tmp_path
+        / "app.heartbeat"
+    )
+
+    heartbeat_path.write_text(
+        "10.000000",
+        encoding="utf-8",
+    )
+
+    watchdog = ExternalWatchdog(
+        heartbeat_path,
+        stale_after_s=2.0,
+    )
+
+    state = watchdog.evaluate(
+        float("nan")
+    )
+
+    assert state.age_s == 0.0
+    assert state.healthy is False
+    assert state.stalled is True
+    assert state.invalid is True
+    assert (
+        state.message
+        == "HEARTBEAT INVALID"
+    )
+
+
+def test_infinite_current_time_fails_safe(
+    tmp_path,
+) -> None:
+    heartbeat_path = (
+        tmp_path
+        / "app.heartbeat"
+    )
+
+    heartbeat_path.write_text(
+        "10.000000",
+        encoding="utf-8",
+    )
+
+    watchdog = ExternalWatchdog(
+        heartbeat_path,
+        stale_after_s=2.0,
+    )
+
+    state = watchdog.evaluate(
+        float("inf")
+    )
+
+    assert state.age_s == 0.0
+    assert state.healthy is False
+    assert state.stalled is True
+    assert state.invalid is True
+    assert (
+        state.message
+        == "HEARTBEAT INVALID"
+    )

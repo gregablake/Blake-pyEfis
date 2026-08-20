@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import math
+
 from dataclasses import dataclass
 
 
@@ -45,10 +47,30 @@ class AppHeartbeat:
                 message="APP HEARTBEAT NOT STARTED",
             )
 
-        age_s = max(
-            0.0,
-            now_s - self.last_beat_s,
+        if (
+            not math.isfinite(now_s)
+            or not math.isfinite(
+                self.last_beat_s
+            )
+        ):
+            return AppHeartbeatState(
+                healthy=False,
+                stalled=True,
+                age_s=0.0,
+                message="APP HEARTBEAT INVALID",
+            )
+
+        age_s = (
+            now_s - self.last_beat_s
         )
+
+        if age_s < 0.0:
+            return AppHeartbeatState(
+                healthy=False,
+                stalled=True,
+                age_s=0.0,
+                message="APP HEARTBEAT INVALID",
+            )
 
         stalled = (
             age_s > self.stall_after_s

@@ -56,7 +56,7 @@ def test_old_heartbeat_is_stalled() -> None:
     assert state.message == "APP LOOP STALLED"
 
 
-def test_backwards_clock_does_not_create_negative_age() -> None:
+def test_backwards_clock_fails_safe() -> None:
     heartbeat = AppHeartbeat(
         stall_after_s=2.0,
     )
@@ -70,7 +70,12 @@ def test_backwards_clock_does_not_create_negative_age() -> None:
     )
 
     assert state.age_s == 0.0
-    assert state.healthy is True
+    assert state.healthy is False
+    assert state.stalled is True
+    assert (
+        state.message
+        == "APP HEARTBEAT INVALID"
+    )
 
 
 def test_new_heartbeat_recovers_after_stall() -> None:
@@ -98,3 +103,89 @@ def test_new_heartbeat_recovers_after_stall() -> None:
 
     assert recovered.healthy is True
     assert recovered.stalled is False
+
+def test_nan_heartbeat_fails_safe() -> None:
+    heartbeat = AppHeartbeat(
+        stall_after_s=2.0,
+    )
+
+    heartbeat.beat(
+        float("nan")
+    )
+
+    state = heartbeat.evaluate(
+        10.0
+    )
+
+    assert state.age_s == 0.0
+    assert state.healthy is False
+    assert state.stalled is True
+    assert (
+        state.message
+        == "APP HEARTBEAT INVALID"
+    )
+
+
+def test_infinite_heartbeat_fails_safe() -> None:
+    heartbeat = AppHeartbeat(
+        stall_after_s=2.0,
+    )
+
+    heartbeat.beat(
+        float("inf")
+    )
+
+    state = heartbeat.evaluate(
+        10.0
+    )
+
+    assert state.age_s == 0.0
+    assert state.healthy is False
+    assert state.stalled is True
+    assert (
+        state.message
+        == "APP HEARTBEAT INVALID"
+    )
+
+def test_nan_current_time_fails_safe() -> None:
+    heartbeat = AppHeartbeat(
+        stall_after_s=2.0,
+    )
+
+    heartbeat.beat(
+        10.0
+    )
+
+    state = heartbeat.evaluate(
+        float("nan")
+    )
+
+    assert state.age_s == 0.0
+    assert state.healthy is False
+    assert state.stalled is True
+    assert (
+        state.message
+        == "APP HEARTBEAT INVALID"
+    )
+
+
+def test_infinite_current_time_fails_safe() -> None:
+    heartbeat = AppHeartbeat(
+        stall_after_s=2.0,
+    )
+
+    heartbeat.beat(
+        10.0
+    )
+
+    state = heartbeat.evaluate(
+        float("inf")
+    )
+
+    assert state.age_s == 0.0
+    assert state.healthy is False
+    assert state.stalled is True
+    assert (
+        state.message
+        == "APP HEARTBEAT INVALID"
+    )

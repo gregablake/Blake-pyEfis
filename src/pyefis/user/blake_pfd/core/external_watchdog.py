@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import math
+
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -71,10 +73,32 @@ class ExternalWatchdog:
                 message="HEARTBEAT INVALID",
             )
 
-        age_s = max(
-            0.0,
-            now_s - heartbeat_s,
+        if (
+            not math.isfinite(now_s)
+            or not math.isfinite(heartbeat_s)
+        ):
+            return ExternalWatchdogState(
+                healthy=False,
+                stalled=True,
+                missing=False,
+                invalid=True,
+                age_s=0.0,
+                message="HEARTBEAT INVALID",
+            )
+
+        age_s = (
+            now_s - heartbeat_s
         )
+
+        if age_s < 0.0:
+            return ExternalWatchdogState(
+                healthy=False,
+                stalled=True,
+                missing=False,
+                invalid=True,
+                age_s=0.0,
+                message="HEARTBEAT INVALID",
+            )
 
         stalled = (
             age_s
