@@ -14,5 +14,10 @@ ExecStart=/bin/sh -lc 'exec "$HOME/Blake-pyEfis/.venv/bin/python" -m pyefis.user
 Restart=always
 RestartSec=1s
 
+# If the GUI/event loop is truly hung, do not let recovery
+# wait on systemd's much longer default shutdown timeout.
+TimeoutStopSec=3s
+KillMode=control-group
+
 [Install]
 WantedBy=default.target
