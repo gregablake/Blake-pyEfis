@@ -217,14 +217,14 @@ class BlakePfdDemo(QWidget):
         self.emergency_airport_manager = (
             self.aircraft_systems.emergency_airport_manager
         )
-        
+
         self.landing_site_monitor = LandingSiteMonitor()
         self.emergency_landing_planner = (
             EmergencyLandingPlanner(
                 best_glide_speed_kt=80.0,
             )
         )
-        
+
         self.energy_state_calculator = (
             EnergyStateCalculator(
                 stable_trend_threshold_fpm=50.0,
@@ -238,7 +238,7 @@ class BlakePfdDemo(QWidget):
                 airspeed_kt=0.0,
             )
         )
-        
+
         self.landing_site_status = (
             self.landing_site_monitor.evaluate(
                 selected_airport_distance_nm=None,
@@ -251,16 +251,16 @@ class BlakePfdDemo(QWidget):
                 emergency_active=False,
             )
         )
-        
+
         self.direct_to_button_rect = QRectF()
-        
+
         self.cancel_direct_to_button_rect = QRectF()
 
         self.reachable_airport_pipeline = (
             self.aircraft_systems.reachable_airport_pipeline
         )
         self.startup_status = run_startup_check()
-        
+
         self.startup_gate = StartupGate()
 
         self.startup_gate_state = (
@@ -277,7 +277,7 @@ class BlakePfdDemo(QWidget):
                 hardware_mode=use_hardware,
             )
         )
-        
+
         self.shutdown_marker = ShutdownMarker(
             Path.home()
             / ".local"
@@ -308,11 +308,11 @@ class BlakePfdDemo(QWidget):
                 flight_data_valid=False,
             )
         )
-        
+
         self.app_heartbeat = AppHeartbeat(
             stall_after_s=2.0,
         )
-        
+
         self.heartbeat_file = HeartbeatFile(
             Path(
                 "/tmp/blake_pyefis/app.heartbeat"
@@ -325,11 +325,11 @@ class BlakePfdDemo(QWidget):
                 monotonic()
             )
         )
-        
+
         self.sensor_watchdog = SensorWatchdog()
-        
+
         self.sensor_fault_message = ""
-        
+
         self.bno085_freshness = (
             DataFreshnessMonitor(
                 stale_after_s=0.5,
@@ -363,7 +363,7 @@ class BlakePfdDemo(QWidget):
 
         self.database = AviationDatabase()
         self.database.load_all()
-        
+
         self.nearby_airport_provider = (
             NearbyAirportProvider(
                 database=self.database,
@@ -384,7 +384,7 @@ class BlakePfdDemo(QWidget):
                 vertical_speed_fpm=0.0,
             )
         )
-        
+
         self.hits_guidance = HitsGuidance(
             box_count=6,
         )
@@ -396,7 +396,7 @@ class BlakePfdDemo(QWidget):
                 navigation_valid=False,
             )
         )
-        
+
         self.flight_director = FlightDirector()
 
         self.flight_director_state = (
@@ -407,7 +407,7 @@ class BlakePfdDemo(QWidget):
                 enabled=False,
             )
         )
-        
+
         self.touch_guidance_menu = (
             TouchGuidanceMenu()
         )
@@ -436,7 +436,7 @@ class BlakePfdDemo(QWidget):
         self.touch_guidance_menu_state = (
             self.touch_guidance_menu.state
         )
-        
+
         self.touch_navigation = TouchNavigation()
 
         self.touch_navigation_state = (
@@ -450,7 +450,7 @@ class BlakePfdDemo(QWidget):
                 current_page="PFD",
             )
         )
-        
+
         self.touch_settings = TouchSettings()
 
         self.touch_settings_state = (
@@ -466,7 +466,7 @@ class BlakePfdDemo(QWidget):
                 ),
             )
         )
-        
+
         self.touch_map_controls = (
             TouchMapControls()
         )
@@ -481,11 +481,11 @@ class BlakePfdDemo(QWidget):
                 ),
             )
         )
-        
+
         self.touch_guidance_menu = (
             TouchGuidanceMenu()
         )
-        
+
         self.guidance_touch_settings = (
             GuidanceTouchSettings(
                 hits_enabled=(
@@ -514,7 +514,7 @@ class BlakePfdDemo(QWidget):
         self.map_range_nm = float(
             self.config.moving_map.range_nm
         )
-        
+
         self.map_airport_selector = (
             MapAirportSelector(
                 touch_radius_px=35.0,
@@ -526,9 +526,9 @@ class BlakePfdDemo(QWidget):
         )
 
         self.map_airport_markers = []
-        
+
         self.map_viewport = MapViewport()
-        
+
         self.map_orientation = (
             MapOrientation(
                 mode="NORTH_UP",
@@ -548,7 +548,7 @@ class BlakePfdDemo(QWidget):
         self.map_drag_last_y = 0.0
 
         self.terrain = TerrainComputer()
-        
+
         self.direct_to_manager = (
             DirectToManager()
         )
@@ -556,7 +556,7 @@ class BlakePfdDemo(QWidget):
         self.direct_to_state = (
             self.direct_to_manager.state
         )
-        
+
         self.direct_to_guidance = (
             DirectToGuidance()
         )
@@ -564,7 +564,7 @@ class BlakePfdDemo(QWidget):
         self.direct_to_guidance_state = (
             self.direct_to_guidance.state
         )
-        
+
         self.direct_to_lateral_guidance = (
             DirectToLateralGuidance(
                 full_scale_error_deg=20.0,
@@ -620,7 +620,7 @@ class BlakePfdDemo(QWidget):
         self.terrain_awareness_state = (
             self.terrain_awareness_manager.state
         )
-        
+
         self.terrain_startup_validator = (
             TerrainStartupValidator()
         )
@@ -648,10 +648,10 @@ class BlakePfdDemo(QWidget):
                 ),
             )
         )
-        
+
         self.cfit_manager = CfitManager()
         self.cfit_state = self.cfit_manager.state
-        
+
         self.terrain_warning_presenter = (
             TerrainWarningPresenter()
         )
@@ -742,7 +742,7 @@ class BlakePfdDemo(QWidget):
             log_interval_s=self.config.logging.interval_s,
         )
         self.engine_analyzer = EngineAnalyzer()
-        
+
         self.audio_alerts = AudioAlertManager(
             enabled=self.config.audio_alerts.enabled,
             buzzer_enabled=self.config.audio_alerts.buzzer_enabled,
@@ -785,7 +785,7 @@ class BlakePfdDemo(QWidget):
             "SETTINGS",
             "S",
         )
-        
+
     def update_engine_state(self) -> None:
         self.engine_data = self.sensor_manager.read_engine()
 
@@ -805,11 +805,11 @@ class BlakePfdDemo(QWidget):
         self.cylinder_analysis = self.cylinder_analyzer.analyze(
             self.engine_data
         )
-        
+
         self.engine_prediction = self.engine_predictor.predict(
             self.engine_trend
         )
-        
+
         self.engine_advice = self.engine_advisor.advise(
             engine_state=SimpleNamespace(
                 data=self.engine_data,
@@ -831,7 +831,7 @@ class BlakePfdDemo(QWidget):
             prediction=self.engine_prediction,
             advice=self.engine_advice,
         )
-        
+
     def activate_pilot_emergency(self) -> None:
         self.pilot_emergency_selected = True
 
@@ -855,7 +855,7 @@ class BlakePfdDemo(QWidget):
         self.app_heartbeat.beat(
             heartbeat_now_s
         )
-        
+
         try:
             self.heartbeat_file.maybe_write(
                 heartbeat_now_s
@@ -868,11 +868,11 @@ class BlakePfdDemo(QWidget):
                 heartbeat_now_s
             )
         )
-        
-        
+
+
         self.pfd = self.sensor_manager.read_flight()
         self.update_engine_state()
-        
+
         sensor_faults: list[str] = []
 
         if self.use_hardware:
@@ -944,7 +944,7 @@ class BlakePfdDemo(QWidget):
                         now_s
                     )
                 )
-                
+
                 if not hardware_status.bno085_ok:
                     sensor_faults.append(
                         "AHRS FAIL"
@@ -991,9 +991,12 @@ class BlakePfdDemo(QWidget):
                 )
                 position_valid = (
                     hardware_status.gps_ok
-                    and self.gps_freshness_state.fresh
                     and self.pfd is not None
                     and self.pfd.position_valid
+                )
+
+                position_fresh = (
+                    self.gps_freshness_state.fresh
                 )
 
                 attitude_fresh = (
@@ -1011,6 +1014,7 @@ class BlakePfdDemo(QWidget):
                 attitude_fresh = False
                 air_data_fresh = False
                 position_valid = False
+                position_fresh = False
 
                 sensor_faults.append(
                     "SENSOR STATUS LOST"
@@ -1021,6 +1025,7 @@ class BlakePfdDemo(QWidget):
             air_data_valid = True
             attitude_fresh = True
             air_data_fresh = True
+            position_fresh = True
 
             position_valid = (
                 self.pfd.position_valid
@@ -1034,13 +1039,14 @@ class BlakePfdDemo(QWidget):
                     self.pfd is not None
                 ),
                 position_valid=position_valid,
+                position_fresh=position_fresh,
                 attitude_valid=attitude_valid,
                 air_data_valid=air_data_valid,
                 attitude_fresh=attitude_fresh,
                 air_data_fresh=air_data_fresh,
             )
         )
-        
+
         self.startup_gate_state = (
             self.startup_gate.evaluate(
                 config_ok=(
@@ -1059,7 +1065,7 @@ class BlakePfdDemo(QWidget):
                 hardware_mode=self.use_hardware,
             )
         )
-        
+
         self.reboot_recovery_state = (
             self.reboot_recovery.evaluate(
                 previous_shutdown_clean=(
@@ -1097,7 +1103,7 @@ class BlakePfdDemo(QWidget):
                 self.pfd,
                 engine=engine,
             )
-            
+
             self.flight_path_marker_state = (
                 self.flight_path_marker.calculate(
                     track_deg=self.pfd.track_deg,
@@ -1110,7 +1116,7 @@ class BlakePfdDemo(QWidget):
                     ),
                 )
             )
-            
+
             self.hits_guidance_state = (
                 self.hits_guidance.calculate(
                     cdi=self.pfd.cdi,
@@ -1124,7 +1130,7 @@ class BlakePfdDemo(QWidget):
                     ),
                 )
             )
-            
+
             self.emergency_status = (
                 self.emergency_detection.evaluate(
                     engine_state=self.engine_state,
@@ -1134,7 +1140,7 @@ class BlakePfdDemo(QWidget):
                     ),
                 )
             )
-            
+
         if (
             self.direct_to_state.active
             and self.pfd is not None
@@ -1150,7 +1156,7 @@ class BlakePfdDemo(QWidget):
                     ),
                 )
             )
-            
+
         if (
             self.pfd is not None
             and self.pfd.position_valid
@@ -1177,7 +1183,7 @@ class BlakePfdDemo(QWidget):
                 ),
             )
         )
-        
+
         if self.pfd is not None:
             if (
                 self.direct_to_lateral_guidance_state.active
@@ -1349,7 +1355,7 @@ class BlakePfdDemo(QWidget):
                     ),
                 )
             )
-            
+
             terrain_profile = (
                 self.terrain_awareness_state.profile
             )
@@ -1387,7 +1393,7 @@ class BlakePfdDemo(QWidget):
                 self.cfit_state = (
                     self.cfit_manager.state
                 )
-                
+
             self.terrain_warning_presentation = (
                 self.terrain_warning_presenter.build(
                     terrain_alert_state=(
@@ -1605,7 +1611,7 @@ class BlakePfdDemo(QWidget):
             self.update()
             event.accept()
             return
-        
+
         if (
             self.page_manager.current()
             == "MAP"
@@ -1653,7 +1659,7 @@ class BlakePfdDemo(QWidget):
                 self.update()
                 event.accept()
                 return
-            
+
             if map_action == "orientation":
                 self.map_orientation_state = (
                     self.map_orientation.toggle()
@@ -1672,7 +1678,7 @@ class BlakePfdDemo(QWidget):
                 self.update()
                 event.accept()
                 return
-            
+
             if (
                 self.direct_to_state.active
                 and (
@@ -1688,11 +1694,11 @@ class BlakePfdDemo(QWidget):
                 self.direct_to_state = (
                     self.direct_to_manager.clear()
                 )
-                
+
                 self.direct_to_guidance_state = (
                     self.direct_to_guidance.clear()
                 )
-                
+
                 self.direct_to_lateral_guidance_state = (
                     self.direct_to_lateral_guidance.clear()
                 )
@@ -1700,7 +1706,7 @@ class BlakePfdDemo(QWidget):
                 self.update()
                 event.accept()
                 return
-            
+
             if (
                 self.map_airport_selection.selected
                 and self.direct_to_button_rect.contains(
@@ -1754,7 +1760,7 @@ class BlakePfdDemo(QWidget):
 
                 event.accept()
                 return
-            
+
             if map_action is None:
                 selection = (
                     self.map_airport_selector
@@ -1782,7 +1788,7 @@ class BlakePfdDemo(QWidget):
 
                 event.accept()
                 return
-        
+
         if (
             self.page_manager.current()
             == "SETTINGS"
@@ -1918,7 +1924,7 @@ class BlakePfdDemo(QWidget):
         super().mousePressEvent(
             event
         )
-        
+
     def mouseMoveEvent(
         self,
         event,
@@ -1960,7 +1966,7 @@ class BlakePfdDemo(QWidget):
 
         self.update()
         event.accept()
-        
+
     def mouseReleaseEvent(
         self,
         event,
@@ -1974,7 +1980,7 @@ class BlakePfdDemo(QWidget):
         super().mouseReleaseEvent(
             event
         )
-        
+
     def mouseReleaseEvent(
         self,
         event,
@@ -1988,7 +1994,7 @@ class BlakePfdDemo(QWidget):
         super().mouseReleaseEvent(
             event
         )
-        
+
     def closeEvent(
         self,
         event,
@@ -2004,11 +2010,11 @@ class BlakePfdDemo(QWidget):
             self.heartbeat_file.remove()
         except OSError:
             pass
-        
+
         super().closeEvent(
             event
         )
-        
+
     def keyPressEvent(
         self,
         event,
@@ -2068,7 +2074,7 @@ class BlakePfdDemo(QWidget):
         self.flight_computer.config = self.config
 
         print(f"EMS test mode: {next_mode}")
-        
+
     def draw_terrain_warning_banner(
         self,
         painter,
@@ -2139,7 +2145,7 @@ class BlakePfdDemo(QWidget):
                 55,
                 presentation.detail,
             )
-            
+
     def draw_hits_guidance(
         self,
         painter: QPainter,
@@ -2230,7 +2236,7 @@ class BlakePfdDemo(QWidget):
             )
 
         painter.restore()
-         
+
     def draw_flight_director(
         self,
         painter: QPainter,
@@ -2356,8 +2362,8 @@ class BlakePfdDemo(QWidget):
             ),
         )
 
-        painter.restore()   
-    
+        painter.restore()
+
     def draw_flight_path_marker(
         self,
         painter: QPainter,
@@ -2466,7 +2472,7 @@ class BlakePfdDemo(QWidget):
         )
 
         painter.restore()
-        
+
     def draw_map_airport_selection(
         self,
         painter: QPainter,
@@ -2777,7 +2783,7 @@ class BlakePfdDemo(QWidget):
             )
 
         painter.restore()
-        
+
     def draw_touch_navigation(
         self,
         painter: QPainter,
@@ -2859,7 +2865,7 @@ class BlakePfdDemo(QWidget):
             )
 
         painter.restore()
-        
+
     def draw_guidance_touch_controls(
         self,
         painter: QPainter,
@@ -3015,7 +3021,7 @@ class BlakePfdDemo(QWidget):
                 ),
                 state_text,
             )
-            
+
         if (
             self.map_orientation_state.mode
             == "TRACK_UP"
@@ -3052,7 +3058,7 @@ class BlakePfdDemo(QWidget):
         )
 
         painter.restore()
-    
+
     def draw_warning_strip(self, painter: QPainter, width: int) -> None:
         self.warning_manager.draw(painter, width)
 
@@ -3079,7 +3085,7 @@ class BlakePfdDemo(QWidget):
         taxi_state = self.safe_taxi.update(self.pfd)
         if features.show_safe_taxi and taxi_state.active:
             self.draw_safe_taxi_map(painter, taxi_state, width, height)
-            
+
             self.draw_touch_navigation(
                 painter,
                 width,
@@ -3182,7 +3188,7 @@ class BlakePfdDemo(QWidget):
 
         if declutter_level <= 1:
             self.draw_navigation_status_box(painter, self.pfd, width, height)
-            
+
         self.draw_direct_to_guidance_box(
             painter,
             width,
@@ -3235,7 +3241,7 @@ class BlakePfdDemo(QWidget):
             width,
             height,
         )
-        
+
         self.draw_sensor_watchdog_banner(
             painter,
             width,
@@ -3253,7 +3259,7 @@ class BlakePfdDemo(QWidget):
             width,
             height,
         )
-        
+
     def draw_reboot_recovery_banner(
         self,
         painter: QPainter,
@@ -3335,7 +3341,7 @@ class BlakePfdDemo(QWidget):
         )
 
         painter.restore()
-        
+
     def draw_startup_gate_banner(
         self,
         painter: QPainter,
@@ -3427,7 +3433,7 @@ class BlakePfdDemo(QWidget):
         )
 
         painter.restore()
-        
+
     def draw_sensor_watchdog_banner(
         self,
         painter: QPainter,
@@ -4193,7 +4199,7 @@ class BlakePfdDemo(QWidget):
                 pfd.cdi
             )
             cdi_source = "NAV"
-            
+
         if (
             self.direct_to_guidance_state.active
             and self.direct_to_guidance_state.bearing_deg
@@ -4214,7 +4220,7 @@ class BlakePfdDemo(QWidget):
             displayed_desired_track = (
                 pfd.desired_track_deg
             )
-            
+
         parts = [
             f"TRK {pfd.track_deg:.0f}°",
             f"BRG {displayed_bearing:.0f}°",
@@ -4632,13 +4638,13 @@ class BlakePfdDemo(QWidget):
         )
 
         glide_range_nm = 0.0
-        
+
         emergency_state = getattr(
             self,
             "emergency_airport_state",
             None,
         )
-        
+
         track_deg = 0.0
 
         if self.pfd is not None:
@@ -4701,7 +4707,7 @@ class BlakePfdDemo(QWidget):
                 int(glide_radius * 2),
                 int(glide_radius * 2),
             )
-            
+
         if (
             self.direct_to_state.active
             and self.direct_to_state.bearing_deg
@@ -4800,7 +4806,7 @@ class BlakePfdDemo(QWidget):
                 QFont.Weight.Bold,
             )
         )
-        
+
         if (
             self.page_manager.current()
             == "MAP"
@@ -4843,7 +4849,7 @@ class BlakePfdDemo(QWidget):
                 * radius
                 * scale
             )
-            
+
             if (
                 self.page_manager.current()
                 == "MAP"
@@ -4876,7 +4882,7 @@ class BlakePfdDemo(QWidget):
                 and airport.ident.upper()
                 == selected_airport
             )
-            
+
             is_touch_selected = (
                 self.map_airport_selection.selected
                 and (
@@ -4916,7 +4922,7 @@ class BlakePfdDemo(QWidget):
                     130,
                     130,
                 )
-                
+
             if is_touch_selected:
                 painter.setPen(
                     QPen(
@@ -5027,7 +5033,7 @@ class BlakePfdDemo(QWidget):
                 ]
             )
         )
-        
+
         if self.direct_to_guidance_state.active:
             guidance_ident = (
                 self.direct_to_guidance_state
@@ -5336,7 +5342,7 @@ class BlakePfdDemo(QWidget):
         painter.setFont(QFont("Arial", 12, QFont.Weight.Bold))
         painter.setPen(QColor(0, 255, 0) if weather_state.ok else QColor(255, 180, 0))
         painter.drawText(width - 230, 105, "WX ONLINE" if weather_state.ok else "WX WAITING")
-        
+
     def draw_emergency_landing_guidance(
         self,
         painter: QPainter,
@@ -5528,9 +5534,9 @@ class BlakePfdDemo(QWidget):
             box_y + 158,
             plan.instruction,
         )
-        
-        
-    
+
+
+
     def draw_aircraft_state_label(
         self,
         painter: QPainter,
@@ -5541,7 +5547,7 @@ class BlakePfdDemo(QWidget):
             return
         engine_state = self.aircraft.engine_state
         engine_health = engine_state.health
-        
+
         engine = engine_state.data
         engine_health = engine_state.health
         engine_analysis = engine_state.analysis
@@ -5609,13 +5615,13 @@ class BlakePfdDemo(QWidget):
             severity = getattr(recommendation, "severity", "NORMAL")
             title = getattr(recommendation, "title", "Normal")
             action = getattr(recommendation, "recommendation", "")
-            
+
         urgency_s = getattr(recommendation, "urgency_s", None)
 
         urgency_text = ""
         if urgency_s is not None:
             urgency_text = f" {urgency_s:.0f}s"
-            
+
         confidence = getattr(recommendation, "confidence", None)
 
         confidence_text = ""
@@ -5660,7 +5666,7 @@ class BlakePfdDemo(QWidget):
             return "W"
 
         return f"{heading // 10:02d}"
-    
+
     def draw_direct_to_guidance_box(
             self,
             painter: QPainter,

@@ -54,7 +54,7 @@ def test_multiple_sensor_failures() -> None:
         state.message
         == "DEGRADED: ATTITUDE / AIR DATA / GPS"
     )
-    
+
 def test_healthy_but_stale_attitude_reports_stale() -> None:
     state = SensorWatchdog().evaluate(
         flight_data_available=True,
@@ -89,7 +89,7 @@ def test_failed_attitude_does_not_also_report_stale() -> None:
         state.message
         == "DEGRADED: ATTITUDE"
     )
-    
+
 def test_healthy_but_stale_air_data_reports_stale() -> None:
     state = SensorWatchdog().evaluate(
         flight_data_available=True,
@@ -123,4 +123,49 @@ def test_failed_air_data_does_not_also_report_stale() -> None:
     assert (
         state.message
         == "DEGRADED: AIR DATA"
+    )
+
+def test_stale_position_reports_gps_stale() -> None:
+    watchdog = SensorWatchdog()
+
+    state = watchdog.evaluate(
+        flight_data_available=True,
+        position_valid=True,
+        position_fresh=False,
+        attitude_valid=True,
+        air_data_valid=True,
+        attitude_fresh=True,
+        air_data_fresh=True,
+    )
+
+    assert state.position_valid is True
+    assert state.position_fresh is False
+    assert state.degraded is True
+    assert state.failed is False
+    assert (
+        state.message
+        == "DEGRADED: GPS STALE"
+    )
+
+
+def test_invalid_position_takes_priority_over_stale() -> None:
+    watchdog = SensorWatchdog()
+
+    state = watchdog.evaluate(
+        flight_data_available=True,
+        position_valid=False,
+        position_fresh=False,
+        attitude_valid=True,
+        air_data_valid=True,
+        attitude_fresh=True,
+        air_data_fresh=True,
+    )
+
+    assert state.position_valid is False
+    assert state.position_fresh is False
+    assert state.degraded is True
+    assert state.failed is False
+    assert (
+        state.message
+        == "DEGRADED: GPS"
     )

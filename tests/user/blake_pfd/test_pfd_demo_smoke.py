@@ -81,7 +81,7 @@ def test_pfd_demo_renders_offscreen(
         widget.close()
         widget.deleteLater()
         qapp.processEvents()
-        
+
 def test_pfd_demo_renders_sensor_failure_banner(
     qapp: QApplication,
 ) -> None:
@@ -145,7 +145,7 @@ def test_pfd_demo_renders_sensor_failure_banner(
         widget.close()
         widget.deleteLater()
         qapp.processEvents()
-        
+
 def test_pfd_demo_sensor_fault_message(
     qapp: QApplication,
 ) -> None:
@@ -181,7 +181,7 @@ def test_pfd_demo_sensor_fault_message(
         widget.close()
         widget.deleteLater()
         qapp.processEvents()
-        
+
 def test_pfd_demo_renders_startup_blocked_banner(
     qapp: QApplication,
 ) -> None:
@@ -306,7 +306,7 @@ def test_pfd_demo_renders_startup_initializing_banner(
         widget.close()
         widget.deleteLater()
         qapp.processEvents()
-        
+
 def test_pfd_demo_renders_unclean_restart_banner(
     qapp: QApplication,
 ) -> None:
@@ -379,7 +379,7 @@ def test_pfd_demo_renders_unclean_restart_banner(
         widget.close()
         widget.deleteLater()
         qapp.processEvents()
-        
+
 def test_transient_ai_caution_does_not_reach_display(
     qapp: QApplication,
 ) -> None:
@@ -445,7 +445,7 @@ def test_transient_ai_caution_does_not_reach_display(
         widget.close()
         widget.deleteLater()
         qapp.processEvents()
-        
+
 def test_sustained_ai_caution_reaches_display_after_latch(
     qapp: QApplication,
 ) -> None:
@@ -511,7 +511,7 @@ def test_sustained_ai_caution_reaches_display_after_latch(
         widget.close()
         widget.deleteLater()
         qapp.processEvents()
-        
+
 def test_latched_caution_clears_after_required_normal_samples(
     qapp: QApplication,
 ) -> None:
@@ -607,7 +607,7 @@ def test_latched_caution_clears_after_required_normal_samples(
         widget.close()
         widget.deleteLater()
         qapp.processEvents()
-        
+
 def test_critical_immediately_replaces_latched_caution(
     qapp: QApplication,
 ) -> None:
@@ -688,7 +688,7 @@ def test_critical_immediately_replaces_latched_caution(
         widget.close()
         widget.deleteLater()
         qapp.processEvents()
-        
+
 def test_latched_caution_survives_brief_clear(
     qapp: QApplication,
 ) -> None:
@@ -768,8 +768,8 @@ def test_latched_caution_survives_brief_clear(
 
         widget.close()
         widget.deleteLater()
-        qapp.processEvents() 
-        
+        qapp.processEvents()
+
 def test_module_help_entrypoint_runs() -> None:
     import subprocess
     import sys
@@ -790,3 +790,43 @@ def test_module_help_entrypoint_runs() -> None:
     assert "Blake PFD visual demo" in result.stdout
     assert "--hardware" in result.stdout
     assert "--sim" in result.stdout
+
+def test_pfd_demo_reports_stale_gps_separately(
+    qapp: QApplication,
+) -> None:
+    widget = BlakePfdDemo(
+        use_hardware=False,
+    )
+
+    widget.timer.stop()
+
+    try:
+        state = (
+            widget.sensor_watchdog.evaluate(
+                flight_data_available=True,
+                position_valid=True,
+                position_fresh=False,
+                attitude_valid=True,
+                air_data_valid=True,
+                attitude_fresh=True,
+                air_data_fresh=True,
+            )
+        )
+
+        assert state.position_valid is True
+        assert state.position_fresh is False
+        assert state.degraded is True
+        assert state.failed is False
+        assert (
+            state.message
+            == "DEGRADED: GPS STALE"
+        )
+
+    finally:
+        if widget.timer.isActive():
+            widget.timer.stop()
+
+        widget.close()
+        widget.deleteLater()
+        qapp.processEvents()
+
