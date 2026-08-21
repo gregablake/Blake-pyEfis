@@ -16,6 +16,17 @@ class SensorMode(str, Enum):
     REPLAY = "replay"
 
 
+class EngineDataUnavailableError(RuntimeError):
+    pass
+
+
+class UnavailableEngineSource:
+    def read(self) -> EngineData:
+        raise EngineDataUnavailableError(
+            "Real engine sensor source is not configured."
+        )
+
+
 class SensorManager:
     def __init__(
         self,
@@ -25,12 +36,18 @@ class SensorManager:
     ) -> None:
         self.flight_computer = flight_computer
         self.replay_source = LogReplaySource(replay_log) if replay_log else None
+
         self.flight_sensor_source = (
             BlakeHardwareSensorSource()
             if use_hardware
             else SimulatedSensorSource()
         )
-        self.engine_source = SimulatedEngineSource()
+
+        self.engine_source = (
+            UnavailableEngineSource()
+            if use_hardware
+            else SimulatedEngineSource()
+        )
 
         if replay_log:
             self.mode = SensorMode.REPLAY

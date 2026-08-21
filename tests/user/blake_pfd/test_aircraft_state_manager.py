@@ -72,6 +72,7 @@ def test_aircraft_state_manager_builds_complete_state() -> None:
 
     assert result.electrical.volts == 14.2
     assert result.electrical.amps == 8.0
+    assert result.electrical.valid is True
     assert result.electrical.alternator_online is True
 
     assert result.navigation.selected_waypoint_id == "KHAO"

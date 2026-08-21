@@ -2,6 +2,10 @@ from __future__ import annotations
 
 import os
 
+import subprocess
+
+import sys
+
 os.environ.setdefault(
     "QT_QPA_PLATFORM",
     "offscreen",
@@ -830,3 +834,116 @@ def test_pfd_demo_reports_stale_gps_separately(
         widget.deleteLater()
         qapp.processEvents()
 
+def test_pfd_demo_survives_unavailable_engine_data(
+    qapp: QApplication,
+) -> None:
+    from pyefis.user.blake_pfd.core.sensor_manager import (
+        UnavailableEngineSource,
+    )
+
+    widget = BlakePfdDemo(
+        use_hardware=False,
+    )
+
+    widget.timer.stop()
+
+    widget.sensor_manager.engine_source = (
+        UnavailableEngineSource()
+    )
+
+    try:
+        widget.update_data()
+
+        assert widget.engine_data_available is False
+        assert (
+            widget.engine_fault_message
+            == "ENGINE DATA UNAVAILABLE"
+        )
+        assert widget.engine_data is None
+        assert widget.engine_state is None
+
+    finally:
+        if widget.timer.isActive():
+            widget.timer.stop()
+
+        widget.close()
+        widget.deleteLater()
+        qapp.processEvents()
+
+def test_engine_data_is_cleared_after_source_loss(
+    qapp: QApplication,
+) -> None:
+    from pyefis.user.blake_pfd.core.sensor_manager import (
+        UnavailableEngineSource,
+    )
+
+    widget = BlakePfdDemo(
+        use_hardware=False,
+    )
+
+    widget.timer.stop()
+
+    try:
+        widget.update_data()
+
+        assert widget.engine_data_available is True
+        assert widget.engine_data is not None
+        assert widget.engine_state is not None
+        assert widget.aircraft.engine is not None
+
+        previous_engine_data = widget.engine_data
+        previous_engine_state = widget.engine_state
+
+        widget.sensor_manager.engine_source = (
+            UnavailableEngineSource()
+        )
+
+        widget.update_data()
+
+        assert widget.engine_data_available is False
+        assert (
+            widget.engine_fault_message
+            == "ENGINE DATA UNAVAILABLE"
+        )
+
+        assert widget.engine_data is None
+        assert widget.engine_state is None
+        assert widget.aircraft.engine is None
+
+        assert (
+            widget.aircraft.fuel.calculation_valid
+            is False
+        )
+        assert widget.aircraft.electrical.valid is False
+
+        assert widget.engine_data is not previous_engine_data
+        assert widget.engine_state is not previous_engine_state
+
+    finally:
+        if widget.timer.isActive():
+            widget.timer.stop()
+
+        widget.close()
+        widget.deleteLater()
+        qapp.processEvents()
+
+def test_module_rejects_hardware_with_replay_log() -> None:
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "pyefis.user.blake_pfd.pfd_demo",
+            "--hardware",
+            "--replay-log",
+            "dummy.csv",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode != 0
+    assert (
+        "not allowed with argument --hardware"
+        in result.stderr
+    )

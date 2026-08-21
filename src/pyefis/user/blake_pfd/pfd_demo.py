@@ -52,7 +52,10 @@ from pyefis.user.blake_pfd.terrain import TerrainComputer
 from pyefis.user.blake_pfd.weather_reader import WeatherReader
 from pyefis.user.blake_pfd.core.event_manager import EventManager
 from pyefis.user.blake_pfd.core.flight_state_manager import FlightStateManager
-from pyefis.user.blake_pfd.core.sensor_manager import SensorManager
+from pyefis.user.blake_pfd.core.sensor_manager import (
+    EngineDataUnavailableError,
+    SensorManager,
+)
 from pyefis.user.blake_pfd.core.aircraft_state_manager import AircraftStateManager
 from pyefis.user.blake_pfd.core.checklist_manager import ChecklistManager
 from pyefis.user.blake_pfd.core.engine_manager import EngineManager
@@ -709,6 +712,12 @@ class BlakePfdDemo(QWidget):
             use_hardware=use_hardware,
             replay_log=replay_log,
         )
+
+        self.engine_data_available = False
+        self.engine_fault_message = ""
+        self.engine_data = None
+        self.engine_state = None
+
         self.engine_manager = EngineManager()
         self.engine_trend_manager = EngineTrendManager()
         self.engine_analyzer = EngineAnalyzer()
@@ -787,7 +796,22 @@ class BlakePfdDemo(QWidget):
         )
 
     def update_engine_state(self) -> None:
-        self.engine_data = self.sensor_manager.read_engine()
+        try:
+            engine_data = (
+                self.sensor_manager.read_engine()
+            )
+        except EngineDataUnavailableError:
+            self.engine_data_available = False
+            self.engine_fault_message = (
+                "ENGINE DATA UNAVAILABLE"
+            )
+            self.engine_data = None
+            self.engine_state = None
+            return
+
+        self.engine_data_available = True
+        self.engine_fault_message = ""
+        self.engine_data = engine_data
 
         self.engine_health = self.engine_manager.update(
             self.engine_data
@@ -802,12 +826,17 @@ class BlakePfdDemo(QWidget):
             self.engine_health,
             self.engine_trend,
         )
-        self.cylinder_analysis = self.cylinder_analyzer.analyze(
-            self.engine_data
+
+        self.cylinder_analysis = (
+            self.cylinder_analyzer.analyze(
+                self.engine_data
+            )
         )
 
-        self.engine_prediction = self.engine_predictor.predict(
-            self.engine_trend
+        self.engine_prediction = (
+            self.engine_predictor.predict(
+                self.engine_trend
+            )
         )
 
         self.engine_advice = self.engine_advisor.advise(
@@ -819,7 +848,11 @@ class BlakePfdDemo(QWidget):
                 cylinders=self.cylinder_analysis,
                 prediction=self.engine_prediction,
             ),
-            flight_state=getattr(self, "flight_state", None),
+            flight_state=getattr(
+                self,
+                "flight_state",
+                None,
+            ),
         )
 
         self.engine_state = EngineState(
@@ -1092,16 +1125,24 @@ class BlakePfdDemo(QWidget):
         else:
             self.sensor_fault_message = ""
 
-        engine = self.engine_state.data
+        engine = (
+            self.engine_state.data
+            if self.engine_state is not None
+            else None
+        )
 
         if self.pfd is not None:
-            engine.fuel_range_nm = (
-                engine.endurance_hr * self.pfd.ground_speed_kt
-            )
+            if engine is not None:
+                engine.fuel_range_nm = (
+                    engine.endurance_hr
+                    * self.pfd.ground_speed_kt
+                )
 
-            self.flight_state = self.flight_state_manager.update(
-                self.pfd,
-                engine=engine,
+            self.flight_state = (
+                self.flight_state_manager.update(
+                    self.pfd,
+                    engine=engine,
+                )
             )
 
             self.flight_path_marker_state = (
@@ -1547,17 +1588,21 @@ class BlakePfdDemo(QWidget):
                 recommendation_key
             )
 
-        self.ems_alert_history.update(engine)
-        self.ems_trend_page.add_sample(engine)
+        if engine is not None:
+            self.ems_alert_history.update(engine)
+            self.ems_trend_page.add_sample(engine)
 
-        self.audio_alerts.update(
-            engine,
-            silenced=self.ems_alert_history.silenced,
-        )
+            self.audio_alerts.update(
+                engine,
+                silenced=(
+                    self.ems_alert_history.silenced
+                ),
+            )
 
         if (
             self.config.logging.enabled
             and self.pfd is not None
+            and engine is not None
         ):
             self.flight_logger.maybe_log(
                 self.pfd,
@@ -5820,7 +5865,7 @@ def parse_args() -> argparse.Namespace:
         help="Run using real hardware sensor readers",
     )
 
-    parser.add_argument(
+    mode_group.add_argument(
         "--replay-log",
         help="Replay a recorded flight log CSV",
     )

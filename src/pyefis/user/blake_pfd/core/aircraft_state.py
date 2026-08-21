@@ -33,7 +33,8 @@ class FuelState:
 class ElectricalState:
     volts: float = 0.0
     amps: float = 0.0
-    alternator_online: bool = True
+    alternator_online: bool = False
+    valid: bool = False
     
 @dataclass
 class WindState:

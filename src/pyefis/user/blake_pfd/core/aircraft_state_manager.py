@@ -46,24 +46,75 @@ class AircraftStateManager:
     def update(
         self,
         pfd: FlightData,
-        engine: EngineData,
+        engine: EngineData | None,
         selected_waypoint_id: str,
         flight_state: FlightState | None = None,
         engine_state: EngineState | None = None,
         wind_speed_kt: float = 0.0,
         wind_from_deg: float = 0.0,
         emergency_airport_state: EmergencyAirportState | None = None,
-        
     ) -> AircraftState:
-        calculated_fuel = self.fuel_calculator.calculate(
-            remaining_gal=engine.fuel_remaining_gal,
-            used_gal=engine.fuel_used_gal,
-            flow_gph=engine.fuel_flow_gph,
-            ground_speed_kt=pfd.ground_speed_kt,
-            fallback_endurance_hr=engine.endurance_hr,
-            fallback_range_nm=engine.fuel_range_nm,
-        )
-        
+        if engine is None:
+            fuel_state = FuelState(
+                calculation_valid=False,
+            )
+
+            electrical_state = ElectricalState(
+                volts=0.0,
+                amps=0.0,
+                alternator_online=False,
+                valid=False,
+            )
+
+        else:
+            calculated_fuel = (
+                self.fuel_calculator.calculate(
+                    remaining_gal=(
+                        engine.fuel_remaining_gal
+                    ),
+                    used_gal=engine.fuel_used_gal,
+                    flow_gph=engine.fuel_flow_gph,
+                    ground_speed_kt=(
+                        pfd.ground_speed_kt
+                    ),
+                    fallback_endurance_hr=(
+                        engine.endurance_hr
+                    ),
+                    fallback_range_nm=(
+                        engine.fuel_range_nm
+                    ),
+                )
+            )
+
+            fuel_state = FuelState(
+                remaining_gal=(
+                    calculated_fuel.remaining_gal
+                ),
+                used_gal=(
+                    calculated_fuel.used_gal
+                ),
+                flow_gph=(
+                    calculated_fuel.flow_gph
+                ),
+                endurance_hr=(
+                    calculated_fuel.endurance_hr
+                ),
+                range_nm=(
+                    calculated_fuel.range_nm
+                ),
+                calculation_valid=(
+                    calculated_fuel.calculation_valid
+                ),
+            )
+
+            electrical_state = ElectricalState(
+                volts=engine.volts,
+                amps=engine.amps,
+                alternator_online=(
+                    engine.alternator_online
+                ),
+                valid=True,
+            )
 
         calculated_wind = (
             self.wind_calculator.calculate_components(
@@ -79,22 +130,9 @@ class AircraftStateManager:
 
             engine=engine,
 
-            fuel=FuelState(
-                remaining_gal=calculated_fuel.remaining_gal,
-                used_gal=calculated_fuel.used_gal,
-                flow_gph=calculated_fuel.flow_gph,
-                endurance_hr=calculated_fuel.endurance_hr,
-                range_nm=calculated_fuel.range_nm,
-                calculation_valid=(
-                    calculated_fuel.calculation_valid
-                ),
-            ),
+            fuel=fuel_state,
 
-            electrical=ElectricalState(
-                volts=engine.volts,
-                amps=engine.amps,
-                alternator_online=engine.alternator_online,
-            ),
+            electrical=electrical_state,
 
             navigation=NavigationState(
                 selected_waypoint_id=selected_waypoint_id,
