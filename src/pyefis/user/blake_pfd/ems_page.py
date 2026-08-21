@@ -17,25 +17,77 @@ class EmsPage:
         checklist=None,
         aircraft_recommendation=None,
     ) -> None:
-        engine_state = aircraft.engine_state
-        engine_advice = getattr(engine_state, "advice", None)
-        engine = engine_state.data
-        engine_health = engine_state.health
-        engine_analysis = engine_state.analysis
-        engine_trend = engine_state.trend
-        cylinders = engine_state.cylinders
+        engine_state = getattr(
+            aircraft,
+            "engine_state",
+            None,
+        )
 
-        painter.fillRect(0, 0, width, height, QColor(0, 0, 0))
+        painter.fillRect(
+            0,
+            0,
+            width,
+            height,
+            QColor(0, 0, 0),
+        )
 
         painter.setPen(QColor(0, 255, 0))
-        painter.setFont(QFont("Arial", 24, QFont.Weight.Bold))
+        painter.setFont(
+            QFont(
+                "Arial",
+                24,
+                QFont.Weight.Bold,
+            )
+        )
         painter.drawText(
             QRectF(0, 20, width, 40),
             Qt.AlignmentFlag.AlignCenter,
             "ENGINE MONITORING SYSTEM",
         )
 
-        self.draw_annunciators(painter, engine, width)
+        if engine_state is None:
+            painter.setPen(
+                QColor(
+                    255,
+                    80,
+                    80,
+                )
+            )
+            painter.setFont(
+                QFont(
+                    "Arial",
+                    28,
+                    QFont.Weight.Bold,
+                )
+            )
+            painter.drawText(
+                QRectF(
+                    0,
+                    150,
+                    width,
+                    80,
+                ),
+                Qt.AlignmentFlag.AlignCenter,
+                "ENGINE DATA UNAVAILABLE",
+            )
+            return
+
+        engine_advice = getattr(
+            engine_state,
+            "advice",
+            None,
+        )
+        engine = engine_state.data
+        engine_health = engine_state.health
+        engine_analysis = engine_state.analysis
+        engine_trend = engine_state.trend
+        cylinders = engine_state.cylinders
+
+        self.draw_annunciators(
+            painter,
+            engine,
+            width,
+        )
         self.draw_test_mode_label(painter, width)
 
         y = 105
