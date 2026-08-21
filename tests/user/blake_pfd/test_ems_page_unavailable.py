@@ -40,3 +40,22 @@ def test_ems_page_shows_unavailable_without_engine_state() -> None:
 
     assert "ENGINE DATA UNAVAILABLE" in painter.text
     assert "0" not in painter.text
+
+def test_ems_page_shows_stale_fault_message() -> None:
+    page = EmsPage()
+    painter = RecordingPainter()
+
+    aircraft = SimpleNamespace(
+        engine_state=None,
+    )
+
+    page.draw(
+        painter,
+        aircraft,
+        width=1024,
+        height=600,
+        fault_message="EMS DATA STALE",
+    )
+
+    assert "EMS DATA STALE" in painter.text
+    assert "ENGINE DATA UNAVAILABLE" not in painter.text

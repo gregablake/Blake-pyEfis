@@ -138,7 +138,8 @@ class PageRenderer:
                 height,
                 checklist=self.app.engine_checklist_page,
                 aircraft_recommendation=self.app.aircraft_recommendation,
-            )   
+                fault_message=self.app.engine_fault_message,
+            )
             self.app.draw_touch_navigation(
                 painter,
                 width,

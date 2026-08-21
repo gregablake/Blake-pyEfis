@@ -927,6 +927,61 @@ def test_engine_data_is_cleared_after_source_loss(
         widget.deleteLater()
         qapp.processEvents()
 
+def test_frozen_engine_source_becomes_stale(
+    qapp: QApplication,
+) -> None:
+    from time import monotonic
+
+    widget = BlakePfdDemo(
+        use_hardware=False,
+    )
+
+    widget.timer.stop()
+
+    try:
+        widget.update_engine_state()
+
+        frozen_data = widget.engine_data
+
+        class FrozenEngineSource:
+            def __init__(self) -> None:
+                self.last_success_s = (
+                    monotonic() - 2.0
+                )
+
+            def read(self):
+                return frozen_data
+
+        widget.sensor_manager.engine_source = (
+            FrozenEngineSource()
+        )
+
+        widget.update_engine_state()
+        widget.update_engine_state()
+
+        assert widget.engine_freshness_state.fresh is False
+        assert widget.engine_freshness_state.stale is True
+        assert (
+            widget.engine_freshness_state.age_s
+            > 1.0
+        )
+
+        assert widget.engine_data_available is False
+        assert (
+            widget.engine_fault_message
+            == "EMS DATA STALE"
+        )
+        assert widget.engine_data is None
+        assert widget.engine_state is None
+
+    finally:
+        if widget.timer.isActive():
+            widget.timer.stop()
+
+        widget.close()
+        widget.deleteLater()
+        qapp.processEvents()
+
 def test_module_rejects_hardware_with_replay_log() -> None:
     result = subprocess.run(
         [

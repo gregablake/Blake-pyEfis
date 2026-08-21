@@ -10,6 +10,7 @@ from pyefis.user.blake_pfd.engine_data import EngineData
 class SimulatedEngineSource:
     def __init__(self) -> None:
         self.start_time_s = monotonic()
+        self.last_success_s: float | None = None
         self.config = load_config()
         self.total_fuel_gal = self.config.fuel.remaining_gal
 
@@ -71,8 +72,9 @@ class SimulatedEngineSource:
 
         self.apply_test_mode(engine)
 
-        return engine
+        self.last_success_s = monotonic()
 
+        return engine
     def apply_test_mode(self, engine: EngineData) -> None:
         ems_test = getattr(self.config, "ems_test", None)
         mode = getattr(ems_test, "mode", "normal")

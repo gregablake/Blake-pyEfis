@@ -53,3 +53,12 @@ def test_hardware_engine_read_fails_closed() -> None:
         match="Real engine sensor source is not configured",
     ):
         manager.read_engine()
+
+def test_simulated_engine_source_records_success_timestamp() -> None:
+    source = SimulatedEngineSource()
+
+    assert source.last_success_s is None
+
+    source.read()
+
+    assert source.last_success_s is not None

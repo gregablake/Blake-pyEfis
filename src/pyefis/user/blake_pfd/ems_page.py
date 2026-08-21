@@ -16,6 +16,7 @@ class EmsPage:
         height: int,
         checklist=None,
         aircraft_recommendation=None,
+        fault_message: str = "",
     ) -> None:
         engine_state = getattr(
             aircraft,
@@ -68,7 +69,7 @@ class EmsPage:
                     80,
                 ),
                 Qt.AlignmentFlag.AlignCenter,
-                "ENGINE DATA UNAVAILABLE",
+                fault_message or "ENGINE DATA UNAVAILABLE",
             )
             return
 

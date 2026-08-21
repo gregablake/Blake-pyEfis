@@ -333,27 +333,39 @@ class BlakePfdDemo(QWidget):
 
         self.sensor_fault_message = ""
 
-        self.bno085_freshness = (
+        self.bno085_freshness_monitor = (
             DataFreshnessMonitor(
                 stale_after_s=0.5,
             )
         )
 
-        self.baro_freshness = (
+        self.baro_freshness_monitor = (
             DataFreshnessMonitor(
                 stale_after_s=1.0,
             )
         )
 
-        self.airspeed_freshness = (
+        self.airspeed_freshness_monitor = (
             DataFreshnessMonitor(
                 stale_after_s=1.0,
             )
         )
 
-        self.gps_freshness = (
+        self.gps_freshness_monitor = (
             DataFreshnessMonitor(
                 stale_after_s=2.5,
+            )
+        )
+
+        self.engine_freshness_monitor = (
+            DataFreshnessMonitor(
+                stale_after_s=1.0,
+            )
+        )
+
+        self.engine_freshness_state = (
+            self.engine_freshness_monitor.evaluate(
+                monotonic()
             )
         )
 
@@ -804,6 +816,32 @@ class BlakePfdDemo(QWidget):
             self.engine_data_available = False
             self.engine_fault_message = (
                 "ENGINE DATA UNAVAILABLE"
+            )
+            self.engine_data = None
+            self.engine_state = None
+            return
+
+        source_timestamp_s = getattr(
+            self.sensor_manager.engine_source,
+            "last_success_s",
+            None,
+        )
+
+        if source_timestamp_s is not None:
+            self.engine_freshness_monitor.mark_update(
+                source_timestamp_s
+            )
+
+        self.engine_freshness_state = (
+            self.engine_freshness_monitor.evaluate(
+                monotonic()
+            )
+        )
+
+        if self.engine_freshness_state.stale:
+            self.engine_data_available = False
+            self.engine_fault_message = (
+                "EMS DATA STALE"
             )
             self.engine_data = None
             self.engine_state = None
