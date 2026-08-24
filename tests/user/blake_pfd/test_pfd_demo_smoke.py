@@ -18,6 +18,14 @@ from pyefis.user.blake_pfd.pfd_demo import (
     BlakePfdDemo,
 )
 
+from pyefis.user.blake_pfd.pfd_demo import (
+    BlakePfdDemo,
+)
+
+from pyefis.user.blake_pfd.core.sensor_manager import (
+    EngineDataUnavailableError,
+)
+
 
 def test_pfd_demo_constructs(
     qapp: QApplication,
@@ -1002,3 +1010,108 @@ def test_module_rejects_hardware_with_replay_log() -> None:
         "not allowed with argument --hardware"
         in result.stderr
     )
+
+def test_engine_sensor_status_populates_from_simulated_data(
+    qapp: QApplication,
+) -> None:
+    widget = BlakePfdDemo(
+        use_hardware=False,
+    )
+
+    widget.timer.stop()
+
+    try:
+        widget.update_engine_state()
+
+        status = widget.engine_sensor_status
+
+        assert status.rpm.valid is True
+        assert status.rpm.fresh is True
+
+        assert status.oil_pressure.valid is True
+        assert status.oil_temperature.valid is True
+        assert status.fuel_pressure.valid is True
+        assert status.fuel_flow.valid is True
+
+        assert all(
+            channel.valid is True
+            for channel in status.cht
+        )
+        assert all(
+            channel.fresh is True
+            for channel in status.cht
+        )
+
+        assert all(
+            channel.valid is True
+            for channel in status.egt
+        )
+        assert all(
+            channel.fresh is True
+            for channel in status.egt
+        )
+
+    finally:
+        if widget.timer.isActive():
+            widget.timer.stop()
+
+        widget.close()
+        widget.deleteLater()
+        qapp.processEvents()
+
+def test_engine_sensor_status_resets_after_source_loss(
+    qapp: QApplication,
+) -> None:
+    widget = BlakePfdDemo(
+        use_hardware=False,
+    )
+
+    widget.timer.stop()
+
+    class UnavailableSource:
+        def read(self):
+            raise EngineDataUnavailableError(
+                "Real engine sensor source is not configured."
+            )
+
+    try:
+        widget.update_engine_state()
+
+        assert widget.engine_sensor_status.rpm.valid is True
+        assert widget.engine_sensor_status.rpm.fresh is True
+
+        widget.sensor_manager.engine_source = (
+            UnavailableSource()
+        )
+
+        widget.update_engine_state()
+
+        assert widget.engine_data_available is False
+        assert widget.engine_state is None
+
+        assert (
+            widget.engine_sensor_status.rpm.valid
+            is False
+        )
+        assert (
+            widget.engine_sensor_status.rpm.fresh
+            is False
+        )
+
+        assert all(
+            channel.valid is False
+            for channel in widget.engine_sensor_status.cht
+        )
+
+        assert all(
+            channel.fresh is False
+            for channel in widget.engine_sensor_status.egt
+        )
+
+    finally:
+        if widget.timer.isActive():
+            widget.timer.stop()
+
+        widget.close()
+        widget.deleteLater()
+        qapp.processEvents()

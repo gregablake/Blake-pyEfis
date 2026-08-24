@@ -180,6 +180,13 @@ from pyefis.user.blake_pfd.core.data_freshness import (
     DataFreshnessMonitor,
 )
 
+from pyefis.user.blake_pfd.core.engine_sensor_monitor import (
+    EngineSensorMonitor,
+)
+from pyefis.user.blake_pfd.core.engine_sensor_status import (
+    EngineSensorStatus,
+)
+
 from pyefis.user.blake_pfd.core.startup_gate import (
     StartupGate,
 )
@@ -367,6 +374,13 @@ class BlakePfdDemo(QWidget):
             self.engine_freshness_monitor.evaluate(
                 monotonic()
             )
+        )
+
+        self.engine_sensor_monitor = (
+            EngineSensorMonitor()
+        )
+        self.engine_sensor_status = (
+            EngineSensorStatus()
         )
 
         self.sensor_watchdog_state = (
@@ -819,6 +833,9 @@ class BlakePfdDemo(QWidget):
             )
             self.engine_data = None
             self.engine_state = None
+            self.engine_sensor_status = (
+                EngineSensorStatus()
+            )
             return
 
         source_timestamp_s = getattr(
@@ -835,6 +852,15 @@ class BlakePfdDemo(QWidget):
         self.engine_freshness_state = (
             self.engine_freshness_monitor.evaluate(
                 monotonic()
+            )
+        )
+
+        self.engine_sensor_status = (
+            self.engine_sensor_monitor.evaluate(
+                engine_data,
+                source_fresh=(
+                    self.engine_freshness_state.fresh
+                ),
             )
         )
 

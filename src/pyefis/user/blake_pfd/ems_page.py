@@ -17,6 +17,7 @@ class EmsPage:
         checklist=None,
         aircraft_recommendation=None,
         fault_message: str = "",
+        sensor_status=None,
     ) -> None:
         engine_state = getattr(
             aircraft,
@@ -88,13 +89,27 @@ class EmsPage:
             painter,
             engine,
             width,
+            sensor_status=sensor_status,
         )
         self.draw_test_mode_label(painter, width)
 
         y = 105
         painter.setFont(QFont("Arial", 16, QFont.Weight.Bold))
 
-        self.draw_value(painter, 40, y, "RPM", engine.rpm, "", self.rpm_color(engine.rpm))
+        self.draw_value(
+            painter,
+            40,
+            y,
+            "RPM",
+            engine.rpm,
+            "",
+            self.rpm_color(engine.rpm),
+            status=(
+                sensor_status.rpm
+                if sensor_status is not None
+                else None
+            ),
+        )
         y += 35
 
         self.draw_value(
@@ -106,6 +121,11 @@ class EmsPage:
             "V",
             self.voltage_color(engine.volts),
             decimals=1,
+            status=(
+                sensor_status.volts
+                if sensor_status is not None
+                else None
+            ),
         )
         y += 35
 
@@ -119,6 +139,11 @@ class EmsPage:
             QColor(255, 255, 255),
             decimals=1,
             signed=True,
+            status=(
+                sensor_status.amps
+                if sensor_status is not None
+                else None
+            ),
         )
         y += 35
 
@@ -129,7 +154,15 @@ class EmsPage:
             "OIL PSI",
             engine.oil_pressure_psi,
             "",
-            self.oil_pressure_color(engine.oil_pressure_psi, engine.rpm),
+            self.oil_pressure_color(
+                engine.oil_pressure_psi,
+                engine.rpm,
+            ),
+            status=(
+                sensor_status.oil_pressure
+                if sensor_status is not None
+                else None
+            ),
         )
         y += 35
 
@@ -141,6 +174,11 @@ class EmsPage:
             engine.oil_temp_f,
             "°F",
             self.oil_temp_color(engine.oil_temp_f),
+            status=(
+                sensor_status.oil_temperature
+                if sensor_status is not None
+                else None
+            ),
         )
         y += 35
 
@@ -153,6 +191,11 @@ class EmsPage:
             "",
             QColor(255, 255, 255),
             decimals=1,
+            status=(
+                sensor_status.fuel_pressure
+                if sensor_status is not None
+                else None
+            ),
         )
         y += 45
 
@@ -167,6 +210,11 @@ class EmsPage:
             "GPH",
             QColor(255, 255, 255),
             decimals=1,
+            status=(
+                sensor_status.fuel_flow
+                if sensor_status is not None
+                else None
+            ),
         )
         y += 35
 
@@ -216,8 +264,28 @@ class EmsPage:
             fuel_color,
             decimals=0,
         )
-        self.draw_cht_column(painter, engine, x=390, y=105)
-        self.draw_egt_column(painter, engine, x=620, y=105)
+        self.draw_cht_column(
+            painter,
+            engine,
+            x=390,
+            y=105,
+            statuses=(
+                sensor_status.cht
+                if sensor_status is not None
+                else None
+            ),
+        )
+        self.draw_egt_column(
+            painter,
+            engine,
+            x=620,
+            y=105,
+            statuses=(
+                sensor_status.egt
+                if sensor_status is not None
+                else None
+            ),
+        )
         self.draw_status_indicators(painter, engine, width, height)
         
         self.draw_cylinder_analysis_box(painter, cylinders, width, height)
@@ -261,9 +329,25 @@ class EmsPage:
         color: QColor,
         decimals: int = 0,
         signed: bool = False,
+        status=None,
     ) -> None:
         painter.setPen(QColor(255, 255, 255))
         painter.drawText(x, y, f"{label:<12}")
+
+        if (
+            status is not None
+            and (
+                not status.valid
+                or not status.fresh
+            )
+        ):
+            painter.setPen(QColor(255, 80, 80))
+            painter.drawText(
+                x + 155,
+                y,
+                f"--- {unit}",
+            )
+            return
 
         painter.setPen(color)
 
@@ -272,7 +356,11 @@ class EmsPage:
         else:
             text = f"{value:.{decimals}f}"
 
-        painter.drawText(x + 155, y, f"{text} {unit}")
+        painter.drawText(
+            x + 155,
+            y,
+            f"{text} {unit}",
+        )
 
     def draw_bar(
         self,
@@ -311,6 +399,7 @@ class EmsPage:
         engine: EngineData,
         x: int,
         y: int,
+        statuses=None,
     ) -> None:
         painter.setFont(QFont("Arial", 16, QFont.Weight.Bold))
         painter.setPen(QColor(0, 180, 255))
@@ -319,6 +408,39 @@ class EmsPage:
         y += 35
 
         for index, cht in enumerate(engine.cht_f, start=1):
+            status = (
+                statuses[index - 1]
+                if (
+                    statuses is not None
+                    and index - 1 < len(statuses)
+                )
+                else None
+            )
+
+            if (
+                status is not None
+                and (
+                    not status.valid
+                    or not status.fresh
+                )
+            ):
+                painter.setPen(QColor(255, 255, 255))
+                painter.drawText(
+                    x,
+                    y,
+                    f"CHT{index}",
+                )
+
+                painter.setPen(QColor(255, 80, 80))
+                painter.drawText(
+                    x + 210,
+                    y,
+                    "---°F",
+                )
+
+                y += 32
+                continue
+
             self.draw_bar(
                 painter=painter,
                 x=x,
@@ -337,6 +459,7 @@ class EmsPage:
         engine: EngineData,
         x: int,
         y: int,
+        statuses=None,
     ) -> None:
         painter.setFont(QFont("Arial", 16, QFont.Weight.Bold))
         painter.setPen(QColor(0, 180, 255))
@@ -345,6 +468,39 @@ class EmsPage:
         y += 35
 
         for index, egt in enumerate(engine.egt_f, start=1):
+            status = (
+                statuses[index - 1]
+                if (
+                    statuses is not None
+                    and index - 1 < len(statuses)
+                )
+                else None
+            )
+
+            if (
+                status is not None
+                and (
+                    not status.valid
+                    or not status.fresh
+                )
+            ):
+                painter.setPen(QColor(255, 255, 255))
+                painter.drawText(
+                    x,
+                    y,
+                    f"EGT{index}",
+                )
+
+                painter.setPen(QColor(255, 80, 80))
+                painter.drawText(
+                    x + 210,
+                    y,
+                    "---°F",
+                )
+
+                y += 32
+                continue
+
             self.draw_bar(
                 painter=painter,
                 x=x,
@@ -402,38 +558,159 @@ class EmsPage:
         painter: QPainter,
         engine: EngineData,
         width: int,
+        sensor_status=None,
     ) -> None:
         config = load_config()
         fuel = config.fuel
 
         annunciators: list[tuple[str, QColor]] = []
 
-        if engine.rpm > 2000 and engine.oil_pressure_psi < 20:
-            annunciators.append(("LOW OIL PRESS", QColor(255, 0, 0)))
+        def channel_usable(status) -> bool:
+            return (
+                status is None
+                or (
+                    status.valid
+                    and status.fresh
+                )
+            )
 
-        if engine.oil_pressure_psi <= 15:
-            annunciators.append(("OIL PRESS", QColor(255, 0, 0)))
+        rpm_status = (
+            sensor_status.rpm
+            if sensor_status is not None
+            else None
+        )
+        oil_pressure_status = (
+            sensor_status.oil_pressure
+            if sensor_status is not None
+            else None
+        )
+        oil_temperature_status = (
+            sensor_status.oil_temperature
+            if sensor_status is not None
+            else None
+        )
+        volts_status = (
+            sensor_status.volts
+            if sensor_status is not None
+            else None
+        )
 
-        if engine.oil_temp_f >= 260:
-            annunciators.append(("HIGH OIL TEMP", QColor(255, 0, 0)))
-        elif engine.oil_temp_f >= 235:
-            annunciators.append(("OIL TEMP", QColor(255, 220, 0)))
+        if (
+            channel_usable(rpm_status)
+            and channel_usable(oil_pressure_status)
+            and engine.rpm > 2000
+            and engine.oil_pressure_psi < 20
+        ):
+            annunciators.append(
+                ("LOW OIL PRESS", QColor(255, 0, 0))
+            )
 
-        if engine.volts < 12.0 or engine.volts > 16.0:
-            annunciators.append(("VOLTS", QColor(255, 0, 0)))
-        elif engine.volts < 13.2 or engine.volts > 15.5:
-            annunciators.append(("VOLTS", QColor(255, 220, 0)))
+        if (
+            channel_usable(oil_pressure_status)
+            and engine.oil_pressure_psi <= 15
+        ):
+            annunciators.append(
+                ("OIL PRESS", QColor(255, 0, 0))
+            )
 
-        if max(engine.cht_f or [0.0]) >= 450:
-            annunciators.append(("HIGH CHT", QColor(255, 0, 0)))
-        elif max(engine.cht_f or [0.0]) >= 425:
-            annunciators.append(("CHT", QColor(255, 220, 0)))
+        if (
+            channel_usable(oil_temperature_status)
+            and engine.oil_temp_f >= 260
+        ):
+            annunciators.append(
+                ("HIGH OIL TEMP", QColor(255, 0, 0))
+            )
+        elif (
+            channel_usable(oil_temperature_status)
+            and engine.oil_temp_f >= 235
+        ):
+            annunciators.append(
+                ("OIL TEMP", QColor(255, 220, 0))
+            )
 
-        if max(engine.egt_f or [0.0]) >= 1600:
-            annunciators.append(("HIGH EGT", QColor(255, 0, 0)))
+        if (
+            channel_usable(volts_status)
+            and (
+                engine.volts < 12.0
+                or engine.volts > 16.0
+            )
+        ):
+            annunciators.append(
+                ("VOLTS", QColor(255, 0, 0))
+            )
+        elif (
+            channel_usable(volts_status)
+            and (
+                engine.volts < 13.2
+                or engine.volts > 15.5
+            )
+        ):
+            annunciators.append(
+                ("VOLTS", QColor(255, 220, 0))
+            )
 
-        if engine.rpm > 3500:
-            annunciators.append(("RPM", QColor(255, 0, 0)))
+        usable_cht_values = [
+            value
+            for index, value in enumerate(
+                engine.cht_f
+            )
+            if (
+                sensor_status is None
+                or (
+                    index < len(sensor_status.cht)
+                    and channel_usable(
+                        sensor_status.cht[index]
+                    )
+                )
+            )
+        ]
+
+        if (
+            usable_cht_values
+            and max(usable_cht_values) >= 450
+        ):
+            annunciators.append(
+                ("HIGH CHT", QColor(255, 0, 0))
+            )
+        elif (
+            usable_cht_values
+            and max(usable_cht_values) >= 425
+        ):
+            annunciators.append(
+                ("CHT", QColor(255, 220, 0))
+            )
+
+        usable_egt_values = [
+            value
+            for index, value in enumerate(
+                engine.egt_f
+            )
+            if (
+                sensor_status is None
+                or (
+                    index < len(sensor_status.egt)
+                    and channel_usable(
+                        sensor_status.egt[index]
+                    )
+                )
+            )
+        ]
+
+        if (
+            usable_egt_values
+            and max(usable_egt_values) >= 1600
+        ):
+            annunciators.append(
+                ("HIGH EGT", QColor(255, 0, 0))
+            )
+
+        if (
+            channel_usable(rpm_status)
+            and engine.rpm > 3500
+        ):
+            annunciators.append(
+                ("RPM", QColor(255, 0, 0))
+            )
 
         if not engine.alternator_online:
             annunciators.append(("ALT FAIL", QColor(255, 0, 0)))
@@ -447,9 +724,6 @@ class EmsPage:
         if engine.starter_engaged:
             annunciators.append(("START", QColor(255, 220, 0)))
         
-        if checklist is not None:
-            self.draw_checklist_status(painter, checklist, width, height)
-
         if engine.fuel_remaining_gal <= fuel.red_gal:
             annunciators.append(("LOW FUEL", QColor(255, 0, 0)))
         elif engine.fuel_remaining_gal <= fuel.yellow_gal:
@@ -556,7 +830,16 @@ class EmsPage:
 
     def draw_test_mode_label(self, painter: QPainter, width: int) -> None:
         config = load_config()
-        mode = getattr(config.ems_test, "mode", "normal")
+        ems_test = getattr(
+            config,
+            "ems_test",
+            None,
+        )
+        mode = getattr(
+            ems_test,
+            "mode",
+            "normal",
+        )
 
         if mode == "normal":
             return
