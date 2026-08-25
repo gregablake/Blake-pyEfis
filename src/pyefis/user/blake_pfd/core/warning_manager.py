@@ -44,14 +44,31 @@ class WarningManager:
             )
         )
 
-        draw_master_warning_strip(
-            painter,
-            self.app.engine_data,
-            width,
-            checklist=self.app.engine_checklist_page,
-            aircraft_moving=aircraft_moving,
-            aircraft_recommendation=display_recommendation,
+        sensor_status = getattr(
+            self.app,
+            "engine_sensor_status",
+            None,
         )
+
+        if sensor_status is None:
+            draw_master_warning_strip(
+                painter,
+                self.app.engine_data,
+                width,
+                checklist=self.app.engine_checklist_page,
+                aircraft_moving=aircraft_moving,
+                aircraft_recommendation=display_recommendation,
+            )
+        else:
+            draw_master_warning_strip(
+                painter,
+                self.app.engine_data,
+                width,
+                checklist=self.app.engine_checklist_page,
+                aircraft_moving=aircraft_moving,
+                aircraft_recommendation=display_recommendation,
+                sensor_status=sensor_status,
+            )
         
     def recommendation_status(
         self,

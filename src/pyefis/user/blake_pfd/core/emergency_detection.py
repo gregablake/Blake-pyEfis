@@ -25,6 +25,7 @@ class EmergencyDetection:
         engine_state: EngineState | None,
         flight_state: FlightState | None,
         pilot_selected: bool = False,
+        sensor_status=None,
     ) -> EmergencyStatus:
         if pilot_selected:
             return EmergencyStatus(
@@ -48,13 +49,45 @@ class EmergencyDetection:
             )
         ).upper()
 
-        engine_running = bool(
-            getattr(
-                engine_state,
-                "running",
-                True,
-            )
+        explicit_running = getattr(
+            engine_state,
+            "running",
+            None,
         )
+
+        if explicit_running is not None:
+            engine_running = bool(
+                explicit_running
+            )
+        else:
+            rpm_status_valid = (
+                sensor_status is None
+                or (
+                    sensor_status.rpm.valid
+                    and sensor_status.rpm.fresh
+                )
+            )
+
+            engine_data = getattr(
+                engine_state,
+                "data",
+                None,
+            )
+
+            rpm = (
+                getattr(engine_data, "rpm", None)
+                if engine_data is not None
+                else None
+            )
+
+            engine_running = (
+                True
+                if (
+                    not rpm_status_valid
+                    or rpm is None
+                )
+                else float(rpm) > 0.0
+            )
 
         if (
             phase

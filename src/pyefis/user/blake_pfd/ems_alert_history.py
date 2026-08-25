@@ -32,9 +32,26 @@ class EmsAlertHistory:
         self.log_dir.mkdir(exist_ok=True)
         self.log_path = self.log_dir / "ems_alert_history.csv"
 
-    def update(self, engine: EngineData) -> None:
-        warnings = get_engine_warnings(engine)
-        current = {warning.text for warning in warnings if warning.text != "ENGINE NORMAL"}
+    def update(
+        self,
+        engine: EngineData,
+        sensor_status=None,
+    ) -> None:
+        if sensor_status is None:
+            warnings = get_engine_warnings(
+                engine,
+            )
+        else:
+            warnings = get_engine_warnings(
+                engine,
+                sensor_status=sensor_status,
+            )
+
+        current = {
+            warning.text
+            for warning in warnings
+            if warning.text != "ENGINE NORMAL"
+        }
 
         new_alerts = current - self.active_alerts
 
@@ -106,15 +123,15 @@ class EmsAlertHistory:
             80,
         )
         config = load_config()
-        audio_status = "ON" if config.audio_alerts.enabled else "OFF"                                                                            
+        audio_status = "ON" if config.audio_alerts.enabled else "OFF"
         buzzer_status = "ON" if config.audio_alerts.buzzer_enabled else "OFF"
-        
-        painter.drawText( 
+
+        painter.drawText(
             40,
             80,
             f"ACK: {len(self.acknowledged_alerts)}   SILENCED: {'YES' if self.silenced else 'NO'}   AUDIO: {audio_status}   BUZZER: {buzzer_status}",
         )
-        
+
 
         painter.setFont(QFont("Arial", 15, QFont.Weight.Bold))
         y = 120

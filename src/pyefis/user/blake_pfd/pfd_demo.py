@@ -725,10 +725,11 @@ class BlakePfdDemo(QWidget):
         self.emergency_status = (
             self.emergency_detection.evaluate(
                 engine_state=None,
-                flight_state=None,
+                flight_state=self.flight_state,
                 pilot_selected=(
                     self.pilot_emergency_selected
                 ),
+                sensor_status=self.engine_sensor_status,
             )
         )
         self.checklist_manager = ChecklistManager()
@@ -878,22 +879,28 @@ class BlakePfdDemo(QWidget):
         self.engine_data = engine_data
 
         self.engine_health = self.engine_manager.update(
-            self.engine_data
+            self.engine_data,
+            sensor_status=self.engine_sensor_status,
         )
 
         self.engine_trend = self.engine_trend_manager.update(
-            self.engine_data
+            self.engine_data,
+            sensor_status=self.engine_sensor_status,
         )
 
         self.engine_analysis = self.engine_analyzer.analyze(
             self.engine_data,
             self.engine_health,
             self.engine_trend,
+            sensor_status=self.engine_sensor_status,
         )
 
         self.cylinder_analysis = (
             self.cylinder_analyzer.analyze(
-                self.engine_data
+                self.engine_data,
+                sensor_status=(
+                    self.engine_sensor_status
+                ),
             )
         )
 
@@ -917,6 +924,7 @@ class BlakePfdDemo(QWidget):
                 "flight_state",
                 None,
             ),
+            sensor_status=self.engine_sensor_status,
         )
 
         self.engine_state = EngineState(
@@ -1206,6 +1214,7 @@ class BlakePfdDemo(QWidget):
                 self.flight_state_manager.update(
                     self.pfd,
                     engine=engine,
+                    sensor_status=self.engine_sensor_status,
                 )
             )
 
@@ -1242,6 +1251,9 @@ class BlakePfdDemo(QWidget):
                     flight_state=self.flight_state,
                     pilot_selected=(
                         self.pilot_emergency_selected
+                    ),
+                    sensor_status=(
+                        self.engine_sensor_status
                     ),
                 )
             )
@@ -1587,6 +1599,7 @@ class BlakePfdDemo(QWidget):
                     emergency_airport_state=(
                         self.emergency_airport_state
                     ),
+                    sensor_status=self.engine_sensor_status,
                 )
             )
 
@@ -1653,15 +1666,31 @@ class BlakePfdDemo(QWidget):
             )
 
         if engine is not None:
-            self.ems_alert_history.update(engine)
-            self.ems_trend_page.add_sample(engine)
+            self.ems_alert_history.update(
+                engine,
+                sensor_status=self.engine_sensor_status,
+            )
+            self.ems_trend_page.add_sample(
+                engine,
+                sensor_status=self.engine_sensor_status,
+            )
 
             self.audio_alerts.update(
                 engine,
                 silenced=(
                     self.ems_alert_history.silenced
                 ),
+                sensor_status=self.engine_sensor_status,
             )
+        else:
+            self.ems_trend_page.set_data_available(
+                False,
+                message=(
+                    self.engine_fault_message
+                    or "EMS DATA UNAVAILABLE"
+                ),
+            )
+            self.audio_alerts.reset()
 
         if (
             self.config.logging.enabled

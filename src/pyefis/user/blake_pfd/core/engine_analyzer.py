@@ -17,16 +17,98 @@ class EngineAnalysis:
 
 
 class EngineAnalyzer:
-    def analyze(self, engine: EngineData, health=None, trend=None) -> EngineAnalysis:
-        cht_values = engine.cht_f or []
-        egt_values = engine.egt_f or []
+    def analyze(
+        self,
+        engine: EngineData,
+        health=None,
+        trend=None,
+        sensor_status=None,
+    ) -> EngineAnalysis:
+        def channel_usable(status) -> bool:
+            return (
+                status is None
+                or (
+                    status.valid
+                    and status.fresh
+                )
+            )
 
-        hottest_cht = max(cht_values) if cht_values else 0.0
-        hottest_cylinder = cht_values.index(hottest_cht) + 1 if cht_values else 0
-        cht_spread = max(cht_values) - min(cht_values) if cht_values else 0.0
-        egt_spread = max(egt_values) - min(egt_values) if egt_values else 0.0
+        cht_values_with_index = [
+            (index, value)
+            for index, value in enumerate(
+                engine.cht_f or []
+            )
+            if (
+                sensor_status is None
+                or (
+                    index < len(sensor_status.cht)
+                    and channel_usable(
+                        sensor_status.cht[index]
+                    )
+                )
+            )
+        ]
 
-        if engine.oil_pressure_psi <= 15:
+        egt_values = [
+            value
+            for index, value in enumerate(
+                engine.egt_f or []
+            )
+            if (
+                sensor_status is None
+                or (
+                    index < len(sensor_status.egt)
+                    and channel_usable(
+                        sensor_status.egt[index]
+                    )
+                )
+            )
+        ]
+
+        if cht_values_with_index:
+            hottest_index, hottest_cht = max(
+                cht_values_with_index,
+                key=lambda item: item[1],
+            )
+            hottest_cylinder = hottest_index + 1
+
+            cht_values = [
+                value
+                for _, value in cht_values_with_index
+            ]
+
+            cht_spread = (
+                max(cht_values)
+                - min(cht_values)
+            )
+        else:
+            hottest_cht = 0.0
+            hottest_cylinder = 0
+            cht_spread = 0.0
+
+        egt_spread = (
+            max(egt_values)
+            - min(egt_values)
+            if egt_values
+            else 0.0
+        )
+
+        oil_pressure_status = (
+            sensor_status.oil_pressure
+            if sensor_status is not None
+            else None
+        )
+
+        oil_temperature_status = (
+            sensor_status.oil_temperature
+            if sensor_status is not None
+            else None
+        )
+
+        if (
+            channel_usable(oil_pressure_status)
+            and engine.oil_pressure_psi <= 15
+        ):
             return EngineAnalysis(
                 summary="Low oil pressure detected.",
                 recommendation="Reduce power and land as soon as practical.",
@@ -37,7 +119,10 @@ class EngineAnalyzer:
                 egt_spread_f=egt_spread,
             )
 
-        if engine.oil_temp_f >= 260:
+        if (
+            channel_usable(oil_temperature_status)
+            and engine.oil_temp_f >= 260
+        ):
             return EngineAnalysis(
                 summary="Oil temperature is above redline.",
                 recommendation="Reduce power, increase airspeed, and land soon.",

@@ -12,7 +12,7 @@ from pyefis.user.blake_pfd.engine_data import EngineData
 class WarningItem:
     text: str
     color: QColor
-    
+
 def format_ai_warning_text(
     title: str,
     urgency_s: float | None = None,
@@ -62,36 +62,118 @@ def format_ai_warning_text(
     )
 
 
-def get_engine_warnings(engine: EngineData) -> list[WarningItem]:
+def get_engine_warnings(
+    engine: EngineData,
+    sensor_status=None,
+) -> list[WarningItem]:
     warnings: list[WarningItem] = []
     config = load_config()
     fuel = config.fuel
 
-    if engine.rpm > 2000 and engine.oil_pressure_psi < 20:
+    def channel_usable(status) -> bool:
+        return (
+            status is None
+            or (
+                status.valid
+                and status.fresh
+            )
+        )
+
+    rpm_usable = (
+        sensor_status is None
+        or channel_usable(sensor_status.rpm)
+    )
+
+    volts_usable = (
+        sensor_status is None
+        or channel_usable(sensor_status.volts)
+    )
+
+    oil_pressure_usable = (
+        sensor_status is None
+        or channel_usable(sensor_status.oil_pressure)
+    )
+
+    oil_temperature_usable = (
+        sensor_status is None
+        or channel_usable(sensor_status.oil_temperature)
+    )
+
+    valid_cht_values = [
+        value
+        for index, value in enumerate(engine.cht_f or [])
+        if (
+            sensor_status is None
+            or (
+                index < len(sensor_status.cht)
+                and channel_usable(sensor_status.cht[index])
+            )
+        )
+    ]
+
+    valid_egt_values = [
+        value
+        for index, value in enumerate(engine.egt_f or [])
+        if (
+            sensor_status is None
+            or (
+                index < len(sensor_status.egt)
+                and channel_usable(sensor_status.egt[index])
+            )
+        )
+    ]
+
+    if (
+        rpm_usable
+        and oil_pressure_usable
+        and engine.rpm > 2000
+        and engine.oil_pressure_psi < 20
+    ):
         warnings.append(WarningItem("LOW OIL PRESS", QColor(255, 0, 0)))
 
-    if engine.oil_pressure_psi <= 15:
+    if (
+        oil_pressure_usable
+        and engine.oil_pressure_psi <= 15
+    ):
         warnings.append(WarningItem("OIL PRESS", QColor(255, 0, 0)))
 
-    if engine.oil_temp_f >= 260:
+    if (
+        oil_temperature_usable
+        and engine.oil_temp_f >= 260
+    ):
         warnings.append(WarningItem("HIGH OIL TEMP", QColor(255, 0, 0)))
-    elif engine.oil_temp_f >= 235:
+    elif (
+        oil_temperature_usable
+        and engine.oil_temp_f >= 235
+    ):
         warnings.append(WarningItem("OIL TEMP", QColor(255, 220, 0)))
 
-    if max(engine.cht_f or [0.0]) >= 450:
+    if valid_cht_values and max(valid_cht_values) >= 450:
         warnings.append(WarningItem("HIGH CHT", QColor(255, 0, 0)))
-    elif max(engine.cht_f or [0.0]) >= 425:
+    elif valid_cht_values and max(valid_cht_values) >= 425:
         warnings.append(WarningItem("CHT", QColor(255, 220, 0)))
 
-    if max(engine.egt_f or [0.0]) >= 1600:
+    if valid_egt_values and max(valid_egt_values) >= 1600:
         warnings.append(WarningItem("HIGH EGT", QColor(255, 0, 0)))
 
-    if engine.rpm > 3500:
+    if rpm_usable and engine.rpm > 3500:
         warnings.append(WarningItem("RPM", QColor(255, 0, 0)))
 
-    if engine.volts < 12.0 or engine.volts > 16.0:
+    if (
+        volts_usable
+        and (
+            engine.volts < 12.0
+            or engine.volts > 16.0
+        )
+    ):
         warnings.append(WarningItem("VOLTS", QColor(255, 0, 0)))
-    elif engine.volts < 13.2 or engine.volts > 15.5:
+    elif (
+        volts_usable
+        and (
+            engine.volts < 13.2
+            or engine.volts > 15.5
+        )
+    ):
         warnings.append(WarningItem("VOLTS", QColor(255, 220, 0)))
 
     if not engine.alternator_online:
@@ -156,8 +238,17 @@ def draw_master_warning_strip(
     checklist=None,
     aircraft_moving: bool = False,
     aircraft_recommendation=None,
+    sensor_status=None,
 ) -> None:
-    warnings = get_engine_warnings(engine)
+    if sensor_status is None:
+        warnings = get_engine_warnings(
+            engine,
+        )
+    else:
+        warnings = get_engine_warnings(
+            engine,
+            sensor_status=sensor_status,
+        )
     warnings.extend(
         get_checklist_warnings(
             checklist=checklist,

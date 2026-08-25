@@ -52,14 +52,43 @@ class EngineTrendManager:
             minimum_duration_s=0.001,
         )
 
-    def update(self, engine) -> EngineTrend:
+    def update(
+        self,
+        engine,
+        sensor_status=None,
+    ) -> EngineTrend:
         now = monotonic()
 
-        cht_values = getattr(
+        def channel_usable(status) -> bool:
+            return (
+                status is None
+                or (
+                    status.valid
+                    and status.fresh
+                )
+            )
+
+        raw_cht_values = getattr(
             engine,
             "cht_f",
             None,
         ) or []
+
+        cht_values = [
+            float(value)
+            for index, value in enumerate(
+                raw_cht_values
+            )
+            if (
+                sensor_status is None
+                or (
+                    index < len(sensor_status.cht)
+                    and channel_usable(
+                        sensor_status.cht[index]
+                    )
+                )
+            )
+        ]
 
         hottest_cht = (
             float(max(cht_values))
@@ -67,36 +96,61 @@ class EngineTrendManager:
             else 0.0
         )
 
-        oil_temp = float(
-            getattr(
-                engine,
-                "oil_temp_f",
-                0.0,
+        oil_temp_usable = (
+            sensor_status is None
+            or channel_usable(
+                sensor_status.oil_temperature
             )
         )
 
-        oil_pressure = float(
-            getattr(
-                engine,
-                "oil_pressure_psi",
-                0.0,
+        oil_pressure_usable = (
+            sensor_status is None
+            or channel_usable(
+                sensor_status.oil_pressure
             )
         )
 
-        self.cht_history.add(
-            value=hottest_cht,
-            timestamp_s=now,
+        oil_temp = (
+            float(
+                getattr(
+                    engine,
+                    "oil_temp_f",
+                    0.0,
+                )
+            )
+            if oil_temp_usable
+            else 0.0
         )
 
-        self.oil_temp_history.add(
-            value=oil_temp,
-            timestamp_s=now,
+        oil_pressure = (
+            float(
+                getattr(
+                    engine,
+                    "oil_pressure_psi",
+                    0.0,
+                )
+            )
+            if oil_pressure_usable
+            else 0.0
         )
 
-        self.oil_pressure_history.add(
-            value=oil_pressure,
-            timestamp_s=now,
-        )
+        if cht_values:
+            self.cht_history.add(
+                value=hottest_cht,
+                timestamp_s=now,
+            )
+
+        if oil_temp_usable:
+            self.oil_temp_history.add(
+                value=oil_temp,
+                timestamp_s=now,
+            )
+
+        if oil_pressure_usable:
+            self.oil_pressure_history.add(
+                value=oil_pressure,
+                timestamp_s=now,
+            )
 
         cht_result = self.rate_calculator.calculate(
             self.cht_history

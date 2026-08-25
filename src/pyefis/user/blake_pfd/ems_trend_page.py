@@ -10,10 +10,36 @@ from pyefis.user.blake_pfd.engine_data import EngineData
 
 class EmsTrendPage:
     def __init__(self, max_samples: int = 300) -> None:
-        self.samples: deque[EngineData] = deque(maxlen=max_samples)
+        self.samples: deque[EngineData] = deque(
+            maxlen=max_samples
+        )
+        self.sensor_statuses: deque = deque(
+            maxlen=max_samples
+        )
+        self.data_available = True
+        self.fault_message = ""
 
-    def add_sample(self, engine: EngineData) -> None:
+    def add_sample(
+        self,
+        engine: EngineData,
+        sensor_status=None,
+    ) -> None:
         self.samples.append(engine)
+        self.sensor_statuses.append(sensor_status)
+        self.data_available = True
+        self.fault_message = ""
+
+    def set_data_available(
+        self,
+        available: bool,
+        message: str = "",
+    ) -> None:
+        self.data_available = bool(available)
+        self.fault_message = (
+            ""
+            if self.data_available
+            else str(message)
+        )
 
     def draw(self, painter: QPainter, width: int, height: int) -> None:
         painter.fillRect(0, 0, width, height, QColor(0, 0, 0))
@@ -29,6 +55,17 @@ class EmsTrendPage:
         painter.setFont(QFont("Arial", 13, QFont.Weight.Bold))
         painter.setPen(QColor(255, 255, 255))
         painter.drawText(40, 90, f"Samples: {len(self.samples)}")
+
+        if not self.data_available:
+            painter.setPen(QColor(255, 80, 80))
+            painter.setFont(
+                QFont("Arial", 18, QFont.Weight.Bold)
+            )
+            painter.drawText(
+                QRectF(0, 78, width, 40),
+                Qt.AlignmentFlag.AlignCenter,
+                self.fault_message or "EMS DATA UNAVAILABLE",
+            )
 
         chart_w = (width - 100) // 2
         chart_h = 185
@@ -55,12 +92,43 @@ class EmsTrendPage:
         ]
 
         for cylinder in range(6):
-            values = [
-                sample.cht_f[cylinder]
-                for sample in self.samples
-                if len(sample.cht_f) > cylinder
-            ]
-            self.draw_line(painter, values, x, y, w, h, 250, 450, colors[cylinder])
+            values = []
+
+            for sample_index, sample in enumerate(self.samples):
+                if len(sample.cht_f) <= cylinder:
+                    continue
+
+                status = (
+                    self.sensor_statuses[sample_index]
+                    if sample_index < len(self.sensor_statuses)
+                    else None
+                )
+
+                if status is not None:
+                    if cylinder >= len(status.cht):
+                        continue
+
+                    channel_status = status.cht[cylinder]
+
+                    if not (
+                        channel_status.valid
+                        and channel_status.fresh
+                    ):
+                        continue
+
+                values.append(sample.cht_f[cylinder])
+
+            self.draw_line(
+                painter,
+                values,
+                x,
+                y,
+                w,
+                h,
+                250,
+                450,
+                colors[cylinder],
+            )
 
     def draw_egt_chart(self, painter: QPainter, x: int, y: int, w: int, h: int) -> None:
         self.draw_chart_frame(painter, x, y, w, h, "EGT 1-2", "1000-1650°F")
@@ -71,23 +139,120 @@ class EmsTrendPage:
         ]
 
         for probe in range(2):
-            values = [
-                sample.egt_f[probe]
-                for sample in self.samples
-                if len(sample.egt_f) > probe
-            ]
-            self.draw_line(painter, values, x, y, w, h, 1000, 1650, colors[probe])
+            values = []
+
+            for sample_index, sample in enumerate(self.samples):
+                if len(sample.egt_f) <= probe:
+                    continue
+
+                status = (
+                    self.sensor_statuses[sample_index]
+                    if sample_index < len(self.sensor_statuses)
+                    else None
+                )
+
+                if status is not None:
+                    if probe >= len(status.egt):
+                        continue
+
+                    channel_status = status.egt[probe]
+
+                    if not (
+                        channel_status.valid
+                        and channel_status.fresh
+                    ):
+                        continue
+
+                values.append(sample.egt_f[probe])
+
+            self.draw_line(
+                painter,
+                values,
+                x,
+                y,
+                w,
+                h,
+                1000,
+                1650,
+                colors[probe],
+            )
 
     def draw_engine_chart(self, painter: QPainter, x: int, y: int, w: int, h: int) -> None:
         self.draw_chart_frame(painter, x, y, w, h, "OIL / VOLTS", "scaled")
 
-        oil_temp = [sample.oil_temp_f for sample in self.samples]
-        oil_psi = [sample.oil_pressure_psi for sample in self.samples]
-        volts = [sample.volts for sample in self.samples]
+        oil_temp = []
+        oil_psi = []
+        volts = []
 
-        self.draw_line(painter, oil_temp, x, y, w, h, 100, 260, QColor(255, 120, 0))
-        self.draw_line(painter, oil_psi, x, y, w, h, 0, 80, QColor(0, 255, 255))
-        self.draw_line(painter, volts, x, y, w, h, 10, 16, QColor(255, 255, 0))
+        for sample_index, sample in enumerate(self.samples):
+            status = (
+                self.sensor_statuses[sample_index]
+                if sample_index < len(self.sensor_statuses)
+                else None
+            )
+
+            if (
+                status is None
+                or (
+                    status.oil_temperature.valid
+                    and status.oil_temperature.fresh
+                )
+            ):
+                oil_temp.append(sample.oil_temp_f)
+
+            if (
+                status is None
+                or (
+                    status.oil_pressure.valid
+                    and status.oil_pressure.fresh
+                )
+            ):
+                oil_psi.append(sample.oil_pressure_psi)
+
+            if (
+                status is None
+                or (
+                    status.volts.valid
+                    and status.volts.fresh
+                )
+            ):
+                volts.append(sample.volts)
+
+        self.draw_line(
+            painter,
+            oil_temp,
+            x,
+            y,
+            w,
+            h,
+            100,
+            260,
+            QColor(255, 120, 0),
+        )
+
+        self.draw_line(
+            painter,
+            oil_psi,
+            x,
+            y,
+            w,
+            h,
+            0,
+            80,
+            QColor(0, 255, 255),
+        )
+
+        self.draw_line(
+            painter,
+            volts,
+            x,
+            y,
+            w,
+            h,
+            10,
+            16,
+            QColor(255, 255, 0),
+        )
 
         self.draw_legend(
             painter,
@@ -105,7 +270,24 @@ class EmsTrendPage:
         self.draw_chart_frame(painter, x, y, w, h, "FUEL", "scaled")
 
         fuel_remaining = [sample.fuel_remaining_gal for sample in self.samples]
-        fuel_flow = [sample.fuel_flow_gph for sample in self.samples]
+        fuel_flow = []
+
+        for index, sample in enumerate(self.samples):
+            status = None
+
+            if index < len(self.sensor_statuses):
+                status = self.sensor_statuses[index]
+
+            if (
+                status is None
+                or (
+                    status.fuel_flow.valid
+                    and status.fuel_flow.fresh
+                )
+            ):
+                fuel_flow.append(
+                    sample.fuel_flow_gph
+                )
         endurance = [sample.endurance_hr for sample in self.samples]
 
         self.draw_line(painter, fuel_remaining, x, y, w, h, 0, 30, QColor(0, 255, 0))

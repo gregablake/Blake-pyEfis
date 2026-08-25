@@ -53,6 +53,7 @@ class AircraftStateManager:
         wind_speed_kt: float = 0.0,
         wind_from_deg: float = 0.0,
         emergency_airport_state: EmergencyAirportState | None = None,
+        sensor_status=None,
     ) -> AircraftState:
         if engine is None:
             fuel_state = FuelState(
@@ -67,13 +68,25 @@ class AircraftStateManager:
             )
 
         else:
+            fuel_flow_valid = (
+                sensor_status is None
+                or (
+                    sensor_status.fuel_flow.valid
+                    and sensor_status.fuel_flow.fresh
+                )
+            )
+
             calculated_fuel = (
                 self.fuel_calculator.calculate(
                     remaining_gal=(
                         engine.fuel_remaining_gal
                     ),
                     used_gal=engine.fuel_used_gal,
-                    flow_gph=engine.fuel_flow_gph,
+                    flow_gph=(
+                        engine.fuel_flow_gph
+                        if fuel_flow_valid
+                        else 0.0
+                    ),
                     ground_speed_kt=(
                         pfd.ground_speed_kt
                     ),
@@ -107,13 +120,33 @@ class AircraftStateManager:
                 ),
             )
 
+            electrical_valid = (
+                sensor_status is None
+                or (
+                    sensor_status.volts.valid
+                    and sensor_status.volts.fresh
+                    and sensor_status.amps.valid
+                    and sensor_status.amps.fresh
+                )
+            )
+
             electrical_state = ElectricalState(
-                volts=engine.volts,
-                amps=engine.amps,
+                volts=(
+                    engine.volts
+                    if electrical_valid
+                    else 0.0
+                ),
+                amps=(
+                    engine.amps
+                    if electrical_valid
+                    else 0.0
+                ),
                 alternator_online=(
                     engine.alternator_online
+                    if electrical_valid
+                    else False
                 ),
-                valid=True,
+                valid=electrical_valid,
             )
 
         calculated_wind = (

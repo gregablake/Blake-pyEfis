@@ -287,16 +287,29 @@ class EmsPage:
             ),
         )
         self.draw_status_indicators(painter, engine, width, height)
-        
-        self.draw_cylinder_analysis_box(painter, cylinders, width, height)
-        
-        if aircraft is not None:
-            self.draw_aircraft_state_label(
+
+        self.draw_cylinder_analysis_box(
             painter,
-            aircraft,
+            cylinders,
             width,
             height,
         )
+
+        if checklist is not None:
+            self.draw_checklist_status(
+                painter,
+                checklist,
+                width,
+                height,
+            )
+
+        if aircraft is not None:
+            self.draw_aircraft_state_label(
+                painter,
+                aircraft,
+                width,
+                height,
+            )
             
         if engine_advice is not None:
             self.draw_engine_advice_box(

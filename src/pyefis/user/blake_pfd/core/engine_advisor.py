@@ -26,6 +26,7 @@ class EngineAdvisor:
         self,
         engine_state,
         flight_state=None,
+        sensor_status=None,
     ) -> EngineAdvice:
         if engine_state is None:
             return EngineAdvice()
@@ -59,6 +60,7 @@ class EngineAdvisor:
         health_advice = self._health_advice(
             health,
             data,
+            sensor_status=sensor_status,
         )
 
         if (
@@ -389,6 +391,7 @@ class EngineAdvisor:
         self,
         health,
         data,
+        sensor_status=None,
     ) -> EngineAdvice | None:
         if health is None:
             return None
@@ -403,13 +406,31 @@ class EngineAdvisor:
             return None
 
         if data is not None:
+            oil_pressure_usable = True
+
+            if sensor_status is not None:
+                oil_pressure_status = getattr(
+                    sensor_status,
+                    "oil_pressure",
+                    None,
+                )
+
+                oil_pressure_usable = (
+                    oil_pressure_status is not None
+                    and oil_pressure_status.valid
+                    and oil_pressure_status.fresh
+                )
+
             oil_pressure = getattr(
                 data,
                 "oil_pressure_psi",
                 0.0,
             )
 
-            if oil_pressure <= 15.0:
+            if (
+                oil_pressure_usable
+                and oil_pressure <= 15.0
+            ):
                 return EngineAdvice(
                     severity="CRITICAL",
                     title="Oil Pressure Advisor",

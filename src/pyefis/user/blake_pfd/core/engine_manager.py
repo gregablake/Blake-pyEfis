@@ -34,26 +34,94 @@ class EngineManager:
 
         return current
 
-    def update(self, engine: EngineData) -> EngineHealth:
-        cht_values = engine.cht_f or []
-        egt_values = engine.egt_f or []
+    def update(
+        self,
+        engine: EngineData,
+        sensor_status=None,
+    ) -> EngineHealth:
+        def channel_usable(status) -> bool:
+            return (
+                status is None
+                or (
+                    status.valid
+                    and status.fresh
+                )
+            )
+
+        raw_cht_values = engine.cht_f or []
+        raw_egt_values = engine.egt_f or []
+
+        cht_values = [
+            float(value)
+            for index, value in enumerate(
+                raw_cht_values
+            )
+            if (
+                sensor_status is None
+                or (
+                    index < len(sensor_status.cht)
+                    and channel_usable(
+                        sensor_status.cht[index]
+                    )
+                )
+            )
+        ]
+
+        egt_values = [
+            float(value)
+            for index, value in enumerate(
+                raw_egt_values
+            )
+            if (
+                sensor_status is None
+                or (
+                    index < len(sensor_status.egt)
+                    and channel_usable(
+                        sensor_status.egt[index]
+                    )
+                )
+            )
+        ]
 
         cht_max = max(cht_values) if cht_values else 0.0
         cht_min = min(cht_values) if cht_values else 0.0
         egt_max = max(egt_values) if egt_values else 0.0
         egt_min = min(egt_values) if egt_values else 0.0
 
+        oil_pressure_usable = (
+            sensor_status is None
+            or channel_usable(
+                sensor_status.oil_pressure
+            )
+        )
+
+        oil_temperature_usable = (
+            sensor_status is None
+            or channel_usable(
+                sensor_status.oil_temperature
+            )
+        )
+
         score = 100
         status = "NORMAL"
 
-        if engine.oil_pressure_psi <= 15:
+        if (
+            oil_pressure_usable
+            and engine.oil_pressure_psi <= 15
+        ):
             score -= 40
             status = self._raise_status(status, "CRITICAL")
 
-        if engine.oil_temp_f >= 260:
+        if (
+            oil_temperature_usable
+            and engine.oil_temp_f >= 260
+        ):
             score -= 35
             status = self._raise_status(status, "CRITICAL")
-        elif engine.oil_temp_f >= 235:
+        elif (
+            oil_temperature_usable
+            and engine.oil_temp_f >= 235
+        ):
             score -= 15
             status = self._raise_status(status, "CAUTION")
 
@@ -80,8 +148,16 @@ class EngineManager:
             cht_spread_f=cht_max - cht_min if cht_values else 0.0,
             egt_max_f=egt_max,
             egt_spread_f=egt_max - egt_min if egt_values else 0.0,
-            oil_temp_margin_f=260.0 - engine.oil_temp_f,
-            oil_pressure_margin_psi=engine.oil_pressure_psi - 15.0,
+            oil_temp_margin_f=(
+                260.0 - engine.oil_temp_f
+                if oil_temperature_usable
+                else 0.0
+            ),
+            oil_pressure_margin_psi=(
+                engine.oil_pressure_psi - 15.0
+                if oil_pressure_usable
+                else 0.0
+            ),
             status=status,
         )
 

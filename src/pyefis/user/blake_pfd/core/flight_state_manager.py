@@ -31,20 +31,59 @@ class FlightStateManager:
         self.event_log = EventLog()
         self.previous_phase = self.state.phase
 
-    def update(self, pfd, engine=None) -> FlightState:
+    def update(
+        self,
+        pfd,
+        engine=None,
+        sensor_status=None,
+    ) -> FlightState:
         gs = getattr(pfd, "ground_speed_kt", 0.0)
         alt = getattr(pfd, "pressure_alt_ft", 0.0)
         vsi = getattr(pfd, "vsi_fpm", 0.0)
-        rpm = getattr(engine, "rpm", 0.0) if engine is not None else 0.0
+
+        rpm_valid = (
+            engine is not None
+            and (
+                sensor_status is None
+                or (
+                    sensor_status.rpm.valid
+                    and sensor_status.rpm.fresh
+                )
+            )
+        )
+
+        rpm = (
+            getattr(engine, "rpm", 0.0)
+            if rpm_valid
+            else None
+        )
 
         aircraft_moving = gs >= 5.0
         airborne = gs >= 55.0 or alt > 1500.0
-        takeoff_roll = 30.0 <= gs < 55.0 and rpm >= 2200.0
-        landing_roll = 10.0 <= gs < 45.0 and rpm < 1800.0
 
-        if gs < 2.0 and rpm < 1200.0:
+        takeoff_roll = (
+            rpm is not None
+            and 30.0 <= gs < 55.0
+            and rpm >= 2200.0
+        )
+
+        landing_roll = (
+            rpm is not None
+            and 10.0 <= gs < 45.0
+            and rpm < 1800.0
+        )
+
+        if (
+            rpm is not None
+            and gs < 2.0
+            and rpm < 1200.0
+        ):
             phase = FlightPhase.PARKED.value
-        elif gs < 5.0 and rpm >= 1200.0:
+        elif (
+            rpm is not None
+            and gs < 5.0
+            and rpm >= 1200.0
+        ):
             phase = FlightPhase.RUNUP.value
         elif 5.0 <= gs < 30.0:
             phase = FlightPhase.TAXI.value

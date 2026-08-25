@@ -193,5 +193,3 @@ class EnginePredictor:
         )
 
         return prediction
-
-        return prediction
