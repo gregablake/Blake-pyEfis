@@ -24,17 +24,6 @@ class SyntheticVisionComputer:
     def update(self, flight) -> SyntheticVisionScene:
         objects = []
 
-        objects.append(
-            SyntheticVisionObject(
-                label="RWY",
-                rel_bearing_deg=self.angle_delta(flight.bearing_deg, flight.heading_deg),
-                elevation_angle_deg=-2.5,
-                distance_nm=getattr(flight, "distance_to_waypoint_nm", 5.0),
-                size=1.5,
-                kind="runway",
-            )
-        )
-
         for index, distance_nm in enumerate([1, 2, 3, 4, 5], start=1):
             objects.append(
                 SyntheticVisionObject(

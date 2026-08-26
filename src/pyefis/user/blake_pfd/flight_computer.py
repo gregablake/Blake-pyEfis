@@ -27,10 +27,12 @@ class FlightData:
     density_alt_ft: float = 0.0
     vsi_fpm: float = 0.0
 
+    pitch_deg: float = 0.0
+    roll_deg: float = 0.0
+
     heading_deg: float = 0.0
     track_deg: float = 0.0
     ground_speed_kt: float = 0.0
-    
     latitude_deg: float = 0.0
     longitude_deg: float = 0.0
     position_valid: bool = False
@@ -84,9 +86,31 @@ class FlightComputer:
             raw.outside_air_temp_c,
         )
 
-        flight.heading_deg = normalize_degrees(raw.heading_deg)
-        flight.track_deg = normalize_degrees(raw.gps_track_deg)
-        flight.ground_speed_kt = raw.gps_ground_speed_kt
+        flight.pitch_deg = float(
+            getattr(
+                raw,
+                "pitch_deg",
+                0.0,
+            )
+        )
+
+        flight.roll_deg = float(
+            getattr(
+                raw,
+                "roll_deg",
+                0.0,
+            )
+        )
+
+        flight.heading_deg = normalize_degrees(
+            raw.heading_deg
+        )
+        flight.track_deg = normalize_degrees(
+            raw.gps_track_deg
+        )
+        flight.ground_speed_kt = (
+            raw.gps_ground_speed_kt
+        )
         
         latitude = safe_latitude(
             getattr(

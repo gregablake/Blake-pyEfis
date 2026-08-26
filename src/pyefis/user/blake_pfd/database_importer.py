@@ -7,6 +7,18 @@ from math import atan2, cos, radians, sin, sqrt
 
 DATA_DIR = Path(__file__).parent / "data"
 
+def optional_float(
+    value: str | None,
+) -> float | None:
+    text = (value or "").strip()
+
+    if not text:
+        return None
+
+    try:
+        return float(text)
+    except (TypeError, ValueError):
+        return None
 
 @dataclass
 class AirportRecord:
@@ -24,17 +36,27 @@ class RunwayRecord:
     length_ft: float
     width_ft: float
     surface: str
+
     le_ident: str
-    le_heading_deg: float
+    le_latitude_deg: float | None
+    le_longitude_deg: float | None
+    le_elevation_ft: float | None
+    le_heading_deg: float | None
+    le_displaced_threshold_ft: float | None
+
     he_ident: str
-    he_heading_deg: float
-    
+    he_latitude_deg: float | None
+    he_longitude_deg: float | None
+    he_elevation_ft: float | None
+    he_heading_deg: float | None
+    he_displaced_threshold_ft: float | None
+
 @dataclass
 class FrequencyRecord:
     airport_ident: str
     type: str
     description: str
-    frequency_mhz: float    
+    frequency_mhz: float
 
 
 @dataclass
@@ -73,7 +95,7 @@ class AviationDatabase:
         self.runways_by_airport: dict[str, list[RunwayRecord]] = {}
         self.navaids: dict[str, NavaidRecord] = {}
         self.frequencies_by_airport: dict[str, list[FrequencyRecord]] = {}
-        
+
     def load_all(self) -> None:
         self.load_airports()
         self.load_runways()
@@ -115,13 +137,47 @@ class AviationDatabase:
 
                 runway = RunwayRecord(
                     airport_ident=airport_ident,
-                    length_ft=float(row["length_ft"] or 0.0),
-                    width_ft=float(row["width_ft"] or 0.0),
+                    length_ft=float(
+                        row["length_ft"] or 0.0
+                    ),
+                    width_ft=float(
+                        row["width_ft"] or 0.0
+                    ),
                     surface=row["surface"] or "",
+
                     le_ident=row["le_ident"] or "",
-                    le_heading_deg=float(row["le_heading_degT"] or 0.0),
+                    le_latitude_deg=optional_float(
+                        row["le_latitude_deg"]
+                    ),
+                    le_longitude_deg=optional_float(
+                        row["le_longitude_deg"]
+                    ),
+                    le_elevation_ft=optional_float(
+                        row["le_elevation_ft"]
+                    ),
+                    le_heading_deg=optional_float(
+                        row["le_heading_degT"]
+                    ),
+                    le_displaced_threshold_ft=optional_float(
+                        row["le_displaced_threshold_ft"]
+                    ),
+
                     he_ident=row["he_ident"] or "",
-                    he_heading_deg=float(row["he_heading_degT"] or 0.0),
+                    he_latitude_deg=optional_float(
+                        row["he_latitude_deg"]
+                    ),
+                    he_longitude_deg=optional_float(
+                        row["he_longitude_deg"]
+                    ),
+                    he_elevation_ft=optional_float(
+                        row["he_elevation_ft"]
+                    ),
+                    he_heading_deg=optional_float(
+                        row["he_heading_degT"]
+                    ),
+                    he_displaced_threshold_ft=optional_float(
+                        row["he_displaced_threshold_ft"]
+                    ),
                 )
 
                 self.runways_by_airport.setdefault(airport_ident, []).append(runway)
@@ -225,7 +281,7 @@ def demo() -> None:
     for ident in ["KCVG", "KLUK", "KHAO"]:
         airport = db.get_airport(ident)
         runways = db.get_runways(ident)
-        
+
         print()
         print(airport)
         print(f"Runways: {runways[:3]}")

@@ -121,7 +121,13 @@ from pyefis.user.blake_pfd.core.flight_path_marker import (
 from pyefis.user.blake_pfd.core.hits_guidance import (
     HitsGuidance,
 )
+from pyefis.user.blake_pfd.core.runway_geometry import (
+    RunwayGeometryComputer,
+)
 
+from pyefis.user.blake_pfd.core.runway_projection import (
+    RunwayProjectionComputer,
+)
 from pyefis.user.blake_pfd.core.flight_director import (
     FlightDirector,
 )
@@ -402,7 +408,17 @@ class BlakePfdDemo(QWidget):
 
         self.route_manager = RouteManager()
         self.flight_computer = FlightComputer()
+
         self.synthetic_vision = SyntheticVisionComputer()
+
+        self.runway_geometry_computer = (
+            RunwayGeometryComputer()
+        )
+
+        self.runway_projection_computer = (
+            RunwayProjectionComputer()
+        )
+
         self.flight_path_marker = FlightPathMarker()
 
         self.flight_path_marker_state = (
@@ -3236,6 +3252,14 @@ class BlakePfdDemo(QWidget):
             painter.end()
             return
 
+        if features.show_attitude:
+            self.draw_attitude(
+                painter,
+                self.pfd,
+                width,
+                height,
+            )
+
         if (
             features.show_synthetic_vision
             and (
@@ -3251,13 +3275,6 @@ class BlakePfdDemo(QWidget):
             )
 
         if features.show_attitude:
-            self.draw_attitude(
-                painter,
-                self.pfd,
-                width,
-                height,
-            )
-
             self.draw_hits_guidance(
                 painter,
                 width,
@@ -3701,22 +3718,173 @@ class BlakePfdDemo(QWidget):
         self.draw_startup_status_box(painter, width, height)
         self.draw_sensor_status_panel(painter, width, height)
         self.draw_sim_profile_box(painter, width, height)
+    def draw_synthetic_runway(
+        self,
+        painter: QPainter,
+        pfd: FlightData,
+        width: int,
+        height: int,
+    ) -> None:
+        if not getattr(
+            pfd,
+            "position_valid",
+            False,
+        ):
+            return
 
-    def draw_synthetic_vision(self, painter: QPainter, pfd: FlightData, width: int, height: int) -> None:
+        airport_id = (
+            self.config.navigation
+            .selected_waypoint_id
+        )
+
+        runway = self.database.best_runway(
+            airport_id
+        )
+
+        if runway is None:
+            return
+
+        geometry = (
+            self.runway_geometry_computer.compute(
+                runway=runway,
+                aircraft_lat_deg=pfd.latitude_deg,
+                aircraft_lon_deg=pfd.longitude_deg,
+                aircraft_alt_ft=pfd.pressure_alt_ft,
+            )
+        )
+
+        if geometry is None:
+            return
+
+        projected = (
+            self.runway_projection_computer.project(
+                geometry=geometry,
+                heading_deg=pfd.heading_deg,
+                pitch_deg=pfd.pitch_deg,
+                roll_deg=pfd.roll_deg,
+                width_px=width,
+                height_px=height,
+            )
+        )
+
+        if (
+            projected is None
+            or not projected.visible
+        ):
+            return
+
+        points = [
+            projected.low_left,
+            projected.low_right,
+            projected.high_right,
+            projected.high_left,
+        ]
+
+        polygon = QPolygonF(
+            [
+                QPointF(
+                    point.x_px,
+                    point.y_px,
+                )
+                for point in points
+            ]
+        )
+
+        painter.setPen(
+            QPen(
+                QColor(255, 255, 255),
+                3,
+            )
+        )
+
+        painter.setBrush(
+            QBrush(
+                QColor(45, 45, 45)
+            )
+        )
+
+        painter.drawPolygon(polygon)
+
+        low_center_x = (
+            projected.low_left.x_px
+            + projected.low_right.x_px
+        ) / 2.0
+
+        low_center_y = (
+            projected.low_left.y_px
+            + projected.low_right.y_px
+        ) / 2.0
+
+        high_center_x = (
+            projected.high_left.x_px
+            + projected.high_right.x_px
+        ) / 2.0
+
+        high_center_y = (
+            projected.high_left.y_px
+            + projected.high_right.y_px
+        ) / 2.0
+
+        painter.setPen(
+            QPen(
+                QColor(255, 255, 0),
+                2,
+            )
+        )
+
+        painter.drawLine(
+            QPointF(
+                low_center_x,
+                low_center_y,
+            ),
+            QPointF(
+                high_center_x,
+                high_center_y,
+            ),
+        )
+
+        painter.setPen(
+            QColor(255, 255, 255)
+        )
+
+        painter.setFont(
+            QFont(
+                "Arial",
+                12,
+                QFont.Weight.Bold,
+            )
+        )
+
+        painter.drawText(
+            QPointF(
+                low_center_x + 8.0,
+                low_center_y - 8.0,
+            ),
+            geometry.low_end.ident,
+        )
+
+        painter.drawText(
+            QPointF(
+                high_center_x + 8.0,
+                high_center_y - 8.0,
+            ),
+            geometry.high_end.ident,
+        )
+    def draw_synthetic_vision(
+        self,
+        painter: QPainter,
+        pfd: FlightData,
+        width: int,
+        height: int,
+    ) -> None:
         scene = self.synthetic_vision.update(pfd)
-        center_x = width // 2
-        center_y = height // 2
 
-        painter.save()
-        painter.translate(center_x, center_y)
-        painter.rotate(-getattr(pfd, "roll_deg", 0.0))
-
-        painter.fillRect(-width, -height * 2, width * 2, height * 2, QColor(*scene.sky_color))
-        painter.fillRect(-width, 0, width * 2, height * 2, QColor(*scene.ground_color))
-
-        painter.setPen(QPen(QColor(255, 255, 255), 3))
-        painter.drawLine(-width, 0, width, 0)
-        painter.restore()
+        self.draw_synthetic_runway(
+            painter,
+            pfd,
+            width,
+            height,
+        )
 
         for obj in scene.objects or []:
             x, y = project_object_to_screen(
@@ -3730,30 +3898,46 @@ class BlakePfdDemo(QWidget):
             if not (0 <= x <= width and 0 <= y <= height):
                 continue
 
-            if obj.kind == "runway":
-                runway_w = int(120 * obj.size)
-                runway_h = int(35 * obj.size)
+            box_w = int(
+                70 * obj.size
+            )
+            box_h = int(
+                38 * obj.size
+            )
 
-                painter.setPen(QPen(QColor(255, 255, 255), 3))
-                painter.setBrush(QBrush(QColor(40, 40, 40)))
-                painter.drawRect(x - runway_w // 2, y - runway_h // 2, runway_w, runway_h)
+            painter.setPen(
+                QPen(
+                    QColor(0, 255, 0),
+                    3,
+                )
+            )
 
-                painter.setPen(QPen(QColor(255, 255, 0), 2))
-                painter.drawLine(x, y - runway_h // 2, x, y + runway_h // 2)
+            painter.setBrush(
+                QBrush(
+                    Qt.BrushStyle.NoBrush
+                )
+            )
 
-                painter.setFont(QFont("Arial", 12, QFont.Weight.Bold))
-                painter.setPen(QColor(255, 255, 255))
-                painter.drawText(x - 20, y - runway_h // 2 - 8, obj.label)
-            else:
-                box_w = int(70 * obj.size)
-                box_h = int(38 * obj.size)
+            painter.drawRect(
+                x - box_w // 2,
+                y - box_h // 2,
+                box_w,
+                box_h,
+            )
 
-                painter.setPen(QPen(QColor(0, 255, 0), 3))
-                painter.setBrush(QBrush(Qt.BrushStyle.NoBrush))
-                painter.drawRect(x - box_w // 2, y - box_h // 2, box_w, box_h)
+            painter.setFont(
+                QFont(
+                    "Arial",
+                    12,
+                    QFont.Weight.Bold,
+                )
+            )
 
-                painter.setFont(QFont("Arial", 12, QFont.Weight.Bold))
-                painter.drawText(x - 20, y - box_h // 2 - 8, obj.label)
+            painter.drawText(
+                x - 20,
+                y - box_h // 2 - 8,
+                obj.label,
+            )
 
     def draw_attitude(self, painter: QPainter, pfd: FlightData, width: int, height: int) -> None:
         center_x = width // 2
