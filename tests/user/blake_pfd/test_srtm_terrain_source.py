@@ -422,3 +422,173 @@ def test_exact_grid_sample_does_not_require_neighbor(
     ) == pytest.approx(
         500.0 * METERS_TO_FEET
     )
+
+
+def test_cache_retains_multiple_loaded_tiles(
+    tmp_path: Path,
+) -> None:
+    first_path = write_test_tile(
+        tmp_path,
+        tile_name="N39W085",
+        samples_per_side=1201,
+        default_elevation_m=100,
+    )
+
+    second_path = write_test_tile(
+        tmp_path,
+        tile_name="N39W084",
+        samples_per_side=1201,
+        default_elevation_m=200,
+    )
+
+    source = SrtmTerrainSource(
+        tmp_path
+    )
+
+    first = source.get_elevation(
+        39.5,
+        -84.5,
+    )
+
+    second = source.get_elevation(
+        39.5,
+        -83.5,
+    )
+
+    first_path.unlink()
+    second_path.unlink()
+
+    first_again = source.get_elevation(
+        39.5,
+        -84.5,
+    )
+
+    second_again = source.get_elevation(
+        39.5,
+        -83.5,
+    )
+
+    assert first == pytest.approx(
+        100.0 * METERS_TO_FEET
+    )
+    assert second == pytest.approx(
+        200.0 * METERS_TO_FEET
+    )
+    assert first_again == pytest.approx(
+        100.0 * METERS_TO_FEET
+    )
+    assert second_again == pytest.approx(
+        200.0 * METERS_TO_FEET
+    )
+
+
+def test_lru_cache_evicts_oldest_tile(
+    tmp_path: Path,
+) -> None:
+    first_path = write_test_tile(
+        tmp_path,
+        tile_name="N39W085",
+        samples_per_side=1201,
+        default_elevation_m=100,
+    )
+
+    second_path = write_test_tile(
+        tmp_path,
+        tile_name="N39W084",
+        samples_per_side=1201,
+        default_elevation_m=200,
+    )
+
+    third_path = write_test_tile(
+        tmp_path,
+        tile_name="N39W083",
+        samples_per_side=1201,
+        default_elevation_m=300,
+    )
+
+    source = SrtmTerrainSource(
+        tmp_path,
+        cache_size=2,
+    )
+
+    assert source.get_elevation(
+        39.5,
+        -84.5,
+    ) is not None
+
+    assert source.get_elevation(
+        39.5,
+        -83.5,
+    ) is not None
+
+    # Touch the first tile so the second becomes LRU.
+    assert source.get_elevation(
+        39.5,
+        -84.5,
+    ) is not None
+
+    assert source.get_elevation(
+        39.5,
+        -82.5,
+    ) is not None
+
+    first_path.unlink()
+    second_path.unlink()
+    third_path.unlink()
+
+    # First remains cached because it was touched.
+    assert source.get_elevation(
+        39.5,
+        -84.5,
+    ) == pytest.approx(
+        100.0 * METERS_TO_FEET
+    )
+
+    # Second was least recently used and should
+    # have been evicted.
+    assert source.get_elevation(
+        39.5,
+        -83.5,
+    ) is None
+
+    # Third remains cached.
+    assert source.get_elevation(
+        39.5,
+        -82.5,
+    ) == pytest.approx(
+        300.0 * METERS_TO_FEET
+    )
+
+
+@pytest.mark.parametrize(
+    "cache_size",
+    (
+        0,
+        -1,
+        True,
+        False,
+        2.0,
+        "2",
+        None,
+    ),
+)
+def test_cache_size_rejects_invalid_values(
+    tmp_path: Path,
+    cache_size,
+) -> None:
+    with pytest.raises(ValueError):
+        SrtmTerrainSource(
+            tmp_path,
+            cache_size=cache_size,
+        )
+
+
+def test_cache_size_accepts_positive_integer(
+    tmp_path: Path,
+) -> None:
+    source = SrtmTerrainSource(
+        tmp_path,
+        cache_size=2,
+    )
+
+    assert source.cache_size == 2

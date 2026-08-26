@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import OrderedDict
 from dataclasses import dataclass
 from math import floor, isfinite
 from pathlib import Path
@@ -36,13 +37,27 @@ class SrtmTerrainSource:
     def __init__(
         self,
         terrain_directory: str | Path,
+        *,
+        cache_size: int = 4,
     ) -> None:
         self.terrain_directory = Path(
             terrain_directory
         )
 
-        self._cached_tile_name: str | None = None
-        self._cached_tile: SrtmTile | None = None
+        if (
+            type(cache_size) is not int
+            or cache_size <= 0
+        ):
+            raise ValueError(
+                "cache_size must be a positive integer"
+            )
+
+        self.cache_size = cache_size
+
+        self._tile_cache: OrderedDict[
+            str,
+            SrtmTile,
+        ] = OrderedDict()
 
     def get_elevation(
         self,
@@ -275,11 +290,15 @@ class SrtmTerrainSource:
         latitude_deg: int,
         longitude_deg: int,
     ) -> SrtmTile | None:
-        if (
-            self._cached_tile_name == tile_name
-            and self._cached_tile is not None
-        ):
-            return self._cached_tile
+        cached_tile = self._tile_cache.get(
+            tile_name
+        )
+
+        if cached_tile is not None:
+            self._tile_cache.move_to_end(
+                tile_name
+            )
+            return cached_tile
 
         tile_path = (
             self.terrain_directory
@@ -311,8 +330,21 @@ class SrtmTerrainSource:
             data=data,
         )
 
-        self._cached_tile_name = tile_name
-        self._cached_tile = tile
+        self._tile_cache[
+            tile_name
+        ] = tile
+
+        self._tile_cache.move_to_end(
+            tile_name
+        )
+
+        while (
+            len(self._tile_cache)
+            > self.cache_size
+        ):
+            self._tile_cache.popitem(
+                last=False
+            )
 
         return tile
 
