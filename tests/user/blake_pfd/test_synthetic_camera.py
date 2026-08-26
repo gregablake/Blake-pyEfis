@@ -173,3 +173,23 @@ def test_nonfinite_world_input_fails_closed() -> None:
     )
 
     assert point is None
+
+
+def test_point_on_near_plane_is_projectable() -> None:
+    camera = SyntheticCamera()
+
+    projected = camera.project(
+        CameraPoint(
+            right_ft=0.0,
+            up_ft=0.0,
+            forward_ft=5.0,
+        ),
+        width_px=1280,
+        height_px=720,
+        near_plane_ft=5.0,
+    )
+
+    assert projected is not None
+    assert projected.visible is True
+    assert projected.x_px == pytest.approx(640.0)
+    assert projected.y_px == pytest.approx(360.0)

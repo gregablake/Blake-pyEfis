@@ -3,8 +3,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from pyefis.user.blake_pfd.core.synthetic_camera import (
+    CameraPoint,
     ProjectedPoint,
     SyntheticCamera,
+)
+from pyefis.user.blake_pfd.core.synthetic_clipping import (
+    clip_camera_polygon_to_near_plane,
+    clip_projected_polygon_to_screen,
 )
 from pyefis.user.blake_pfd.core.terrain_surface import (
     TerrainSurface,
@@ -13,22 +18,48 @@ from pyefis.user.blake_pfd.core.terrain_surface import (
 
 @dataclass(frozen=True)
 class ProjectedTerrainTriangle:
-    first: ProjectedPoint
-    second: ProjectedPoint
-    third: ProjectedPoint
+    points: tuple[
+        ProjectedPoint,
+        ...,
+    ] = ()
 
     elevations_ft: tuple[
         float,
         float,
         float,
-    ]
+    ] = (
+        0.0,
+        0.0,
+        0.0,
+    )
 
     @property
     def visible(self) -> bool:
-        return (
-            self.first.visible
-            and self.second.visible
-            and self.third.visible
+        return len(self.points) >= 3
+
+    @property
+    def first(self) -> ProjectedPoint:
+        return self._point_or_hidden(0)
+
+    @property
+    def second(self) -> ProjectedPoint:
+        return self._point_or_hidden(1)
+
+    @property
+    def third(self) -> ProjectedPoint:
+        return self._point_or_hidden(2)
+
+    def _point_or_hidden(
+        self,
+        index: int,
+    ) -> ProjectedPoint:
+        if index < len(self.points):
+            return self.points[index]
+
+        return ProjectedPoint(
+            x_px=0.0,
+            y_px=0.0,
+            visible=False,
         )
 
 
@@ -47,11 +78,17 @@ class TerrainProjectionComputer:
     def __init__(
         self,
         camera: SyntheticCamera | None = None,
+        *,
+        near_plane_ft: float = 5.0,
     ) -> None:
         self.camera = (
             camera
             if camera is not None
             else SyntheticCamera()
+        )
+
+        self.near_plane_ft = float(
+            near_plane_ft
         )
 
     def project(
@@ -67,6 +104,17 @@ class TerrainProjectionComputer:
         if not surface.valid:
             return ProjectedTerrain(
                 message="TERRAIN SURFACE INVALID",
+            )
+
+        if (
+            width_px <= 0
+            or height_px <= 0
+            or self.near_plane_ft <= 0.0
+        ):
+            return ProjectedTerrain(
+                message=(
+                    "TERRAIN PROJECTION INVALID"
+                ),
             )
 
         projected_triangles: list[
@@ -93,65 +141,114 @@ class TerrainProjectionComputer:
                     message="TERRAIN TRIANGLE INVALID",
                 )
 
-            first_vertex = surface.vertices[
-                triangle.first_index
-            ]
-
-            second_vertex = surface.vertices[
-                triangle.second_index
-            ]
-
-            third_vertex = surface.vertices[
-                triangle.third_index
-            ]
-
-            first = self._project_vertex(
-                vertex=first_vertex,
-                heading_deg=heading_deg,
-                pitch_deg=pitch_deg,
-                roll_deg=roll_deg,
-                width_px=width_px,
-                height_px=height_px,
+            source_vertices = tuple(
+                surface.vertices[index]
+                for index in indices
             )
 
-            second = self._project_vertex(
-                vertex=second_vertex,
-                heading_deg=heading_deg,
-                pitch_deg=pitch_deg,
-                roll_deg=roll_deg,
-                width_px=width_px,
-                height_px=height_px,
-            )
+            camera_points: list[
+                CameraPoint
+            ] = []
 
-            third = self._project_vertex(
-                vertex=third_vertex,
-                heading_deg=heading_deg,
-                pitch_deg=pitch_deg,
-                roll_deg=roll_deg,
-                width_px=width_px,
-                height_px=height_px,
-            )
+            for vertex in source_vertices:
+                camera_point = (
+                    self.camera.world_to_camera(
+                        north_ft=(
+                            vertex.north_ft
+                        ),
+                        east_ft=(
+                            vertex.east_ft
+                        ),
+                        up_ft=(
+                            vertex.up_ft
+                        ),
+                        heading_deg=heading_deg,
+                        pitch_deg=pitch_deg,
+                        roll_deg=roll_deg,
+                    )
+                )
 
-            if (
-                first is None
-                or second is None
-                or third is None
-            ):
-                return ProjectedTerrain(
-                    message=(
-                        "TERRAIN PROJECTION INVALID"
+                if camera_point is None:
+                    return ProjectedTerrain(
+                        message=(
+                            "TERRAIN "
+                            "PROJECTION INVALID"
+                        ),
+                    )
+
+                camera_points.append(
+                    camera_point
+                )
+
+            clipped_camera_points = (
+                clip_camera_polygon_to_near_plane(
+                    tuple(camera_points),
+                    near_plane_ft=(
+                        self.near_plane_ft
                     ),
                 )
+            )
+
+            if not clipped_camera_points:
+                projected_triangles.append(
+                    ProjectedTerrainTriangle(
+                        elevations_ft=tuple(
+                            vertex.elevation_ft
+                            for vertex
+                            in source_vertices
+                        ),
+                    )
+                )
+
+                continue
+
+            projected_points: list[
+                ProjectedPoint
+            ] = []
+
+            for camera_point in (
+                clipped_camera_points
+            ):
+                projected_point = (
+                    self.camera.project(
+                        camera_point,
+                        width_px=width_px,
+                        height_px=height_px,
+                        near_plane_ft=(
+                            self.near_plane_ft
+                        ),
+                    )
+                )
+
+                if projected_point is None:
+                    return ProjectedTerrain(
+                        message=(
+                            "TERRAIN "
+                            "PROJECTION INVALID"
+                        ),
+                    )
+
+                projected_points.append(
+                    projected_point
+                )
+
+            clipped_screen_points = (
+                clip_projected_polygon_to_screen(
+                    tuple(projected_points),
+                    width_px=width_px,
+                    height_px=height_px,
+                )
+            )
 
             projected_triangles.append(
                 ProjectedTerrainTriangle(
-                    first=first,
-                    second=second,
-                    third=third,
-                    elevations_ft=(
-                        first_vertex.elevation_ft,
-                        second_vertex.elevation_ft,
-                        third_vertex.elevation_ft,
+                    points=(
+                        clipped_screen_points
+                    ),
+                    elevations_ft=tuple(
+                        vertex.elevation_ft
+                        for vertex
+                        in source_vertices
                     ),
                 )
             )
@@ -161,34 +258,4 @@ class TerrainProjectionComputer:
                 projected_triangles
             ),
             valid=True,
-        )
-
-    def _project_vertex(
-        self,
-        *,
-        vertex,
-        heading_deg: float,
-        pitch_deg: float,
-        roll_deg: float,
-        width_px: int,
-        height_px: int,
-    ) -> ProjectedPoint | None:
-        camera_point = (
-            self.camera.world_to_camera(
-                north_ft=vertex.north_ft,
-                east_ft=vertex.east_ft,
-                up_ft=vertex.up_ft,
-                heading_deg=heading_deg,
-                pitch_deg=pitch_deg,
-                roll_deg=roll_deg,
-            )
-        )
-
-        if camera_point is None:
-            return None
-
-        return self.camera.project(
-            camera_point,
-            width_px=width_px,
-            height_px=height_px,
         )

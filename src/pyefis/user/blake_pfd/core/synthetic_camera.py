@@ -108,7 +108,7 @@ class SyntheticCamera:
         ):
             return None
 
-        if point.forward_ft <= near_plane_ft:
+        if point.forward_ft < near_plane_ft:
             return ProjectedPoint(
                 x_px=0.0,
                 y_px=0.0,

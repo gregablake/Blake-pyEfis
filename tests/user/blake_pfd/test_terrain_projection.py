@@ -175,3 +175,123 @@ def test_bad_triangle_index_fails_closed() -> None:
     assert projected.message == (
         "TERRAIN TRIANGLE INVALID"
     )
+
+
+def test_partially_offscreen_triangle_is_clipped_visible() -> None:
+    surface = TerrainSurface(
+        vertices=(
+            TerrainSurfaceVertex(
+                north_ft=3000.0,
+                east_ft=-5000.0,
+                up_ft=-300.0,
+                latitude_deg=39.0,
+                longitude_deg=-84.0,
+                elevation_ft=1000.0,
+            ),
+            TerrainSurfaceVertex(
+                north_ft=3000.0,
+                east_ft=0.0,
+                up_ft=-300.0,
+                latitude_deg=39.0,
+                longitude_deg=-84.0,
+                elevation_ft=1000.0,
+            ),
+            TerrainSurfaceVertex(
+                north_ft=5000.0,
+                east_ft=500.0,
+                up_ft=-300.0,
+                latitude_deg=39.0,
+                longitude_deg=-84.0,
+                elevation_ft=1000.0,
+            ),
+        ),
+        triangles=(
+            TerrainTriangle(
+                first_index=0,
+                second_index=1,
+                third_index=2,
+            ),
+        ),
+        rows=2,
+        columns=2,
+        valid=True,
+    )
+
+    projected = TerrainProjectionComputer().project(
+        surface=surface,
+        heading_deg=0.0,
+        pitch_deg=0.0,
+        roll_deg=0.0,
+        width_px=1280,
+        height_px=720,
+    )
+
+    triangle = projected.triangles[0]
+
+    assert triangle.visible is True
+    assert len(triangle.points) >= 3
+
+    for point in triangle.points:
+        assert point.visible is True
+        assert 0.0 <= point.x_px <= 1280.0
+        assert 0.0 <= point.y_px <= 720.0
+
+
+def test_near_plane_crossing_triangle_is_clipped_visible() -> None:
+    surface = TerrainSurface(
+        vertices=(
+            TerrainSurfaceVertex(
+                north_ft=0.0,
+                east_ft=0.0,
+                up_ft=0.0,
+                latitude_deg=39.0,
+                longitude_deg=-84.0,
+                elevation_ft=1000.0,
+            ),
+            TerrainSurfaceVertex(
+                north_ft=100.0,
+                east_ft=-10.0,
+                up_ft=0.0,
+                latitude_deg=39.0,
+                longitude_deg=-84.0,
+                elevation_ft=1000.0,
+            ),
+            TerrainSurfaceVertex(
+                north_ft=100.0,
+                east_ft=10.0,
+                up_ft=0.0,
+                latitude_deg=39.0,
+                longitude_deg=-84.0,
+                elevation_ft=1000.0,
+            ),
+        ),
+        triangles=(
+            TerrainTriangle(
+                first_index=0,
+                second_index=1,
+                third_index=2,
+            ),
+        ),
+        rows=2,
+        columns=2,
+        valid=True,
+    )
+
+    projected = TerrainProjectionComputer().project(
+        surface=surface,
+        heading_deg=0.0,
+        pitch_deg=0.0,
+        roll_deg=0.0,
+        width_px=1280,
+        height_px=720,
+    )
+
+    triangle = projected.triangles[0]
+
+    assert triangle.visible is True
+    assert len(triangle.points) >= 3
+
+    for point in triangle.points:
+        assert point.visible is True
+        assert 0.0 <= point.x_px <= 1280.0
+        assert 0.0 <= point.y_px <= 720.0

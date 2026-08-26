@@ -4150,17 +4150,11 @@ class BlakePfdDemo(QWidget):
             polygon = QPolygonF(
                 [
                     QPointF(
-                        triangle.first.x_px,
-                        triangle.first.y_px,
-                    ),
-                    QPointF(
-                        triangle.second.x_px,
-                        triangle.second.y_px,
-                    ),
-                    QPointF(
-                        triangle.third.x_px,
-                        triangle.third.y_px,
-                    ),
+                        point.x_px,
+                        point.y_px,
+                    )
+                    for point
+                    in triangle.points
                 ]
             )
 
