@@ -134,6 +134,10 @@ from pyefis.user.blake_pfd.core.terrain_surface import (
     TerrainSurfaceGenerator,
 )
 
+from pyefis.user.blake_pfd.core.terrain_rebase import (
+    TerrainSurfaceRebaser,
+)
+
 from pyefis.user.blake_pfd.core.terrain_projection import (
     TerrainProjectionComputer,
 )
@@ -683,6 +687,10 @@ class BlakePfdDemo(QWidget):
                 ),
                 half_width_ratio=0.75,
             )
+        )
+
+        self.synthetic_terrain_rebaser = (
+            TerrainSurfaceRebaser()
         )
 
         self.synthetic_terrain_projection = (
@@ -1301,10 +1309,6 @@ class BlakePfdDemo(QWidget):
             )
         )
 
-        self.refresh_synthetic_terrain(
-            heartbeat_now_s
-        )
-
         self.startup_gate_state = (
             self.startup_gate.evaluate(
                 config_ok=(
@@ -1755,6 +1759,10 @@ class BlakePfdDemo(QWidget):
                     sensor_status=self.engine_sensor_status,
                 )
             )
+
+        self.refresh_synthetic_terrain(
+            heartbeat_now_s
+        )
 
         raw_recommendation = (
             self.aircraft_intelligence.analyze(
@@ -4039,9 +4047,27 @@ class BlakePfdDemo(QWidget):
         ):
             return
 
+        rebased_surface = (
+            self.synthetic_terrain_rebaser.rebase(
+                surface=surface,
+                aircraft_lat_deg=(
+                    pfd.latitude_deg
+                ),
+                aircraft_lon_deg=(
+                    pfd.longitude_deg
+                ),
+                aircraft_alt_ft=(
+                    pfd.pressure_alt_ft
+                ),
+            )
+        )
+
+        if not rebased_surface.valid:
+            return
+
         projected = (
             self.synthetic_terrain_projection.project(
-                surface=surface,
+                surface=rebased_surface,
                 heading_deg=pfd.heading_deg,
                 pitch_deg=pfd.pitch_deg,
                 roll_deg=pfd.roll_deg,
@@ -4055,7 +4081,7 @@ class BlakePfdDemo(QWidget):
 
         classified = (
             self.synthetic_terrain_classifier.classify(
-                surface=surface,
+                surface=rebased_surface,
                 aircraft_altitude_ft=(
                     pfd.pressure_alt_ft
                 ),
