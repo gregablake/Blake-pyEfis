@@ -87,55 +87,174 @@ class SrtmTerrainSource:
             tile.samples_per_side - 1
         )
 
-        row = int(
-            round(
-                (1.0 - latitude_fraction)
-                * maximum_index
-            )
+        row_position = (
+            (1.0 - latitude_fraction)
+            * maximum_index
         )
 
-        column = int(
-            round(
-                longitude_fraction
-                * maximum_index
-            )
+        column_position = (
+            longitude_fraction
+            * maximum_index
         )
 
-        row = max(
-            0,
+        row_position = max(
+            0.0,
             min(
-                maximum_index,
-                row,
+                float(maximum_index),
+                row_position,
             ),
         )
 
-        column = max(
-            0,
+        column_position = max(
+            0.0,
             min(
-                maximum_index,
-                column,
+                float(maximum_index),
+                column_position,
             ),
         )
 
-        sample_index = (
-            row
-            * tile.samples_per_side
-            + column
+        row_low = int(
+            floor(row_position)
         )
 
-        byte_offset = sample_index * 2
+        column_low = int(
+            floor(column_position)
+        )
 
-        elevation_m = unpack_from(
-            ">h",
-            tile.data,
-            byte_offset,
-        )[0]
+        row_fraction = (
+            row_position
+            - row_low
+        )
 
-        if elevation_m == self.VOID_ELEVATION:
-            return None
+        column_fraction = (
+            column_position
+            - column_low
+        )
+
+        # Floating-point conversion from geographic
+        # coordinates can place an exact SRTM grid
+        # point infinitesimally to either side of the
+        # integer index. Snap those tiny errors so an
+        # unused neighboring void sample is not treated
+        # as contributing to the interpolation.
+        grid_epsilon = 1.0e-9
+
+        if row_fraction < grid_epsilon:
+            row_fraction = 0.0
+
+        elif (
+            1.0 - row_fraction
+            < grid_epsilon
+        ):
+            row_low = min(
+                row_low + 1,
+                maximum_index,
+            )
+            row_fraction = 0.0
+
+        if column_fraction < grid_epsilon:
+            column_fraction = 0.0
+
+        elif (
+            1.0 - column_fraction
+            < grid_epsilon
+        ):
+            column_low = min(
+                column_low + 1,
+                maximum_index,
+            )
+            column_fraction = 0.0
+
+        row_high = min(
+            row_low + 1,
+            maximum_index,
+        )
+
+        column_high = min(
+            column_low + 1,
+            maximum_index,
+        )
+
+        weighted_samples = (
+            (
+                row_low,
+                column_low,
+                (
+                    (1.0 - row_fraction)
+                    * (
+                        1.0
+                        - column_fraction
+                    )
+                ),
+            ),
+            (
+                row_low,
+                column_high,
+                (
+                    (1.0 - row_fraction)
+                    * column_fraction
+                ),
+            ),
+            (
+                row_high,
+                column_low,
+                (
+                    row_fraction
+                    * (
+                        1.0
+                        - column_fraction
+                    )
+                ),
+            ),
+            (
+                row_high,
+                column_high,
+                (
+                    row_fraction
+                    * column_fraction
+                ),
+            ),
+        )
+
+        elevation_m = 0.0
+
+        for (
+            row,
+            column,
+            weight,
+        ) in weighted_samples:
+            if weight <= 0.0:
+                continue
+
+            sample_index = (
+                row
+                * tile.samples_per_side
+                + column
+            )
+
+            byte_offset = (
+                sample_index * 2
+            )
+
+            sample_elevation_m = unpack_from(
+                ">h",
+                tile.data,
+                byte_offset,
+            )[0]
+
+            if (
+                sample_elevation_m
+                == self.VOID_ELEVATION
+            ):
+                return None
+
+            elevation_m += (
+                float(sample_elevation_m)
+                * weight
+            )
 
         return (
-            float(elevation_m)
+            elevation_m
             * METERS_TO_FEET
         )
 

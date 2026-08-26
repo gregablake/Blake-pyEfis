@@ -278,3 +278,147 @@ def test_cache_reuses_loaded_tile(
     assert second == pytest.approx(
         100.0 * METERS_TO_FEET
     )
+
+
+def test_bilinear_interpolates_between_four_samples(
+    tmp_path: Path,
+) -> None:
+    maximum_index = 1200
+
+    row_position = 600.5
+    column_position = 600.5
+
+    latitude_fraction = (
+        1.0
+        - row_position / maximum_index
+    )
+
+    longitude_fraction = (
+        column_position / maximum_index
+    )
+
+    latitude = (
+        39.0
+        + latitude_fraction
+    )
+
+    longitude = (
+        -85.0
+        + longitude_fraction
+    )
+
+    write_test_tile(
+        tmp_path,
+        tile_name="N39W085",
+        samples_per_side=1201,
+        default_elevation_m=0,
+        overrides={
+            (600, 600): 100,
+            (600, 601): 200,
+            (601, 600): 300,
+            (601, 601): 400,
+        },
+    )
+
+    source = SrtmTerrainSource(
+        tmp_path
+    )
+
+    elevation_ft = source.get_elevation(
+        latitude,
+        longitude,
+    )
+
+    assert elevation_ft == pytest.approx(
+        250.0 * METERS_TO_FEET
+    )
+
+
+def test_bilinear_required_void_sample_fails_closed(
+    tmp_path: Path,
+) -> None:
+    maximum_index = 1200
+
+    row_position = 600.5
+    column_position = 600.5
+
+    latitude = (
+        39.0
+        + (
+            1.0
+            - row_position / maximum_index
+        )
+    )
+
+    longitude = (
+        -85.0
+        + column_position / maximum_index
+    )
+
+    write_test_tile(
+        tmp_path,
+        tile_name="N39W085",
+        samples_per_side=1201,
+        default_elevation_m=100,
+        overrides={
+            (600, 600): 100,
+            (600, 601): 200,
+            (601, 600): 300,
+            (601, 601): -32768,
+        },
+    )
+
+    source = SrtmTerrainSource(
+        tmp_path
+    )
+
+    assert source.get_elevation(
+        latitude,
+        longitude,
+    ) is None
+
+
+def test_exact_grid_sample_does_not_require_neighbor(
+    tmp_path: Path,
+) -> None:
+    maximum_index = 1200
+
+    row = 600
+    column = 600
+
+    latitude = (
+        39.0
+        + (
+            1.0
+            - row / maximum_index
+        )
+    )
+
+    longitude = (
+        -85.0
+        + column / maximum_index
+    )
+
+    write_test_tile(
+        tmp_path,
+        tile_name="N39W085",
+        samples_per_side=1201,
+        default_elevation_m=100,
+        overrides={
+            (600, 600): 500,
+            (600, 601): -32768,
+            (601, 600): -32768,
+            (601, 601): -32768,
+        },
+    )
+
+    source = SrtmTerrainSource(
+        tmp_path
+    )
+
+    assert source.get_elevation(
+        latitude,
+        longitude,
+    ) == pytest.approx(
+        500.0 * METERS_TO_FEET
+    )
