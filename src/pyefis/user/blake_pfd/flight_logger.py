@@ -19,7 +19,13 @@ class FlightLogger:
 
         LOG_DIR.mkdir(exist_ok=True)
 
-    def maybe_log(self, pfd, waypoint_id: str, engine=None) -> None:
+    def maybe_log(
+        self,
+        pfd,
+        waypoint_id: str,
+        engine=None,
+        sensor_status=None,
+    ) -> None:
         now_s = monotonic()
 
         if now_s - self.last_log_time_s < self.log_interval_s:
@@ -34,7 +40,6 @@ class FlightLogger:
         engine_row = asdict(engine)
 
         for key, value in engine_row.items():
-
             if key == "cht_f":
                 for idx, cht in enumerate(value, start=1):
                     row[f"engine_cht_{idx}"] = cht
@@ -45,6 +50,73 @@ class FlightLogger:
 
             else:
                 row[f"engine_{key}"] = value
+
+        def add_status(
+            prefix: str,
+            status,
+        ) -> None:
+            if status is None:
+                row[f"{prefix}_valid"] = ""
+                row[f"{prefix}_fresh"] = ""
+                return
+
+            row[f"{prefix}_valid"] = bool(status.valid)
+            row[f"{prefix}_fresh"] = bool(status.fresh)
+
+        if sensor_status is None:
+            scalar_statuses = {
+                "engine_rpm": None,
+                "engine_volts": None,
+                "engine_amps": None,
+                "engine_oil_pressure_psi": None,
+                "engine_oil_temp_f": None,
+                "engine_fuel_pressure_psi": None,
+                "engine_fuel_flow_gph": None,
+            }
+        else:
+            scalar_statuses = {
+                "engine_rpm": sensor_status.rpm,
+                "engine_volts": sensor_status.volts,
+                "engine_amps": sensor_status.amps,
+                "engine_oil_pressure_psi": sensor_status.oil_pressure,
+                "engine_oil_temp_f": sensor_status.oil_temperature,
+                "engine_fuel_pressure_psi": sensor_status.fuel_pressure,
+                "engine_fuel_flow_gph": sensor_status.fuel_flow,
+            }
+
+        for prefix, status in scalar_statuses.items():
+            add_status(
+                prefix,
+                status,
+            )
+
+        for index in range(6):
+            status = None
+
+            if (
+                sensor_status is not None
+                and index < len(sensor_status.cht)
+            ):
+                status = sensor_status.cht[index]
+
+            add_status(
+                f"engine_cht_{index + 1}",
+                status,
+            )
+
+        for index in range(2):
+            status = None
+
+            if (
+                sensor_status is not None
+                and index < len(sensor_status.egt)
+            ):
+                status = sensor_status.egt[index]
+
+            add_status(
+                f"engine_egt_{index + 1}",
+                status,
+            )
 
         self.write_row(row)
 

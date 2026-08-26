@@ -36,13 +36,48 @@ def summarize_log(path: Path) -> None:
         print("Log is empty.")
         return
 
+    def status_allows_sample(
+        row: dict,
+        field: str,
+    ) -> bool:
+        valid_key = f"{field}_valid"
+        fresh_key = f"{field}_fresh"
+
+        # Legacy logs have no validity/freshness columns.
+        if (
+            valid_key not in row
+            and fresh_key not in row
+        ):
+            return True
+
+        valid_text = row.get(valid_key, "")
+        fresh_text = row.get(fresh_key, "")
+
+        valid = str(valid_text).strip().lower() == "true"
+        fresh = str(fresh_text).strip().lower() == "true"
+
+        return valid and fresh
+
     def values(field: str) -> list[float]:
         result = []
+
         for row in rows:
+            if not status_allows_sample(
+                row,
+                field,
+            ):
+                continue
+
+            raw_value = row.get(field, "")
+
+            if raw_value in ("", None):
+                continue
+
             try:
-                result.append(float(row.get(field, 0.0)))
-            except ValueError:
+                result.append(float(raw_value))
+            except (TypeError, ValueError):
                 pass
+
         return result
 
     ias = values("ias_kt")

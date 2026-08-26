@@ -1703,6 +1703,9 @@ class BlakePfdDemo(QWidget):
                     self.config.navigation.selected_waypoint_id
                 ),
                 engine=engine,
+                sensor_status=(
+                    self.engine_sensor_status
+                ),
             )
 
         self.update()
