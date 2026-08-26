@@ -105,6 +105,14 @@ class EngineAnalyzer:
             else None
         )
 
+        electrical_usable = (
+            sensor_status is None
+            or (
+                channel_usable(sensor_status.volts)
+                and channel_usable(sensor_status.amps)
+            )
+        )
+
         if (
             channel_usable(oil_pressure_status)
             and engine.oil_pressure_psi <= 15
@@ -166,7 +174,10 @@ class EngineAnalyzer:
                 egt_spread_f=egt_spread,
             )
 
-        if not engine.alternator_online:
+        if (
+            electrical_usable
+            and not engine.alternator_online
+        ):
             return EngineAnalysis(
                 summary="Alternator offline.",
                 recommendation="Reduce electrical load and monitor battery voltage.",

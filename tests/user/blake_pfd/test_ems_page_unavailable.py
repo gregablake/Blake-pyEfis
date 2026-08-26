@@ -482,3 +482,156 @@ def test_valid_hot_cht_still_triggers_high_cht_annunciator() -> None:
         text == "HIGH CHT"
         for text in painter.text
     )
+
+def test_invalid_electrical_status_shows_alt_unavailable_without_alt_fail() -> None:
+    from types import SimpleNamespace
+
+    from pyefis.user.blake_pfd.core.engine_sensor_status import (
+        EngineChannelStatus,
+        EngineSensorStatus,
+    )
+    from pyefis.user.blake_pfd.engine_data import EngineData
+
+    page = EmsPage()
+    painter = RecordingPainter()
+
+    engine = EngineData(
+        rpm=2450.0,
+        volts=0.0,
+        amps=0.0,
+        oil_pressure_psi=45.0,
+        oil_temp_f=190.0,
+        cht_f=[350.0] * 6,
+        egt_f=[1350.0, 1360.0],
+        ignition_a=True,
+        ignition_b=True,
+        alternator_online=False,
+        fuel_remaining_gal=20.0,
+        endurance_hr=3.0,
+    )
+
+    engine_state = SimpleNamespace(
+        data=engine,
+        health=SimpleNamespace(),
+        analysis=SimpleNamespace(),
+        trend=SimpleNamespace(),
+        cylinders=SimpleNamespace(),
+        advice=None,
+    )
+
+    aircraft = SimpleNamespace(
+        engine_state=engine_state,
+    )
+
+    healthy = EngineChannelStatus(
+        valid=True,
+        fresh=True,
+        message="DATA VALID",
+    )
+
+    invalid = EngineChannelStatus(
+        valid=False,
+        fresh=False,
+        message="IMPLAUSIBLE DATA",
+    )
+
+    sensor_status = EngineSensorStatus(
+        rpm=healthy,
+        volts=invalid,
+        amps=invalid,
+        oil_pressure=healthy,
+        oil_temperature=healthy,
+        fuel_pressure=healthy,
+        fuel_flow=healthy,
+        cht=(healthy,) * 6,
+        egt=(healthy,) * 2,
+    )
+
+    page.draw(
+        painter,
+        aircraft,
+        width=1024,
+        height=600,
+        sensor_status=sensor_status,
+    )
+
+    assert "ALT ---" in painter.text
+
+    assert not any(
+        text == "ALT FAIL"
+        for text in painter.text
+    )
+
+
+def test_valid_electrical_status_still_shows_alt_failure() -> None:
+    from types import SimpleNamespace
+
+    from pyefis.user.blake_pfd.core.engine_sensor_status import (
+        EngineChannelStatus,
+        EngineSensorStatus,
+    )
+    from pyefis.user.blake_pfd.engine_data import EngineData
+
+    page = EmsPage()
+    painter = RecordingPainter()
+
+    engine = EngineData(
+        rpm=2450.0,
+        volts=14.2,
+        amps=5.0,
+        oil_pressure_psi=45.0,
+        oil_temp_f=190.0,
+        cht_f=[350.0] * 6,
+        egt_f=[1350.0, 1360.0],
+        ignition_a=True,
+        ignition_b=True,
+        alternator_online=False,
+        fuel_remaining_gal=20.0,
+        endurance_hr=3.0,
+    )
+
+    engine_state = SimpleNamespace(
+        data=engine,
+        health=SimpleNamespace(),
+        analysis=SimpleNamespace(),
+        trend=SimpleNamespace(),
+        cylinders=SimpleNamespace(),
+        advice=None,
+    )
+
+    aircraft = SimpleNamespace(
+        engine_state=engine_state,
+    )
+
+    healthy = EngineChannelStatus(
+        valid=True,
+        fresh=True,
+        message="DATA VALID",
+    )
+
+    sensor_status = EngineSensorStatus(
+        rpm=healthy,
+        volts=healthy,
+        amps=healthy,
+        oil_pressure=healthy,
+        oil_temperature=healthy,
+        fuel_pressure=healthy,
+        fuel_flow=healthy,
+        cht=(healthy,) * 6,
+        egt=(healthy,) * 2,
+    )
+
+    page.draw(
+        painter,
+        aircraft,
+        width=1024,
+        height=600,
+        sensor_status=sensor_status,
+    )
+
+    assert "ALT OFF" in painter.text
+
+    assert any(
+        text == "ALT FAIL"
+        for text in painter.text
+    )

@@ -140,3 +140,84 @@ def test_valid_hot_cht_still_creates_critical_analysis() -> None:
     assert result.severity == "CRITICAL"
     assert result.hottest_cylinder == 3
     assert result.hottest_cht_f == 460.0
+def test_invalid_electrical_status_does_not_create_alternator_caution() -> None:
+    analyzer = EngineAnalyzer()
+
+    engine = EngineData(
+        rpm=2450.0,
+        volts=0.0,
+        amps=0.0,
+        oil_pressure_psi=45.0,
+        oil_temp_f=190.0,
+        cht_f=[350.0] * 6,
+        egt_f=[1350.0, 1360.0],
+        alternator_online=False,
+    )
+
+    healthy = EngineChannelStatus(
+        valid=True,
+        fresh=True,
+        message="DATA VALID",
+    )
+
+    invalid = EngineChannelStatus(
+        valid=False,
+        fresh=False,
+        message="IMPLAUSIBLE DATA",
+    )
+
+    status = EngineSensorStatus(
+        rpm=healthy,
+        volts=invalid,
+        amps=invalid,
+        oil_pressure=healthy,
+        oil_temperature=healthy,
+        cht=(healthy,) * 6,
+        egt=(healthy,) * 2,
+    )
+
+    result = analyzer.analyze(
+        engine,
+        sensor_status=status,
+    )
+
+    assert result.severity == "NORMAL"
+
+
+def test_valid_electrical_status_still_reports_alternator_caution() -> None:
+    analyzer = EngineAnalyzer()
+
+    engine = EngineData(
+        rpm=2450.0,
+        volts=14.2,
+        amps=5.0,
+        oil_pressure_psi=45.0,
+        oil_temp_f=190.0,
+        cht_f=[350.0] * 6,
+        egt_f=[1350.0, 1360.0],
+        alternator_online=False,
+    )
+
+    healthy = EngineChannelStatus(
+        valid=True,
+        fresh=True,
+        message="DATA VALID",
+    )
+
+    status = EngineSensorStatus(
+        rpm=healthy,
+        volts=healthy,
+        amps=healthy,
+        oil_pressure=healthy,
+        oil_temperature=healthy,
+        cht=(healthy,) * 6,
+        egt=(healthy,) * 2,
+    )
+
+    result = analyzer.analyze(
+        engine,
+        sensor_status=status,
+    )
+
+    assert result.severity == "CAUTION"
+    assert result.summary == "Alternator offline."

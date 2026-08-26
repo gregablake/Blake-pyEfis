@@ -102,6 +102,14 @@ class EngineManager:
             )
         )
 
+        electrical_usable = (
+            sensor_status is None
+            or (
+                channel_usable(sensor_status.volts)
+                and channel_usable(sensor_status.amps)
+            )
+        )
+
         score = 100
         status = "NORMAL"
 
@@ -136,7 +144,10 @@ class EngineManager:
             score -= 20
             status = self._raise_status(status, "CAUTION")
 
-        if not engine.alternator_online:
+        if (
+            electrical_usable
+            and not engine.alternator_online
+        ):
             score -= 15
             status = self._raise_status(status, "CAUTION")
 

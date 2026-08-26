@@ -286,7 +286,13 @@ class EmsPage:
                 else None
             ),
         )
-        self.draw_status_indicators(painter, engine, width, height)
+        self.draw_status_indicators(
+            painter,
+            engine,
+            width,
+            height,
+            sensor_status=sensor_status,
+        )
 
         self.draw_cylinder_analysis_box(
             painter,
@@ -532,6 +538,7 @@ class EmsPage:
         engine: EngineData,
         width: int,
         height: int,
+        sensor_status=None,
     ) -> None:
         x = width - 220
         y = height - 170
@@ -544,7 +551,32 @@ class EmsPage:
         self.draw_status(painter, x, y, "IGN B", engine.ignition_b)
         y += 35
 
-        self.draw_status(painter, x, y, "ALT", engine.alternator_online)
+        electrical_usable = (
+            sensor_status is None
+            or (
+                sensor_status.volts.valid
+                and sensor_status.volts.fresh
+                and sensor_status.amps.valid
+                and sensor_status.amps.fresh
+            )
+        )
+
+        if electrical_usable:
+            self.draw_status(
+                painter,
+                x,
+                y,
+                "ALT",
+                engine.alternator_online,
+            )
+        else:
+            painter.setPen(QColor(255, 220, 0))
+            painter.drawText(
+                x,
+                y,
+                "ALT ---",
+            )
+
         y += 35
 
         starter_color = (
@@ -606,6 +638,17 @@ class EmsPage:
             sensor_status.volts
             if sensor_status is not None
             else None
+        )
+
+        amps_status = (
+            sensor_status.amps
+            if sensor_status is not None
+            else None
+        )
+
+        electrical_usable = (
+            channel_usable(volts_status)
+            and channel_usable(amps_status)
         )
 
         if (
@@ -725,8 +768,13 @@ class EmsPage:
                 ("RPM", QColor(255, 0, 0))
             )
 
-        if not engine.alternator_online:
-            annunciators.append(("ALT FAIL", QColor(255, 0, 0)))
+        if (
+            electrical_usable
+            and not engine.alternator_online
+        ):
+            annunciators.append(
+                ("ALT FAIL", QColor(255, 0, 0))
+            )
 
         if not engine.ignition_a:
             annunciators.append(("IGN A OFF", QColor(255, 0, 0)))

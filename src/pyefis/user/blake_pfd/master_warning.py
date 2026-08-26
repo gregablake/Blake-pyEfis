@@ -89,6 +89,16 @@ def get_engine_warnings(
         or channel_usable(sensor_status.volts)
     )
 
+    amps_usable = (
+        sensor_status is None
+        or channel_usable(sensor_status.amps)
+    )
+
+    electrical_usable = (
+        volts_usable
+        and amps_usable
+    )
+
     oil_pressure_usable = (
         sensor_status is None
         or channel_usable(sensor_status.oil_pressure)
@@ -176,8 +186,16 @@ def get_engine_warnings(
     ):
         warnings.append(WarningItem("VOLTS", QColor(255, 220, 0)))
 
-    if not engine.alternator_online:
-        warnings.append(WarningItem("ALT FAIL", QColor(255, 0, 0)))
+    if (
+        electrical_usable
+        and not engine.alternator_online
+    ):
+        warnings.append(
+            WarningItem(
+                "ALT FAIL",
+                QColor(255, 0, 0),
+            )
+        )
 
     if not engine.ignition_a:
         warnings.append(WarningItem("IGN A OFF", QColor(255, 0, 0)))
