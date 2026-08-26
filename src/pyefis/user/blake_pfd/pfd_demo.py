@@ -128,6 +128,19 @@ from pyefis.user.blake_pfd.core.runway_geometry import (
 from pyefis.user.blake_pfd.core.runway_projection import (
     RunwayProjectionComputer,
 )
+
+from pyefis.user.blake_pfd.core.terrain_surface import (
+    TerrainSurface,
+    TerrainSurfaceGenerator,
+)
+
+from pyefis.user.blake_pfd.core.terrain_projection import (
+    TerrainProjectionComputer,
+)
+
+from pyefis.user.blake_pfd.core.terrain_visual_classifier import (
+    TerrainVisualClassifier,
+)
 from pyefis.user.blake_pfd.core.flight_director import (
     FlightDirector,
 )
@@ -644,6 +657,54 @@ class BlakePfdDemo(QWidget):
             self.terrain_source_bundle.message
         )
 
+        self.synthetic_terrain_generator = (
+            TerrainSurfaceGenerator(
+                elevation_sampler=(
+                    self.terrain_sampler
+                ),
+                forward_distances_nm=(
+                    0.25,
+                    0.5,
+                    1.0,
+                    2.0,
+                    3.0,
+                    5.0,
+                    8.0,
+                    10.0,
+                ),
+                lateral_fractions=(
+                    -1.0,
+                    -0.6667,
+                    -0.3333,
+                    0.0,
+                    0.3333,
+                    0.6667,
+                    1.0,
+                ),
+                half_width_ratio=0.75,
+            )
+        )
+
+        self.synthetic_terrain_projection = (
+            TerrainProjectionComputer()
+        )
+
+        self.synthetic_terrain_classifier = (
+            TerrainVisualClassifier()
+        )
+
+        self.synthetic_terrain_surface = (
+            TerrainSurface()
+        )
+
+        self.synthetic_terrain_last_refresh_s: (
+            float | None
+        ) = None
+
+        self.synthetic_terrain_refresh_interval_s = (
+            1.0
+        )
+
         self.terrain_profile_provider = (
             TerrainProfileProvider(
                 elevation_sampler=self.terrain_sampler,
@@ -970,6 +1031,78 @@ class BlakePfdDemo(QWidget):
             "Pilot manually cancelled emergency mode.",
         )
 
+    def refresh_synthetic_terrain(
+        self,
+        now_s: float,
+    ) -> None:
+        pfd = self.pfd
+
+        watchdog = (
+            self.sensor_watchdog_state
+        )
+
+        inputs_valid = (
+            self.real_terrain_enabled
+            and pfd is not None
+            and pfd.position_valid
+            and watchdog.position_valid
+            and watchdog.position_fresh
+            and watchdog.attitude_valid
+            and watchdog.attitude_fresh
+            and watchdog.air_data_valid
+            and watchdog.air_data_fresh
+            and (
+                self.terrain_startup_status
+                .predictive_alerts_enabled
+            )
+        )
+
+        if not inputs_valid:
+            self.synthetic_terrain_surface = (
+                TerrainSurface()
+            )
+
+            self.synthetic_terrain_last_refresh_s = (
+                None
+            )
+
+            return
+
+        last_refresh = (
+            self.synthetic_terrain_last_refresh_s
+        )
+
+        if (
+            last_refresh is not None
+            and now_s - last_refresh
+            < self.synthetic_terrain_refresh_interval_s
+        ):
+            return
+
+        # Record the attempt time before sampling.
+        # If an SRTM tile is unavailable, this prevents
+        # retrying the failed read at the 20 Hz display rate.
+        self.synthetic_terrain_last_refresh_s = (
+            now_s
+        )
+
+        self.synthetic_terrain_surface = (
+            self.synthetic_terrain_generator.generate(
+                aircraft_lat_deg=(
+                    pfd.latitude_deg
+                ),
+                aircraft_lon_deg=(
+                    pfd.longitude_deg
+                ),
+                aircraft_alt_ft=(
+                    pfd.pressure_alt_ft
+                ),
+                heading_deg=(
+                    pfd.heading_deg
+                ),
+            )
+        )
+
     def update_data(self) -> None:
         heartbeat_now_s = monotonic()
 
@@ -1166,6 +1299,10 @@ class BlakePfdDemo(QWidget):
                 attitude_fresh=attitude_fresh,
                 air_data_fresh=air_data_fresh,
             )
+        )
+
+        self.refresh_synthetic_terrain(
+            heartbeat_now_s
         )
 
         self.startup_gate_state = (
@@ -3870,6 +4007,184 @@ class BlakePfdDemo(QWidget):
             ),
             geometry.high_end.ident,
         )
+
+    def draw_synthetic_terrain(
+        self,
+        painter: QPainter,
+        pfd: FlightData,
+        width: int,
+        height: int,
+    ) -> None:
+        if not self.real_terrain_enabled:
+            return
+
+        surface = (
+            self.synthetic_terrain_surface
+        )
+
+        if not surface.valid:
+            return
+
+        watchdog = (
+            self.sensor_watchdog_state
+        )
+
+        if not (
+            watchdog.position_valid
+            and watchdog.position_fresh
+            and watchdog.attitude_valid
+            and watchdog.attitude_fresh
+            and watchdog.air_data_valid
+            and watchdog.air_data_fresh
+        ):
+            return
+
+        projected = (
+            self.synthetic_terrain_projection.project(
+                surface=surface,
+                heading_deg=pfd.heading_deg,
+                pitch_deg=pfd.pitch_deg,
+                roll_deg=pfd.roll_deg,
+                width_px=width,
+                height_px=height,
+            )
+        )
+
+        if not projected.valid:
+            return
+
+        classified = (
+            self.synthetic_terrain_classifier.classify(
+                surface=surface,
+                aircraft_altitude_ft=(
+                    pfd.pressure_alt_ft
+                ),
+                vertical_speed_fpm=(
+                    pfd.vsi_fpm
+                ),
+                ground_speed_kt=(
+                    pfd.ground_speed_kt
+                ),
+            )
+        )
+
+        if not classified.valid:
+            return
+
+        if (
+            len(projected.triangles)
+            != len(classified.triangles)
+        ):
+            return
+
+        terrain_colors = {
+            "NONE": QColor(
+                75,
+                90,
+                45,
+            ),
+            "CAUTION": QColor(
+                190,
+                170,
+                0,
+            ),
+            "WARNING": QColor(
+                220,
+                110,
+                0,
+            ),
+            "CRITICAL": QColor(
+                200,
+                0,
+                0,
+            ),
+        }
+
+        center_x = width // 2
+        center_y = height // 2
+
+        horizon_width = int(
+            width * 0.58
+        )
+
+        horizon_height = int(
+            height * 0.70
+        )
+
+        painter.save()
+
+        painter.setClipRect(
+            center_x - horizon_width // 2,
+            center_y - horizon_height // 2,
+            horizon_width,
+            horizon_height,
+        )
+
+        # Surface triangles are generated near-to-far.
+        # Paint in reverse order so farther terrain is
+        # laid down before nearer terrain.
+        for index in range(
+            len(projected.triangles) - 1,
+            -1,
+            -1,
+        ):
+            triangle = (
+                projected.triangles[index]
+            )
+
+            if not triangle.visible:
+                continue
+
+            warning_level = (
+                classified.triangles[index]
+                .warning_level
+            )
+
+            color = terrain_colors.get(
+                warning_level
+            )
+
+            if color is None:
+                continue
+
+            polygon = QPolygonF(
+                [
+                    QPointF(
+                        triangle.first.x_px,
+                        triangle.first.y_px,
+                    ),
+                    QPointF(
+                        triangle.second.x_px,
+                        triangle.second.y_px,
+                    ),
+                    QPointF(
+                        triangle.third.x_px,
+                        triangle.third.y_px,
+                    ),
+                ]
+            )
+
+            painter.setPen(
+                QPen(
+                    QColor(
+                        35,
+                        35,
+                        35,
+                    ),
+                    1,
+                )
+            )
+
+            painter.setBrush(
+                QBrush(color)
+            )
+
+            painter.drawPolygon(
+                polygon
+            )
+
+        painter.restore()
+
     def draw_synthetic_vision(
         self,
         painter: QPainter,
@@ -3878,6 +4193,13 @@ class BlakePfdDemo(QWidget):
         height: int,
     ) -> None:
         scene = self.synthetic_vision.update(pfd)
+
+        self.draw_synthetic_terrain(
+            painter,
+            pfd,
+            width,
+            height,
+        )
 
         self.draw_synthetic_runway(
             painter,
