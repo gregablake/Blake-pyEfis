@@ -140,3 +140,93 @@ def test_invalid_aircraft_position_fails_closed() -> None:
     assert surface.message == (
         "AIRCRAFT POSITION INVALID"
     )
+
+
+def test_missing_corner_sample_suppresses_only_affected_cell() -> None:
+    sample_count = 0
+
+    def sampler(
+        latitude,
+        longitude,
+    ):
+        nonlocal sample_count
+
+        sample_count += 1
+
+        if sample_count == 1:
+            return None
+
+        return 1000.0
+
+    surface = generator(
+        sampler
+    ).generate(
+        aircraft_lat_deg=39.0,
+        aircraft_lon_deg=-84.0,
+        aircraft_alt_ft=1500.0,
+        heading_deg=0.0,
+    )
+
+    assert surface.valid is True
+    assert surface.rows == 3
+    assert surface.columns == 3
+
+    # One unavailable grid point is not fabricated.
+    assert len(surface.vertices) == 8
+
+    # The one cell touching the missing corner is
+    # removed. The other three cells remain:
+    # 3 cells * 2 triangles = 6 triangles.
+    assert len(surface.triangles) == 6
+
+    assert surface.message == "TERRAIN PARTIAL"
+
+    for vertex in surface.vertices:
+        assert vertex.elevation_ft == 1000.0
+
+    for triangle in surface.triangles:
+        assert (
+            triangle.first_index
+            < len(surface.vertices)
+        )
+        assert (
+            triangle.second_index
+            < len(surface.vertices)
+        )
+        assert (
+            triangle.third_index
+            < len(surface.vertices)
+        )
+
+
+def test_missing_center_sample_with_no_usable_cells_fails_closed() -> None:
+    sample_count = 0
+
+    def sampler(
+        latitude,
+        longitude,
+    ):
+        nonlocal sample_count
+
+        sample_count += 1
+
+        if sample_count == 5:
+            return None
+
+        return 1000.0
+
+    surface = generator(
+        sampler
+    ).generate(
+        aircraft_lat_deg=39.0,
+        aircraft_lon_deg=-84.0,
+        aircraft_alt_ft=1500.0,
+        heading_deg=0.0,
+    )
+
+    assert surface.valid is False
+    assert surface.vertices == ()
+    assert surface.triangles == ()
+    assert surface.message == (
+        "TERRAIN SAMPLE UNAVAILABLE"
+    )

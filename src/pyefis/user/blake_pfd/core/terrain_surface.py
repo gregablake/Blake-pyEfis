@@ -171,9 +171,19 @@ class TerrainSurfaceGenerator:
             heading
         )
 
-        vertices: list[
-            TerrainSurfaceVertex
+        rows = len(
+            self.forward_distances_nm
+        )
+
+        columns = len(
+            self.lateral_fractions
+        )
+
+        grid_vertices: list[
+            TerrainSurfaceVertex | None
         ] = []
+
+        missing_sample = False
 
         for (
             forward_distance_nm
@@ -252,14 +262,13 @@ class TerrainSurfaceGenerator:
                 )
 
                 if elevation is None:
-                    return TerrainSurface(
-                        message=(
-                            "TERRAIN SAMPLE "
-                            "UNAVAILABLE"
-                        ),
+                    missing_sample = True
+                    grid_vertices.append(
+                        None
                     )
+                    continue
 
-                vertices.append(
+                grid_vertices.append(
                     TerrainSurfaceVertex(
                         north_ft=north_ft,
                         east_ft=east_ft,
@@ -279,16 +288,8 @@ class TerrainSurfaceGenerator:
                     )
                 )
 
-        rows = len(
-            self.forward_distances_nm
-        )
-
-        columns = len(
-            self.lateral_fractions
-        )
-
-        triangles: list[
-            TerrainTriangle
+        source_triangles: list[
+            tuple[int, int, int]
         ] = []
 
         for row in range(
@@ -316,28 +317,110 @@ class TerrainSurfaceGenerator:
                     far_left + 1
                 )
 
-                triangles.append(
-                    TerrainTriangle(
-                        first_index=near_left,
-                        second_index=far_left,
-                        third_index=far_right,
+                cell_indices = (
+                    near_left,
+                    near_right,
+                    far_left,
+                    far_right,
+                )
+
+                if any(
+                    grid_vertices[index]
+                    is None
+                    for index in cell_indices
+                ):
+                    continue
+
+                source_triangles.append(
+                    (
+                        near_left,
+                        far_left,
+                        far_right,
                     )
                 )
 
-                triangles.append(
-                    TerrainTriangle(
-                        first_index=near_left,
-                        second_index=far_right,
-                        third_index=near_right,
+                source_triangles.append(
+                    (
+                        near_left,
+                        far_right,
+                        near_right,
                     )
                 )
+
+        if not source_triangles:
+            return TerrainSurface(
+                message=(
+                    "TERRAIN SAMPLE "
+                    "UNAVAILABLE"
+                ),
+            )
+
+        used_indices = sorted(
+            {
+                index
+                for triangle
+                in source_triangles
+                for index in triangle
+            }
+        )
+
+        index_map = {
+            source_index: compact_index
+            for compact_index, source_index
+            in enumerate(used_indices)
+        }
+
+        vertices: list[
+            TerrainSurfaceVertex
+        ] = []
+
+        for source_index in used_indices:
+            vertex = grid_vertices[
+                source_index
+            ]
+
+            if vertex is None:
+                return TerrainSurface(
+                    message=(
+                        "TERRAIN SAMPLE "
+                        "UNAVAILABLE"
+                    ),
+                )
+
+            vertices.append(
+                vertex
+            )
+
+        triangles = tuple(
+            TerrainTriangle(
+                first_index=index_map[
+                    first_index
+                ],
+                second_index=index_map[
+                    second_index
+                ],
+                third_index=index_map[
+                    third_index
+                ],
+            )
+            for (
+                first_index,
+                second_index,
+                third_index,
+            ) in source_triangles
+        )
 
         return TerrainSurface(
             vertices=tuple(vertices),
-            triangles=tuple(triangles),
+            triangles=triangles,
             rows=rows,
             columns=columns,
             valid=True,
+            message=(
+                "TERRAIN PARTIAL"
+                if missing_sample
+                else ""
+            ),
         )
 
     @staticmethod

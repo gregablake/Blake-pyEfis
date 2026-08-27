@@ -295,3 +295,63 @@ def test_near_plane_crossing_triangle_is_clipped_visible() -> None:
         assert point.visible is True
         assert 0.0 <= point.x_px <= 1280.0
         assert 0.0 <= point.y_px <= 720.0
+
+
+def test_partial_surface_projects_without_invalid_indices() -> None:
+    from pyefis.user.blake_pfd.core.terrain_surface import (
+        TerrainSurfaceGenerator,
+    )
+
+    sample_count = 0
+
+    def sampler(
+        latitude,
+        longitude,
+    ):
+        nonlocal sample_count
+
+        sample_count += 1
+
+        if sample_count == 1:
+            return None
+
+        return 1000.0
+
+    surface = TerrainSurfaceGenerator(
+        elevation_sampler=sampler,
+        forward_distances_nm=(
+            1.0,
+            2.0,
+            3.0,
+        ),
+        lateral_fractions=(
+            -1.0,
+            0.0,
+            1.0,
+        ),
+        half_width_ratio=0.5,
+    ).generate(
+        aircraft_lat_deg=39.0,
+        aircraft_lon_deg=-84.0,
+        aircraft_alt_ft=1500.0,
+        heading_deg=0.0,
+    )
+
+    assert surface.valid is True
+    assert surface.message == "TERRAIN PARTIAL"
+    assert len(surface.vertices) == 8
+    assert len(surface.triangles) == 6
+
+    for triangle in surface.triangles:
+        assert (
+            triangle.first_index
+            < len(surface.vertices)
+        )
+        assert (
+            triangle.second_index
+            < len(surface.vertices)
+        )
+        assert (
+            triangle.third_index
+            < len(surface.vertices)
+        )
