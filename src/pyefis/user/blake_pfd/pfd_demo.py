@@ -4,7 +4,7 @@ import argparse
 import sys
 from time import monotonic
 from pathlib import Path
-from math import cos, radians, sin
+from math import cos, isfinite, radians, sin
 from pathlib import Path
 
 import yaml
@@ -709,8 +709,20 @@ class BlakePfdDemo(QWidget):
             float | None
         ) = None
 
+        self.synthetic_terrain_last_refresh_heading_deg: (
+            float | None
+        ) = None
+
         self.synthetic_terrain_refresh_interval_s = (
             1.0
+        )
+
+        self.synthetic_terrain_heading_refresh_threshold_deg = (
+            10.0
+        )
+
+        self.synthetic_terrain_heading_min_refresh_interval_s = (
+            0.20
         )
 
         self.terrain_profile_provider = (
@@ -1074,24 +1086,106 @@ class BlakePfdDemo(QWidget):
                 None
             )
 
+            self.synthetic_terrain_last_refresh_heading_deg = (
+                None
+            )
+
             return
+
+        try:
+            current_heading = float(
+                pfd.heading_deg
+            )
+        except (TypeError, ValueError):
+            current_heading = float("nan")
+
+        if not isfinite(current_heading):
+            self.synthetic_terrain_surface = (
+                TerrainSurface()
+            )
+
+            self.synthetic_terrain_last_refresh_s = (
+                None
+            )
+
+            self.synthetic_terrain_last_refresh_heading_deg = (
+                None
+            )
+
+            return
+
+        current_heading = (
+            current_heading % 360.0
+        )
 
         last_refresh = (
             self.synthetic_terrain_last_refresh_s
         )
 
+        last_heading = (
+            self.synthetic_terrain_last_refresh_heading_deg
+        )
+
+        heading_refresh_due = False
+
+        if last_heading is not None:
+            heading_change_deg = abs(
+                (
+                    current_heading
+                    - last_heading
+                    + 180.0
+                )
+                % 360.0
+                - 180.0
+            )
+
+            heading_refresh_due = (
+                heading_change_deg
+                >= (
+                    self
+                    .synthetic_terrain_heading_refresh_threshold_deg
+                )
+            )
+
+        elapsed_s = (
+            None
+            if last_refresh is None
+            else now_s - last_refresh
+        )
+
+        time_refresh_due = (
+            elapsed_s is None
+            or elapsed_s
+            >= self.synthetic_terrain_refresh_interval_s
+        )
+
+        heading_refresh_allowed = (
+            heading_refresh_due
+            and elapsed_s is not None
+            and elapsed_s
+            >= (
+                self
+                .synthetic_terrain_heading_min_refresh_interval_s
+            )
+        )
+
         if (
-            last_refresh is not None
-            and now_s - last_refresh
-            < self.synthetic_terrain_refresh_interval_s
+            not time_refresh_due
+            and not heading_refresh_allowed
         ):
             return
 
-        # Record the attempt time before sampling.
-        # If an SRTM tile is unavailable, this prevents
-        # retrying the failed read at the 20 Hz display rate.
+        # Record the attempt time and heading before
+        # sampling. If terrain is unavailable, this
+        # prevents repeated reads at the 20 Hz display
+        # rate while still allowing the footprint to
+        # follow a meaningful aircraft turn.
         self.synthetic_terrain_last_refresh_s = (
             now_s
+        )
+
+        self.synthetic_terrain_last_refresh_heading_deg = (
+            current_heading
         )
 
         self.synthetic_terrain_surface = (
@@ -1106,7 +1200,7 @@ class BlakePfdDemo(QWidget):
                     pfd.pressure_alt_ft
                 ),
                 heading_deg=(
-                    pfd.heading_deg
+                    current_heading
                 ),
             )
         )

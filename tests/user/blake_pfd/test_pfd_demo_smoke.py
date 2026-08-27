@@ -1115,3 +1115,509 @@ def test_engine_sensor_status_resets_after_source_loss(
         widget.close()
         widget.deleteLater()
         qapp.processEvents()
+
+
+def test_synthetic_terrain_small_heading_change_keeps_time_throttle(
+    qapp: QApplication,
+) -> None:
+    from types import SimpleNamespace
+
+    from pyefis.user.blake_pfd.core.terrain_surface import (
+        TerrainSurface,
+    )
+
+    widget = BlakePfdDemo(
+        use_hardware=False,
+    )
+
+    widget.timer.stop()
+
+    class RecordingGenerator:
+        def __init__(self) -> None:
+            self.headings: list[float] = []
+
+        def generate(
+            self,
+            *,
+            aircraft_lat_deg,
+            aircraft_lon_deg,
+            aircraft_alt_ft,
+            heading_deg,
+        ):
+            self.headings.append(
+                float(heading_deg)
+            )
+
+            return TerrainSurface(
+                valid=True,
+            )
+
+    generator = RecordingGenerator()
+
+    try:
+        widget.real_terrain_enabled = True
+
+        widget.terrain_startup_status = (
+            SimpleNamespace(
+                predictive_alerts_enabled=True,
+            )
+        )
+
+        widget.sensor_watchdog_state = (
+            SimpleNamespace(
+                position_valid=True,
+                position_fresh=True,
+                attitude_valid=True,
+                attitude_fresh=True,
+                air_data_valid=True,
+                air_data_fresh=True,
+            )
+        )
+
+        widget.pfd = SimpleNamespace(
+            position_valid=True,
+            latitude_deg=39.0,
+            longitude_deg=-84.0,
+            pressure_alt_ft=1500.0,
+            heading_deg=100.0,
+        )
+
+        widget.synthetic_terrain_generator = (
+            generator
+        )
+
+        widget.synthetic_terrain_last_refresh_s = (
+            None
+        )
+
+        widget.refresh_synthetic_terrain(
+            100.0
+        )
+
+        widget.pfd.heading_deg = 105.0
+
+        widget.refresh_synthetic_terrain(
+            100.2
+        )
+
+        assert generator.headings == [
+            100.0,
+        ]
+
+    finally:
+        if widget.timer.isActive():
+            widget.timer.stop()
+
+        widget.close()
+        widget.deleteLater()
+        qapp.processEvents()
+
+
+def test_synthetic_terrain_large_heading_change_forces_refresh(
+    qapp: QApplication,
+) -> None:
+    from types import SimpleNamespace
+
+    from pyefis.user.blake_pfd.core.terrain_surface import (
+        TerrainSurface,
+    )
+
+    widget = BlakePfdDemo(
+        use_hardware=False,
+    )
+
+    widget.timer.stop()
+
+    class RecordingGenerator:
+        def __init__(self) -> None:
+            self.headings: list[float] = []
+
+        def generate(
+            self,
+            *,
+            aircraft_lat_deg,
+            aircraft_lon_deg,
+            aircraft_alt_ft,
+            heading_deg,
+        ):
+            self.headings.append(
+                float(heading_deg)
+            )
+
+            return TerrainSurface(
+                valid=True,
+            )
+
+    generator = RecordingGenerator()
+
+    try:
+        widget.real_terrain_enabled = True
+
+        widget.terrain_startup_status = (
+            SimpleNamespace(
+                predictive_alerts_enabled=True,
+            )
+        )
+
+        widget.sensor_watchdog_state = (
+            SimpleNamespace(
+                position_valid=True,
+                position_fresh=True,
+                attitude_valid=True,
+                attitude_fresh=True,
+                air_data_valid=True,
+                air_data_fresh=True,
+            )
+        )
+
+        widget.pfd = SimpleNamespace(
+            position_valid=True,
+            latitude_deg=39.0,
+            longitude_deg=-84.0,
+            pressure_alt_ft=1500.0,
+            heading_deg=100.0,
+        )
+
+        widget.synthetic_terrain_generator = (
+            generator
+        )
+
+        widget.synthetic_terrain_last_refresh_s = (
+            None
+        )
+
+        widget.refresh_synthetic_terrain(
+            100.0
+        )
+
+        widget.pfd.heading_deg = 115.0
+
+        widget.refresh_synthetic_terrain(
+            100.2
+        )
+
+        assert generator.headings == [
+            100.0,
+            115.0,
+        ]
+
+    finally:
+        if widget.timer.isActive():
+            widget.timer.stop()
+
+        widget.close()
+        widget.deleteLater()
+        qapp.processEvents()
+
+
+def test_synthetic_terrain_heading_wraparound_uses_shortest_angle(
+    qapp: QApplication,
+) -> None:
+    from types import SimpleNamespace
+
+    from pyefis.user.blake_pfd.core.terrain_surface import (
+        TerrainSurface,
+    )
+
+    widget = BlakePfdDemo(
+        use_hardware=False,
+    )
+
+    widget.timer.stop()
+
+    class RecordingGenerator:
+        def __init__(self) -> None:
+            self.headings: list[float] = []
+
+        def generate(
+            self,
+            *,
+            aircraft_lat_deg,
+            aircraft_lon_deg,
+            aircraft_alt_ft,
+            heading_deg,
+        ):
+            self.headings.append(
+                float(heading_deg)
+            )
+
+            return TerrainSurface(
+                valid=True,
+            )
+
+    generator = RecordingGenerator()
+
+    try:
+        widget.real_terrain_enabled = True
+
+        widget.terrain_startup_status = (
+            SimpleNamespace(
+                predictive_alerts_enabled=True,
+            )
+        )
+
+        widget.sensor_watchdog_state = (
+            SimpleNamespace(
+                position_valid=True,
+                position_fresh=True,
+                attitude_valid=True,
+                attitude_fresh=True,
+                air_data_valid=True,
+                air_data_fresh=True,
+            )
+        )
+
+        widget.pfd = SimpleNamespace(
+            position_valid=True,
+            latitude_deg=39.0,
+            longitude_deg=-84.0,
+            pressure_alt_ft=1500.0,
+            heading_deg=359.0,
+        )
+
+        widget.synthetic_terrain_generator = (
+            generator
+        )
+
+        widget.synthetic_terrain_last_refresh_s = (
+            None
+        )
+
+        widget.refresh_synthetic_terrain(
+            100.0
+        )
+
+        widget.pfd.heading_deg = 1.0
+
+        widget.refresh_synthetic_terrain(
+            100.2
+        )
+
+        # Crossing north is only a 2-degree change,
+        # not a 358-degree change.
+        assert generator.headings == [
+            359.0,
+        ]
+
+    finally:
+        if widget.timer.isActive():
+            widget.timer.stop()
+
+        widget.close()
+        widget.deleteLater()
+        qapp.processEvents()
+
+
+def test_synthetic_terrain_heading_refresh_is_rate_limited(
+    qapp: QApplication,
+) -> None:
+    from types import SimpleNamespace
+
+    from pyefis.user.blake_pfd.core.terrain_surface import (
+        TerrainSurface,
+    )
+
+    widget = BlakePfdDemo(
+        use_hardware=False,
+    )
+
+    widget.timer.stop()
+
+    class RecordingGenerator:
+        def __init__(self) -> None:
+            self.headings: list[float] = []
+
+        def generate(
+            self,
+            *,
+            aircraft_lat_deg,
+            aircraft_lon_deg,
+            aircraft_alt_ft,
+            heading_deg,
+        ):
+            self.headings.append(
+                float(heading_deg)
+            )
+
+            return TerrainSurface(
+                valid=True,
+            )
+
+    generator = RecordingGenerator()
+
+    try:
+        widget.real_terrain_enabled = True
+
+        widget.terrain_startup_status = (
+            SimpleNamespace(
+                predictive_alerts_enabled=True,
+            )
+        )
+
+        widget.sensor_watchdog_state = (
+            SimpleNamespace(
+                position_valid=True,
+                position_fresh=True,
+                attitude_valid=True,
+                attitude_fresh=True,
+                air_data_valid=True,
+                air_data_fresh=True,
+            )
+        )
+
+        widget.pfd = SimpleNamespace(
+            position_valid=True,
+            latitude_deg=39.0,
+            longitude_deg=-84.0,
+            pressure_alt_ft=1500.0,
+            heading_deg=100.0,
+        )
+
+        widget.synthetic_terrain_generator = (
+            generator
+        )
+
+        widget.synthetic_terrain_last_refresh_s = (
+            None
+        )
+
+        widget.refresh_synthetic_terrain(
+            100.0
+        )
+
+        widget.pfd.heading_deg = 115.0
+
+        # Large heading change, but only 0.10 second
+        # since the previous terrain sample.
+        widget.refresh_synthetic_terrain(
+            100.10
+        )
+
+        assert generator.headings == [
+            100.0,
+        ]
+
+        # Once the 0.20-second minimum interval has
+        # elapsed, the same heading change may refresh.
+        widget.refresh_synthetic_terrain(
+            100.20
+        )
+
+        assert generator.headings == [
+            100.0,
+            115.0,
+        ]
+
+    finally:
+        if widget.timer.isActive():
+            widget.timer.stop()
+
+        widget.close()
+        widget.deleteLater()
+        qapp.processEvents()
+
+
+def test_synthetic_terrain_nonfinite_heading_fails_closed(
+    qapp: QApplication,
+) -> None:
+    from types import SimpleNamespace
+
+    from pyefis.user.blake_pfd.core.terrain_surface import (
+        TerrainSurface,
+    )
+
+    widget = BlakePfdDemo(
+        use_hardware=False,
+    )
+
+    widget.timer.stop()
+
+    class RecordingGenerator:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def generate(
+            self,
+            *,
+            aircraft_lat_deg,
+            aircraft_lon_deg,
+            aircraft_alt_ft,
+            heading_deg,
+        ):
+            self.calls += 1
+
+            return TerrainSurface(
+                valid=True,
+            )
+
+    generator = RecordingGenerator()
+
+    try:
+        widget.real_terrain_enabled = True
+
+        widget.terrain_startup_status = (
+            SimpleNamespace(
+                predictive_alerts_enabled=True,
+            )
+        )
+
+        widget.sensor_watchdog_state = (
+            SimpleNamespace(
+                position_valid=True,
+                position_fresh=True,
+                attitude_valid=True,
+                attitude_fresh=True,
+                air_data_valid=True,
+                air_data_fresh=True,
+            )
+        )
+
+        widget.pfd = SimpleNamespace(
+            position_valid=True,
+            latitude_deg=39.0,
+            longitude_deg=-84.0,
+            pressure_alt_ft=1500.0,
+            heading_deg=100.0,
+        )
+
+        widget.synthetic_terrain_generator = (
+            generator
+        )
+
+        widget.synthetic_terrain_last_refresh_s = (
+            None
+        )
+
+        widget.refresh_synthetic_terrain(
+            100.0
+        )
+
+        assert generator.calls == 1
+        assert widget.synthetic_terrain_surface.valid is True
+
+        widget.pfd.heading_deg = float("nan")
+
+        widget.refresh_synthetic_terrain(
+            100.2
+        )
+
+        assert generator.calls == 1
+        assert widget.synthetic_terrain_surface.valid is False
+
+        assert (
+            widget.synthetic_terrain_last_refresh_s
+            is None
+        )
+
+        assert (
+            widget.synthetic_terrain_last_refresh_heading_deg
+            is None
+        )
+
+    finally:
+        if widget.timer.isActive():
+            widget.timer.stop()
+
+        widget.close()
+        widget.deleteLater()
+        qapp.processEvents()
