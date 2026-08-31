@@ -562,3 +562,53 @@ def test_shared_vertices_are_projected_once_per_projection() -> None:
     # Four unique source vertices should therefore
     # require only four camera projections.
     assert camera.project_calls == 4
+
+
+def test_fully_front_triangle_skips_near_plane_clipper(
+    monkeypatch,
+) -> None:
+    import pyefis.user.blake_pfd.core.terrain_projection as terrain_projection_module
+
+    clip_calls = 0
+
+    original_clipper = (
+        terrain_projection_module
+        .clip_camera_polygon_to_near_plane
+    )
+
+    def counting_clipper(
+        points,
+        *,
+        near_plane_ft=5.0,
+    ):
+        nonlocal clip_calls
+        clip_calls += 1
+
+        return original_clipper(
+            points,
+            near_plane_ft=near_plane_ft,
+        )
+
+    monkeypatch.setattr(
+        terrain_projection_module,
+        "clip_camera_polygon_to_near_plane",
+        counting_clipper,
+    )
+
+    projected = TerrainProjectionComputer().project(
+        surface=simple_surface(),
+        heading_deg=0.0,
+        pitch_deg=0.0,
+        roll_deg=0.0,
+        width_px=1280,
+        height_px=720,
+    )
+
+    assert projected.valid is True
+    assert len(projected.triangles) == 1
+    assert projected.triangles[0].visible is True
+
+    # All three source vertices are already safely
+    # forward of the near plane, so generic polygon
+    # clipping should not be needed.
+    assert clip_calls == 0

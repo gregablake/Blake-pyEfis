@@ -204,14 +204,28 @@ class TerrainProjectionComputer:
                     camera_point
                 )
 
-            clipped_camera_points = (
-                clip_camera_polygon_to_near_plane(
-                    tuple(camera_points),
-                    near_plane_ft=(
-                        self.near_plane_ft
-                    ),
-                )
+            source_camera_points = tuple(
+                camera_points
             )
+
+            all_points_in_front = all(
+                point.forward_ft >= self.near_plane_ft
+                for point in source_camera_points
+            )
+
+            if all_points_in_front:
+                clipped_camera_points = (
+                    source_camera_points
+                )
+            else:
+                clipped_camera_points = (
+                    clip_camera_polygon_to_near_plane(
+                        source_camera_points,
+                        near_plane_ft=(
+                            self.near_plane_ft
+                        ),
+                    )
+                )
 
             if not clipped_camera_points:
                 projected_triangles.append(
@@ -230,20 +244,8 @@ class TerrainProjectionComputer:
                 ProjectedPoint
             ] = []
 
-            source_camera_points = tuple(
-                camera_points
-            )
-
             polygon_was_not_near_clipped = (
-                len(clipped_camera_points)
-                == len(source_camera_points)
-                and all(
-                    clipped is source
-                    for clipped, source in zip(
-                        clipped_camera_points,
-                        source_camera_points,
-                    )
-                )
+                all_points_in_front
             )
 
             if polygon_was_not_near_clipped:
