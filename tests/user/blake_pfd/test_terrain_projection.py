@@ -355,3 +355,210 @@ def test_partial_surface_projects_without_invalid_indices() -> None:
             triangle.third_index
             < len(surface.vertices)
         )
+
+
+def test_shared_vertices_are_transformed_once_per_projection() -> None:
+    from pyefis.user.blake_pfd.core.synthetic_camera import (
+        SyntheticCamera,
+    )
+
+    class CountingCamera(SyntheticCamera):
+        def __init__(self) -> None:
+            super().__init__()
+            self.world_to_camera_calls = 0
+
+        def world_to_camera(
+            self,
+            north_ft,
+            east_ft,
+            up_ft,
+            heading_deg,
+            pitch_deg,
+            roll_deg,
+        ):
+            self.world_to_camera_calls += 1
+
+            return super().world_to_camera(
+                north_ft=north_ft,
+                east_ft=east_ft,
+                up_ft=up_ft,
+                heading_deg=heading_deg,
+                pitch_deg=pitch_deg,
+                roll_deg=roll_deg,
+            )
+
+    surface = TerrainSurface(
+        vertices=(
+            TerrainSurfaceVertex(
+                north_ft=3000.0,
+                east_ft=-500.0,
+                up_ft=-500.0,
+                latitude_deg=39.0,
+                longitude_deg=-84.0,
+                elevation_ft=1000.0,
+            ),
+            TerrainSurfaceVertex(
+                north_ft=3000.0,
+                east_ft=500.0,
+                up_ft=-500.0,
+                latitude_deg=39.0,
+                longitude_deg=-84.0,
+                elevation_ft=1000.0,
+            ),
+            TerrainSurfaceVertex(
+                north_ft=6000.0,
+                east_ft=-500.0,
+                up_ft=-200.0,
+                latitude_deg=39.0,
+                longitude_deg=-84.0,
+                elevation_ft=1300.0,
+            ),
+            TerrainSurfaceVertex(
+                north_ft=6000.0,
+                east_ft=500.0,
+                up_ft=-200.0,
+                latitude_deg=39.0,
+                longitude_deg=-84.0,
+                elevation_ft=1300.0,
+            ),
+        ),
+        triangles=(
+            TerrainTriangle(
+                first_index=0,
+                second_index=2,
+                third_index=3,
+            ),
+            TerrainTriangle(
+                first_index=0,
+                second_index=3,
+                third_index=1,
+            ),
+        ),
+        rows=2,
+        columns=2,
+        valid=True,
+    )
+
+    camera = CountingCamera()
+
+    projected = TerrainProjectionComputer(
+        camera=camera,
+    ).project(
+        surface=surface,
+        heading_deg=0.0,
+        pitch_deg=0.0,
+        roll_deg=0.0,
+        width_px=1280,
+        height_px=720,
+    )
+
+    assert projected.valid is True
+    assert len(projected.triangles) == 2
+
+    # Four unique terrain vertices should require
+    # exactly four world-to-camera transforms.
+    assert camera.world_to_camera_calls == 4
+
+
+def test_shared_vertices_are_projected_once_per_projection() -> None:
+    from pyefis.user.blake_pfd.core.synthetic_camera import (
+        SyntheticCamera,
+    )
+
+    class CountingCamera(SyntheticCamera):
+        def __init__(self) -> None:
+            super().__init__()
+            self.project_calls = 0
+
+        def project(
+            self,
+            point,
+            width_px,
+            height_px,
+            horizontal_fov_deg=70.0,
+            vertical_fov_deg=45.0,
+            near_plane_ft=5.0,
+        ):
+            self.project_calls += 1
+
+            return super().project(
+                point=point,
+                width_px=width_px,
+                height_px=height_px,
+                horizontal_fov_deg=horizontal_fov_deg,
+                vertical_fov_deg=vertical_fov_deg,
+                near_plane_ft=near_plane_ft,
+            )
+
+    surface = TerrainSurface(
+        vertices=(
+            TerrainSurfaceVertex(
+                north_ft=3000.0,
+                east_ft=-500.0,
+                up_ft=-500.0,
+                latitude_deg=39.0,
+                longitude_deg=-84.0,
+                elevation_ft=1000.0,
+            ),
+            TerrainSurfaceVertex(
+                north_ft=3000.0,
+                east_ft=500.0,
+                up_ft=-500.0,
+                latitude_deg=39.0,
+                longitude_deg=-84.0,
+                elevation_ft=1000.0,
+            ),
+            TerrainSurfaceVertex(
+                north_ft=6000.0,
+                east_ft=-500.0,
+                up_ft=-200.0,
+                latitude_deg=39.0,
+                longitude_deg=-84.0,
+                elevation_ft=1300.0,
+            ),
+            TerrainSurfaceVertex(
+                north_ft=6000.0,
+                east_ft=500.0,
+                up_ft=-200.0,
+                latitude_deg=39.0,
+                longitude_deg=-84.0,
+                elevation_ft=1300.0,
+            ),
+        ),
+        triangles=(
+            TerrainTriangle(
+                first_index=0,
+                second_index=2,
+                third_index=3,
+            ),
+            TerrainTriangle(
+                first_index=0,
+                second_index=3,
+                third_index=1,
+            ),
+        ),
+        rows=2,
+        columns=2,
+        valid=True,
+    )
+
+    camera = CountingCamera()
+
+    projected = TerrainProjectionComputer(
+        camera=camera,
+    ).project(
+        surface=surface,
+        heading_deg=0.0,
+        pitch_deg=0.0,
+        roll_deg=0.0,
+        width_px=1280,
+        height_px=720,
+    )
+
+    assert projected.valid is True
+    assert len(projected.triangles) == 2
+
+    # The two triangles share vertices 0 and 3.
+    # Four unique source vertices should therefore
+    # require only four camera projections.
+    assert camera.project_calls == 4

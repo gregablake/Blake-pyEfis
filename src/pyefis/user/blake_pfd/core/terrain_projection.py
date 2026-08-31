@@ -125,6 +125,16 @@ class TerrainProjectionComputer:
             surface.vertices
         )
 
+        camera_point_cache: dict[
+            int,
+            CameraPoint,
+        ] = {}
+
+        projected_point_cache: dict[
+            int,
+            ProjectedPoint,
+        ] = {}
+
         for triangle in surface.triangles:
             indices = (
                 triangle.first_index,
@@ -150,31 +160,45 @@ class TerrainProjectionComputer:
                 CameraPoint
             ] = []
 
-            for vertex in source_vertices:
+            for index, vertex in zip(
+                indices,
+                source_vertices,
+            ):
                 camera_point = (
-                    self.camera.world_to_camera(
-                        north_ft=(
-                            vertex.north_ft
-                        ),
-                        east_ft=(
-                            vertex.east_ft
-                        ),
-                        up_ft=(
-                            vertex.up_ft
-                        ),
-                        heading_deg=heading_deg,
-                        pitch_deg=pitch_deg,
-                        roll_deg=roll_deg,
+                    camera_point_cache.get(
+                        index
                     )
                 )
 
                 if camera_point is None:
-                    return ProjectedTerrain(
-                        message=(
-                            "TERRAIN "
-                            "PROJECTION INVALID"
-                        ),
+                    camera_point = (
+                        self.camera.world_to_camera(
+                            north_ft=(
+                                vertex.north_ft
+                            ),
+                            east_ft=(
+                                vertex.east_ft
+                            ),
+                            up_ft=(
+                                vertex.up_ft
+                            ),
+                            heading_deg=heading_deg,
+                            pitch_deg=pitch_deg,
+                            roll_deg=roll_deg,
+                        )
                     )
+
+                    if camera_point is None:
+                        return ProjectedTerrain(
+                            message=(
+                                "TERRAIN "
+                                "PROJECTION INVALID"
+                            ),
+                        )
+
+                    camera_point_cache[
+                        index
+                    ] = camera_point
 
                 camera_points.append(
                     camera_point
@@ -206,31 +230,90 @@ class TerrainProjectionComputer:
                 ProjectedPoint
             ] = []
 
-            for camera_point in (
-                clipped_camera_points
-            ):
-                projected_point = (
-                    self.camera.project(
-                        camera_point,
-                        width_px=width_px,
-                        height_px=height_px,
-                        near_plane_ft=(
-                            self.near_plane_ft
-                        ),
+            source_camera_points = tuple(
+                camera_points
+            )
+
+            polygon_was_not_near_clipped = (
+                len(clipped_camera_points)
+                == len(source_camera_points)
+                and all(
+                    clipped is source
+                    for clipped, source in zip(
+                        clipped_camera_points,
+                        source_camera_points,
                     )
                 )
+            )
 
-                if projected_point is None:
-                    return ProjectedTerrain(
-                        message=(
-                            "TERRAIN "
-                            "PROJECTION INVALID"
-                        ),
+            if polygon_was_not_near_clipped:
+                for index, camera_point in zip(
+                    indices,
+                    source_camera_points,
+                ):
+                    projected_point = (
+                        projected_point_cache.get(
+                            index
+                        )
                     )
 
-                projected_points.append(
-                    projected_point
-                )
+                    if projected_point is None:
+                        projected_point = (
+                            self.camera.project(
+                                camera_point,
+                                width_px=width_px,
+                                height_px=height_px,
+                                near_plane_ft=(
+                                    self.near_plane_ft
+                                ),
+                            )
+                        )
+
+                        if projected_point is None:
+                            return ProjectedTerrain(
+                                message=(
+                                    "TERRAIN "
+                                    "PROJECTION INVALID"
+                                ),
+                            )
+
+                        projected_point_cache[
+                            index
+                        ] = projected_point
+
+                    projected_points.append(
+                        projected_point
+                    )
+
+            else:
+                # Near-plane clipping may create new
+                # intersection vertices that do not
+                # correspond to source mesh indices.
+                for camera_point in (
+                    clipped_camera_points
+                ):
+                    projected_point = (
+                        self.camera.project(
+                            camera_point,
+                            width_px=width_px,
+                            height_px=height_px,
+                            near_plane_ft=(
+                                self.near_plane_ft
+                            ),
+                        )
+                    )
+
+                    if projected_point is None:
+                        return ProjectedTerrain(
+                            message=(
+                                "TERRAIN "
+                                "PROJECTION INVALID"
+                            ),
+                        )
+
+                    projected_points.append(
+                        projected_point
+                    )
 
             clipped_screen_points = (
                 clip_projected_polygon_to_screen(
