@@ -1621,3 +1621,55 @@ def test_synthetic_terrain_nonfinite_heading_fails_closed(
         widget.close()
         widget.deleteLater()
         qapp.processEvents()
+
+
+def test_synthetic_terrain_uses_nearfield_biased_mesh(
+    qapp: QApplication,
+) -> None:
+    widget = BlakePfdDemo(
+        use_hardware=False,
+    )
+
+    widget.timer.stop()
+
+    try:
+        assert (
+            widget
+            .synthetic_terrain_generator
+            .forward_distances_nm
+        ) == (
+            0.125,
+            0.25,
+            0.375,
+            0.5,
+            0.75,
+            1.0,
+            1.5,
+            2.0,
+            3.0,
+            5.0,
+            8.0,
+            10.0,
+        )
+
+        assert (
+            widget
+            .synthetic_terrain_generator
+            .lateral_fractions
+        ) == (
+            -1.0,
+            -0.6667,
+            -0.3333,
+            0.0,
+            0.3333,
+            0.6667,
+            1.0,
+        )
+
+    finally:
+        if widget.timer.isActive():
+            widget.timer.stop()
+
+        widget.close()
+        widget.deleteLater()
+        qapp.processEvents()
