@@ -317,13 +317,27 @@ class TerrainProjectionComputer:
                         projected_point
                     )
 
-            clipped_screen_points = (
-                clip_projected_polygon_to_screen(
-                    tuple(projected_points),
-                    width_px=width_px,
-                    height_px=height_px,
-                )
+            source_projected_points = tuple(
+                projected_points
             )
+
+            all_points_onscreen = all(
+                point.visible
+                for point in source_projected_points
+            )
+
+            if all_points_onscreen:
+                clipped_screen_points = (
+                    source_projected_points
+                )
+            else:
+                clipped_screen_points = (
+                    clip_projected_polygon_to_screen(
+                        source_projected_points,
+                        width_px=width_px,
+                        height_px=height_px,
+                    )
+                )
 
             projected_triangles.append(
                 ProjectedTerrainTriangle(

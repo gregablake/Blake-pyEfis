@@ -612,3 +612,144 @@ def test_fully_front_triangle_skips_near_plane_clipper(
     # forward of the near plane, so generic polygon
     # clipping should not be needed.
     assert clip_calls == 0
+
+
+def test_fully_onscreen_triangle_skips_screen_clipper(
+    monkeypatch,
+) -> None:
+    import pyefis.user.blake_pfd.core.terrain_projection as terrain_projection_module
+
+    clip_calls = 0
+
+    original_clipper = (
+        terrain_projection_module
+        .clip_projected_polygon_to_screen
+    )
+
+    def counting_clipper(
+        points,
+        *,
+        width_px,
+        height_px,
+    ):
+        nonlocal clip_calls
+        clip_calls += 1
+
+        return original_clipper(
+            points,
+            width_px=width_px,
+            height_px=height_px,
+        )
+
+    monkeypatch.setattr(
+        terrain_projection_module,
+        "clip_projected_polygon_to_screen",
+        counting_clipper,
+    )
+
+    projected = TerrainProjectionComputer().project(
+        surface=simple_surface(),
+        heading_deg=0.0,
+        pitch_deg=0.0,
+        roll_deg=0.0,
+        width_px=1280,
+        height_px=720,
+    )
+
+    assert projected.valid is True
+    assert len(projected.triangles) == 1
+    assert projected.triangles[0].visible is True
+
+    # Every projected source vertex is already
+    # inside the screen, so generic screen polygon
+    # clipping should not be needed.
+    assert clip_calls == 0
+
+
+def test_partially_offscreen_triangle_uses_screen_clipper(
+    monkeypatch,
+) -> None:
+    import pyefis.user.blake_pfd.core.terrain_projection as terrain_projection_module
+
+    clip_calls = 0
+
+    original_clipper = (
+        terrain_projection_module
+        .clip_projected_polygon_to_screen
+    )
+
+    def counting_clipper(
+        points,
+        *,
+        width_px,
+        height_px,
+    ):
+        nonlocal clip_calls
+        clip_calls += 1
+
+        return original_clipper(
+            points,
+            width_px=width_px,
+            height_px=height_px,
+        )
+
+    monkeypatch.setattr(
+        terrain_projection_module,
+        "clip_projected_polygon_to_screen",
+        counting_clipper,
+    )
+
+    surface = TerrainSurface(
+        vertices=(
+            TerrainSurfaceVertex(
+                north_ft=3000.0,
+                east_ft=-5000.0,
+                up_ft=-300.0,
+                latitude_deg=39.0,
+                longitude_deg=-84.0,
+                elevation_ft=1000.0,
+            ),
+            TerrainSurfaceVertex(
+                north_ft=3000.0,
+                east_ft=0.0,
+                up_ft=-300.0,
+                latitude_deg=39.0,
+                longitude_deg=-84.0,
+                elevation_ft=1000.0,
+            ),
+            TerrainSurfaceVertex(
+                north_ft=5000.0,
+                east_ft=500.0,
+                up_ft=-300.0,
+                latitude_deg=39.0,
+                longitude_deg=-84.0,
+                elevation_ft=1000.0,
+            ),
+        ),
+        triangles=(
+            TerrainTriangle(
+                first_index=0,
+                second_index=1,
+                third_index=2,
+            ),
+        ),
+        rows=2,
+        columns=2,
+        valid=True,
+    )
+
+    projected = TerrainProjectionComputer().project(
+        surface=surface,
+        heading_deg=0.0,
+        pitch_deg=0.0,
+        roll_deg=0.0,
+        width_px=1280,
+        height_px=720,
+    )
+
+    assert projected.valid is True
+    assert projected.triangles[0].visible is True
+
+    # At least one source vertex is outside the
+    # screen, so polygon clipping must still run.
+    assert clip_calls == 1
