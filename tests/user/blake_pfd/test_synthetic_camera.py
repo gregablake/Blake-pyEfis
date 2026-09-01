@@ -193,3 +193,44 @@ def test_point_on_near_plane_is_projectable() -> None:
     assert projected.visible is True
     assert projected.x_px == pytest.approx(640.0)
     assert projected.y_px == pytest.approx(360.0)
+
+
+def test_prepared_orientation_matches_direct_transform() -> None:
+    camera = SyntheticCamera()
+
+    orientation = camera.prepare_orientation(
+        heading_deg=37.0,
+        pitch_deg=8.0,
+        roll_deg=-12.0,
+    )
+
+    assert orientation is not None
+
+    direct = camera.world_to_camera(
+        north_ft=3200.0,
+        east_ft=850.0,
+        up_ft=-425.0,
+        heading_deg=37.0,
+        pitch_deg=8.0,
+        roll_deg=-12.0,
+    )
+
+    prepared = camera.world_to_camera_prepared(
+        north_ft=3200.0,
+        east_ft=850.0,
+        up_ft=-425.0,
+        orientation=orientation,
+    )
+
+    assert direct is not None
+    assert prepared is not None
+
+    assert prepared.right_ft == pytest.approx(
+        direct.right_ft
+    )
+    assert prepared.up_ft == pytest.approx(
+        direct.up_ft
+    )
+    assert prepared.forward_ft == pytest.approx(
+        direct.forward_ft
+    )

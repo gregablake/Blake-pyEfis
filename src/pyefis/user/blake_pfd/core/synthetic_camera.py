@@ -18,7 +18,49 @@ class ProjectedPoint:
     visible: bool
 
 
+@dataclass(frozen=True)
+class CameraOrientation:
+    heading_cos: float
+    heading_sin: float
+    pitch_cos: float
+    pitch_sin: float
+    roll_cos: float
+    roll_sin: float
+
+
 class SyntheticCamera:
+    def prepare_orientation(
+        self,
+        *,
+        heading_deg: float,
+        pitch_deg: float,
+        roll_deg: float,
+    ) -> CameraOrientation | None:
+        values = (
+            heading_deg,
+            pitch_deg,
+            roll_deg,
+        )
+
+        if not all(
+            isfinite(value)
+            for value in values
+        ):
+            return None
+
+        heading = radians(heading_deg)
+        pitch = radians(pitch_deg)
+        roll = radians(roll_deg)
+
+        return CameraOrientation(
+            heading_cos=cos(heading),
+            heading_sin=sin(heading),
+            pitch_cos=cos(pitch),
+            pitch_sin=sin(pitch),
+            roll_cos=cos(roll),
+            roll_sin=sin(roll),
+        )
+
     def world_to_camera(
         self,
         north_ft: float,
@@ -28,50 +70,76 @@ class SyntheticCamera:
         pitch_deg: float,
         roll_deg: float,
     ) -> CameraPoint | None:
-        values = (
-            north_ft,
-            east_ft,
-            up_ft,
-            heading_deg,
-            pitch_deg,
-            roll_deg,
+        orientation = self.prepare_orientation(
+            heading_deg=heading_deg,
+            pitch_deg=pitch_deg,
+            roll_deg=roll_deg,
         )
 
-        if not all(isfinite(value) for value in values):
+        if orientation is None:
             return None
 
-        heading = radians(heading_deg)
-        pitch = radians(pitch_deg)
-        roll = radians(roll_deg)
+        return self.world_to_camera_prepared(
+            north_ft=north_ft,
+            east_ft=east_ft,
+            up_ft=up_ft,
+            orientation=orientation,
+        )
+
+    def world_to_camera_prepared(
+        self,
+        *,
+        north_ft: float,
+        east_ft: float,
+        up_ft: float,
+        orientation: CameraOrientation,
+    ) -> CameraPoint | None:
+        if not isinstance(
+            orientation,
+            CameraOrientation,
+        ):
+            return None
+
+        if not all(
+            isfinite(value)
+            for value in (
+                north_ft,
+                east_ft,
+                up_ft,
+            )
+        ):
+            return None
 
         forward_level = (
-            north_ft * cos(heading)
-            + east_ft * sin(heading)
+            north_ft * orientation.heading_cos
+            + east_ft * orientation.heading_sin
         )
 
         right_level = (
-            -north_ft * sin(heading)
-            + east_ft * cos(heading)
+            -north_ft * orientation.heading_sin
+            + east_ft * orientation.heading_cos
         )
 
         up_pitched = (
-            up_ft * cos(pitch)
-            - forward_level * sin(pitch)
+            up_ft * orientation.pitch_cos
+            - forward_level
+            * orientation.pitch_sin
         )
 
         forward_pitched = (
-            up_ft * sin(pitch)
-            + forward_level * cos(pitch)
+            up_ft * orientation.pitch_sin
+            + forward_level
+            * orientation.pitch_cos
         )
 
         right_rolled = (
-            right_level * cos(roll)
-            + up_pitched * sin(roll)
+            right_level * orientation.roll_cos
+            + up_pitched * orientation.roll_sin
         )
 
         up_rolled = (
-            -right_level * sin(roll)
-            + up_pitched * cos(roll)
+            -right_level * orientation.roll_sin
+            + up_pitched * orientation.roll_cos
         )
 
         return CameraPoint(

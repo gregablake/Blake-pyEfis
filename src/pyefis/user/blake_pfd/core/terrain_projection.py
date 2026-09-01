@@ -135,6 +135,22 @@ class TerrainProjectionComputer:
             ProjectedPoint,
         ] = {}
 
+        camera_orientation = (
+            self.camera.prepare_orientation(
+                heading_deg=heading_deg,
+                pitch_deg=pitch_deg,
+                roll_deg=roll_deg,
+            )
+        )
+
+        if camera_orientation is None:
+            return ProjectedTerrain(
+                message=(
+                    "TERRAIN "
+                    "PROJECTION INVALID"
+                ),
+            )
+
         for triangle in surface.triangles:
             indices = (
                 triangle.first_index,
@@ -172,7 +188,7 @@ class TerrainProjectionComputer:
 
                 if camera_point is None:
                     camera_point = (
-                        self.camera.world_to_camera(
+                        self.camera.world_to_camera_prepared(
                             north_ft=(
                                 vertex.north_ft
                             ),
@@ -182,9 +198,9 @@ class TerrainProjectionComputer:
                             up_ft=(
                                 vertex.up_ft
                             ),
-                            heading_deg=heading_deg,
-                            pitch_deg=pitch_deg,
-                            roll_deg=roll_deg,
+                            orientation=(
+                                camera_orientation
+                            ),
                         )
                     )
 

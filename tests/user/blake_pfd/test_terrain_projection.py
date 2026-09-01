@@ -365,26 +365,23 @@ def test_shared_vertices_are_transformed_once_per_projection() -> None:
     class CountingCamera(SyntheticCamera):
         def __init__(self) -> None:
             super().__init__()
-            self.world_to_camera_calls = 0
+            self.prepared_transform_calls = 0
 
-        def world_to_camera(
+        def world_to_camera_prepared(
             self,
+            *,
             north_ft,
             east_ft,
             up_ft,
-            heading_deg,
-            pitch_deg,
-            roll_deg,
+            orientation,
         ):
-            self.world_to_camera_calls += 1
+            self.prepared_transform_calls += 1
 
-            return super().world_to_camera(
+            return super().world_to_camera_prepared(
                 north_ft=north_ft,
                 east_ft=east_ft,
                 up_ft=up_ft,
-                heading_deg=heading_deg,
-                pitch_deg=pitch_deg,
-                roll_deg=roll_deg,
+                orientation=orientation,
             )
 
     surface = TerrainSurface(
@@ -456,8 +453,8 @@ def test_shared_vertices_are_transformed_once_per_projection() -> None:
     assert len(projected.triangles) == 2
 
     # Four unique terrain vertices should require
-    # exactly four world-to-camera transforms.
-    assert camera.world_to_camera_calls == 4
+    # exactly four prepared camera transforms.
+    assert camera.prepared_transform_calls == 4
 
 
 def test_shared_vertices_are_projected_once_per_projection() -> None:
@@ -753,3 +750,118 @@ def test_partially_offscreen_triangle_uses_screen_clipper(
     # At least one source vertex is outside the
     # screen, so polygon clipping must still run.
     assert clip_calls == 1
+
+
+def test_camera_orientation_is_prepared_once_per_projection() -> None:
+    from pyefis.user.blake_pfd.core.synthetic_camera import (
+        SyntheticCamera,
+    )
+
+    class CountingCamera(SyntheticCamera):
+        def __init__(self) -> None:
+            super().__init__()
+            self.prepare_orientation_calls = 0
+            self.prepared_transform_calls = 0
+
+        def prepare_orientation(
+            self,
+            *,
+            heading_deg,
+            pitch_deg,
+            roll_deg,
+        ):
+            self.prepare_orientation_calls += 1
+
+            return super().prepare_orientation(
+                heading_deg=heading_deg,
+                pitch_deg=pitch_deg,
+                roll_deg=roll_deg,
+            )
+
+        def world_to_camera_prepared(
+            self,
+            *,
+            north_ft,
+            east_ft,
+            up_ft,
+            orientation,
+        ):
+            self.prepared_transform_calls += 1
+
+            return super().world_to_camera_prepared(
+                north_ft=north_ft,
+                east_ft=east_ft,
+                up_ft=up_ft,
+                orientation=orientation,
+            )
+
+    surface = TerrainSurface(
+        vertices=(
+            TerrainSurfaceVertex(
+                north_ft=3000.0,
+                east_ft=-500.0,
+                up_ft=-500.0,
+                latitude_deg=39.0,
+                longitude_deg=-84.0,
+                elevation_ft=1000.0,
+            ),
+            TerrainSurfaceVertex(
+                north_ft=3000.0,
+                east_ft=500.0,
+                up_ft=-500.0,
+                latitude_deg=39.0,
+                longitude_deg=-84.0,
+                elevation_ft=1000.0,
+            ),
+            TerrainSurfaceVertex(
+                north_ft=6000.0,
+                east_ft=-500.0,
+                up_ft=-200.0,
+                latitude_deg=39.0,
+                longitude_deg=-84.0,
+                elevation_ft=1300.0,
+            ),
+            TerrainSurfaceVertex(
+                north_ft=6000.0,
+                east_ft=500.0,
+                up_ft=-200.0,
+                latitude_deg=39.0,
+                longitude_deg=-84.0,
+                elevation_ft=1300.0,
+            ),
+        ),
+        triangles=(
+            TerrainTriangle(
+                first_index=0,
+                second_index=2,
+                third_index=3,
+            ),
+            TerrainTriangle(
+                first_index=0,
+                second_index=3,
+                third_index=1,
+            ),
+        ),
+        rows=2,
+        columns=2,
+        valid=True,
+    )
+
+    camera = CountingCamera()
+
+    projected = TerrainProjectionComputer(
+        camera=camera,
+    ).project(
+        surface=surface,
+        heading_deg=37.0,
+        pitch_deg=8.0,
+        roll_deg=-12.0,
+        width_px=1280,
+        height_px=720,
+    )
+
+    assert projected.valid is True
+    assert len(projected.triangles) == 2
+
+    assert camera.prepare_orientation_calls == 1
+    assert camera.prepared_transform_calls == 4
