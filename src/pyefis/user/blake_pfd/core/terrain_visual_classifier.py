@@ -71,6 +71,11 @@ class TerrainVisualClassifier:
             TerrainVisualTriangle
         ] = []
 
+        vertex_warning_levels: dict[
+            int,
+            str,
+        ] = {}
+
         for (
             triangle_index,
             triangle,
@@ -95,51 +100,62 @@ class TerrainVisualClassifier:
             warning_level = "NONE"
 
             for index in indices:
-                vertex = surface.vertices[
-                    index
-                ]
-
-                distance_nm = (
-                    hypot(
-                        vertex.north_ft,
-                        vertex.east_ft,
-                    )
-                    / FEET_PER_NM
-                )
-
-                state = self.awareness.evaluate(
-                    aircraft_altitude_ft=(
-                        aircraft_altitude_ft
-                    ),
-                    vertical_speed_fpm=(
-                        vertical_speed_fpm
-                    ),
-                    ground_speed_kt=(
-                        ground_speed_kt
-                    ),
-                    profile=(
-                        TerrainProfilePoint(
-                            distance_nm=(
-                                distance_nm
-                            ),
-                            elevation_ft=(
-                                vertex.elevation_ft
-                            ),
-                        ),
-                    ),
-                )
-
-                if not state.valid:
-                    return TerrainVisualClassification(
-                        message=(
-                            "TERRAIN "
-                            "CLASSIFICATION INVALID"
-                        ),
-                    )
-
                 candidate = (
-                    state.warning_level
+                    vertex_warning_levels.get(
+                        index
+                    )
                 )
+
+                if candidate is None:
+                    vertex = surface.vertices[
+                        index
+                    ]
+
+                    distance_nm = (
+                        hypot(
+                            vertex.north_ft,
+                            vertex.east_ft,
+                        )
+                        / FEET_PER_NM
+                    )
+
+                    state = self.awareness.evaluate(
+                        aircraft_altitude_ft=(
+                            aircraft_altitude_ft
+                        ),
+                        vertical_speed_fpm=(
+                            vertical_speed_fpm
+                        ),
+                        ground_speed_kt=(
+                            ground_speed_kt
+                        ),
+                        profile=(
+                            TerrainProfilePoint(
+                                distance_nm=(
+                                    distance_nm
+                                ),
+                                elevation_ft=(
+                                    vertex.elevation_ft
+                                ),
+                            ),
+                        ),
+                    )
+
+                    if not state.valid:
+                        return TerrainVisualClassification(
+                            message=(
+                                "TERRAIN "
+                                "CLASSIFICATION INVALID"
+                            ),
+                        )
+
+                    candidate = (
+                        state.warning_level
+                    )
+
+                    vertex_warning_levels[
+                        index
+                    ] = candidate
 
                 if (
                     SEVERITY_ORDER[
