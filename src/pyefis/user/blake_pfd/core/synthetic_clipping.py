@@ -123,6 +123,29 @@ def clip_projected_polygon_to_screen(
     ):
         return polygon
 
+    common_outcode = 0b1111
+
+    for point in polygon:
+        outcode = 0
+
+        if point.x_px < 0.0:
+            outcode |= 0b0001
+        elif point.x_px > width:
+            outcode |= 0b0010
+
+        if point.y_px < 0.0:
+            outcode |= 0b0100
+        elif point.y_px > height:
+            outcode |= 0b1000
+
+        common_outcode &= outcode
+
+        if common_outcode == 0:
+            break
+
+    if common_outcode != 0:
+        return ()
+
     polygon = _clip_screen_boundary(
         polygon,
         inside=lambda point: (

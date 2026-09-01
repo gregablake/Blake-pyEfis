@@ -194,3 +194,103 @@ def test_invalid_screen_dimensions_fail_closed() -> None:
     )
 
     assert clipped == ()
+
+
+@pytest.mark.parametrize(
+    "points",
+    (
+        (
+            ProjectedPoint(-300.0, 100.0, False),
+            ProjectedPoint(-200.0, 200.0, False),
+            ProjectedPoint(-100.0, 300.0, False),
+        ),
+        (
+            ProjectedPoint(1380.0, 100.0, False),
+            ProjectedPoint(1480.0, 200.0, False),
+            ProjectedPoint(1580.0, 300.0, False),
+        ),
+        (
+            ProjectedPoint(100.0, -300.0, False),
+            ProjectedPoint(200.0, -200.0, False),
+            ProjectedPoint(300.0, -100.0, False),
+        ),
+        (
+            ProjectedPoint(100.0, 820.0, False),
+            ProjectedPoint(200.0, 920.0, False),
+            ProjectedPoint(300.0, 1020.0, False),
+        ),
+    ),
+)
+def test_screen_clip_trivial_reject_skips_boundary_clipper(
+    monkeypatch,
+    points,
+) -> None:
+    from pyefis.user.blake_pfd.core import (
+        synthetic_clipping,
+    )
+
+    boundary_calls = 0
+    original = (
+        synthetic_clipping
+        ._clip_screen_boundary
+    )
+
+    def counting_boundary(*args, **kwargs):
+        nonlocal boundary_calls
+        boundary_calls += 1
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(
+        synthetic_clipping,
+        "_clip_screen_boundary",
+        counting_boundary,
+    )
+
+    clipped = (
+        synthetic_clipping
+        .clip_projected_polygon_to_screen(
+            points,
+            width_px=1280,
+            height_px=720,
+        )
+    )
+
+    assert clipped == ()
+    assert boundary_calls == 0
+
+
+def test_screen_clip_does_not_reject_crossing_polygon() -> None:
+    points = (
+        ProjectedPoint(
+            x_px=-100.0,
+            y_px=360.0,
+            visible=False,
+        ),
+        ProjectedPoint(
+            x_px=640.0,
+            y_px=-100.0,
+            visible=False,
+        ),
+        ProjectedPoint(
+            x_px=1380.0,
+            y_px=360.0,
+            visible=False,
+        ),
+        ProjectedPoint(
+            x_px=640.0,
+            y_px=820.0,
+            visible=False,
+        ),
+    )
+
+    clipped = clip_projected_polygon_to_screen(
+        points,
+        width_px=1280,
+        height_px=720,
+    )
+
+    assert len(clipped) >= 3
+
+    for point in clipped:
+        assert 0.0 <= point.x_px <= 1280.0
+        assert 0.0 <= point.y_px <= 720.0
