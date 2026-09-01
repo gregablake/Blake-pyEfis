@@ -28,6 +28,17 @@ class CameraOrientation:
     roll_sin: float
 
 
+@dataclass(frozen=True)
+class CameraProjection:
+    width_px: int
+    height_px: int
+    half_width: float
+    half_height: float
+    horizontal_scale: float
+    vertical_scale: float
+    near_plane_ft: float
+
+
 class SyntheticCamera:
     def prepare_orientation(
         self,
@@ -148,15 +159,27 @@ class SyntheticCamera:
             forward_ft=forward_pitched,
         )
 
-    def project(
+    def prepare_projection(
         self,
-        point: CameraPoint,
+        *,
         width_px: int,
         height_px: int,
         horizontal_fov_deg: float = 70.0,
         vertical_fov_deg: float = 45.0,
         near_plane_ft: float = 5.0,
-    ) -> ProjectedPoint | None:
+    ) -> CameraProjection | None:
+        if not all(
+            isfinite(value)
+            for value in (
+                width_px,
+                height_px,
+                horizontal_fov_deg,
+                vertical_fov_deg,
+                near_plane_ft,
+            )
+        ):
+            return None
+
         if (
             width_px <= 0
             or height_px <= 0
@@ -165,23 +188,6 @@ class SyntheticCamera:
             or near_plane_ft <= 0.0
         ):
             return None
-
-        if not all(
-            isfinite(value)
-            for value in (
-                point.right_ft,
-                point.up_ft,
-                point.forward_ft,
-            )
-        ):
-            return None
-
-        if point.forward_ft < near_plane_ft:
-            return ProjectedPoint(
-                x_px=0.0,
-                y_px=0.0,
-                visible=False,
-            )
 
         half_width = width_px / 2.0
         half_height = height_px / 2.0
@@ -202,27 +208,98 @@ class SyntheticCamera:
             )
         )
 
+        return CameraProjection(
+            width_px=width_px,
+            height_px=height_px,
+            half_width=half_width,
+            half_height=half_height,
+            horizontal_scale=horizontal_scale,
+            vertical_scale=vertical_scale,
+            near_plane_ft=near_plane_ft,
+        )
+
+    def project(
+        self,
+        point: CameraPoint,
+        width_px: int,
+        height_px: int,
+        horizontal_fov_deg: float = 70.0,
+        vertical_fov_deg: float = 45.0,
+        near_plane_ft: float = 5.0,
+    ) -> ProjectedPoint | None:
+        projection = self.prepare_projection(
+            width_px=width_px,
+            height_px=height_px,
+            horizontal_fov_deg=horizontal_fov_deg,
+            vertical_fov_deg=vertical_fov_deg,
+            near_plane_ft=near_plane_ft,
+        )
+
+        if projection is None:
+            return None
+
+        return self.project_prepared(
+            point,
+            projection=projection,
+        )
+
+    def project_prepared(
+        self,
+        point: CameraPoint,
+        *,
+        projection: CameraProjection,
+    ) -> ProjectedPoint | None:
+        if not isinstance(
+            projection,
+            CameraProjection,
+        ):
+            return None
+
+        if not all(
+            isfinite(value)
+            for value in (
+                point.right_ft,
+                point.up_ft,
+                point.forward_ft,
+            )
+        ):
+            return None
+
+        if (
+            point.forward_ft
+            < projection.near_plane_ft
+        ):
+            return ProjectedPoint(
+                x_px=0.0,
+                y_px=0.0,
+                visible=False,
+            )
+
         x_px = (
-            half_width
+            projection.half_width
             + (
                 point.right_ft
                 / point.forward_ft
             )
-            * horizontal_scale
+            * projection.horizontal_scale
         )
 
         y_px = (
-            half_height
+            projection.half_height
             - (
                 point.up_ft
                 / point.forward_ft
             )
-            * vertical_scale
+            * projection.vertical_scale
         )
 
         visible = (
-            0.0 <= x_px <= width_px
-            and 0.0 <= y_px <= height_px
+            0.0
+            <= x_px
+            <= projection.width_px
+            and 0.0
+            <= y_px
+            <= projection.height_px
         )
 
         return ProjectedPoint(

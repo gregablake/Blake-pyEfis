@@ -151,6 +151,24 @@ class TerrainProjectionComputer:
                 ),
             )
 
+        camera_projection = (
+            self.camera.prepare_projection(
+                width_px=width_px,
+                height_px=height_px,
+                near_plane_ft=(
+                    self.near_plane_ft
+                ),
+            )
+        )
+
+        if camera_projection is None:
+            return ProjectedTerrain(
+                message=(
+                    "TERRAIN "
+                    "PROJECTION INVALID"
+                ),
+            )
+
         for triangle in surface.triangles:
             indices = (
                 triangle.first_index,
@@ -277,12 +295,10 @@ class TerrainProjectionComputer:
 
                     if projected_point is None:
                         projected_point = (
-                            self.camera.project(
+                            self.camera.project_prepared(
                                 camera_point,
-                                width_px=width_px,
-                                height_px=height_px,
-                                near_plane_ft=(
-                                    self.near_plane_ft
+                                projection=(
+                                    camera_projection
                                 ),
                             )
                         )
@@ -311,12 +327,10 @@ class TerrainProjectionComputer:
                     clipped_camera_points
                 ):
                     projected_point = (
-                        self.camera.project(
+                        self.camera.project_prepared(
                             camera_point,
-                            width_px=width_px,
-                            height_px=height_px,
-                            near_plane_ft=(
-                                self.near_plane_ft
+                            projection=(
+                                camera_projection
                             ),
                         )
                     )

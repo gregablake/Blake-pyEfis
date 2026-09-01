@@ -234,3 +234,62 @@ def test_prepared_orientation_matches_direct_transform() -> None:
     assert prepared.forward_ft == pytest.approx(
         direct.forward_ft
     )
+
+
+def test_prepared_projection_matches_direct_projection() -> None:
+    camera = SyntheticCamera()
+
+    projection = camera.prepare_projection(
+        width_px=1280,
+        height_px=720,
+        horizontal_fov_deg=70.0,
+        vertical_fov_deg=45.0,
+        near_plane_ft=5.0,
+    )
+
+    assert projection is not None
+
+    point = CameraPoint(
+        right_ft=125.0,
+        up_ft=-75.0,
+        forward_ft=1000.0,
+    )
+
+    direct = camera.project(
+        point,
+        width_px=1280,
+        height_px=720,
+        horizontal_fov_deg=70.0,
+        vertical_fov_deg=45.0,
+        near_plane_ft=5.0,
+    )
+
+    prepared = camera.project_prepared(
+        point,
+        projection=projection,
+    )
+
+    assert direct is not None
+    assert prepared is not None
+
+    assert prepared.x_px == pytest.approx(
+        direct.x_px
+    )
+    assert prepared.y_px == pytest.approx(
+        direct.y_px
+    )
+    assert prepared.visible is direct.visible
+
+
+def test_nonfinite_projection_setup_fails_closed() -> None:
+    camera = SyntheticCamera()
+
+    projection = camera.prepare_projection(
+        width_px=1280,
+        height_px=720,
+        horizontal_fov_deg=float("nan"),
+        vertical_fov_deg=45.0,
+        near_plane_ft=5.0,
+    )
+
+    assert projection is None
