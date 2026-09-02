@@ -973,3 +973,116 @@ def test_camera_projection_is_prepared_once_per_projection() -> None:
 
     assert camera.prepare_projection_calls == 1
     assert camera.prepared_project_calls == 4
+
+
+def test_live_terrain_projection_outputs_convex_polygons() -> None:
+    from pyefis.user.blake_pfd.core.terrain_surface import (
+        TerrainSurfaceGenerator,
+    )
+
+    surface = TerrainSurfaceGenerator(
+        elevation_sampler=lambda latitude, longitude: 1000.0,
+        forward_distances_nm=(
+            0.125,
+            0.25,
+            0.375,
+            0.5,
+            0.75,
+            1.0,
+            1.5,
+            2.0,
+            3.0,
+            5.0,
+            8.0,
+            10.0,
+        ),
+        lateral_fractions=(
+            -1.0,
+            -0.6667,
+            -0.3333,
+            0.0,
+            0.3333,
+            0.6667,
+            1.0,
+        ),
+        half_width_ratio=0.75,
+    ).generate(
+        aircraft_lat_deg=39.0,
+        aircraft_lon_deg=-84.0,
+        aircraft_alt_ft=1500.0,
+        heading_deg=0.0,
+    )
+
+    projected = TerrainProjectionComputer().project(
+        surface=surface,
+        heading_deg=10.0,
+        pitch_deg=0.0,
+        roll_deg=0.0,
+        width_px=1280,
+        height_px=720,
+    )
+
+    assert projected.valid is True
+
+    visible = tuple(
+        triangle
+        for triangle in projected.triangles
+        if triangle.visible
+    )
+
+    assert visible
+    assert any(
+        len(triangle.points) > 3
+        for triangle in visible
+    )
+
+    for triangle in visible:
+        points = triangle.points
+
+        assert len(points) >= 3
+
+        winding = 0
+
+        for index in range(len(points)):
+            first = points[index]
+            second = points[
+                (index + 1) % len(points)
+            ]
+            third = points[
+                (index + 2) % len(points)
+            ]
+
+            cross = (
+                (
+                    second.x_px
+                    - first.x_px
+                )
+                * (
+                    third.y_px
+                    - second.y_px
+                )
+                - (
+                    second.y_px
+                    - first.y_px
+                )
+                * (
+                    third.x_px
+                    - second.x_px
+                )
+            )
+
+            if abs(cross) <= 1.0e-9:
+                continue
+
+            current_winding = (
+                1
+                if cross > 0.0
+                else -1
+            )
+
+            if winding == 0:
+                winding = current_winding
+            else:
+                assert current_winding == winding
+
+        assert winding != 0

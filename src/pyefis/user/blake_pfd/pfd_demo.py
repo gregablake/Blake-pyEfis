@@ -4297,7 +4297,7 @@ class BlakePfdDemo(QWidget):
                 QBrush(color)
             )
 
-            painter.drawPolygon(
+            painter.drawConvexPolygon(
                 polygon
             )
 
