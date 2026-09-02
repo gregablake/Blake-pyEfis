@@ -4016,12 +4016,9 @@ class BlakePfdDemo(QWidget):
         ):
             return
 
-        points = [
-            projected.low_left,
-            projected.low_right,
-            projected.high_right,
-            projected.high_left,
-        ]
+        points = (
+            projected.polygon_points
+        )
 
         polygon = QPolygonF(
             [
