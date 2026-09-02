@@ -4201,28 +4201,45 @@ class BlakePfdDemo(QWidget):
         ):
             return
 
-        terrain_colors = {
-            "NONE": QColor(
-                75,
-                90,
-                45,
+        terrain_brushes = {
+            "NONE": QBrush(
+                QColor(
+                    75,
+                    90,
+                    45,
+                )
             ),
-            "CAUTION": QColor(
-                190,
-                170,
-                0,
+            "CAUTION": QBrush(
+                QColor(
+                    190,
+                    170,
+                    0,
+                )
             ),
-            "WARNING": QColor(
-                220,
-                110,
-                0,
+            "WARNING": QBrush(
+                QColor(
+                    220,
+                    110,
+                    0,
+                )
             ),
-            "CRITICAL": QColor(
-                200,
-                0,
-                0,
+            "CRITICAL": QBrush(
+                QColor(
+                    200,
+                    0,
+                    0,
+                )
             ),
         }
+
+        terrain_pen = QPen(
+            QColor(
+                35,
+                35,
+                35,
+            ),
+            1,
+        )
 
         center_x = width // 2
         center_y = height // 2
@@ -4242,6 +4259,10 @@ class BlakePfdDemo(QWidget):
             center_y - horizon_height // 2,
             horizon_width,
             horizon_height,
+        )
+
+        painter.setPen(
+            terrain_pen
         )
 
         # Surface triangles are generated near-to-far.
@@ -4264,11 +4285,11 @@ class BlakePfdDemo(QWidget):
                 .warning_level
             )
 
-            color = terrain_colors.get(
+            brush = terrain_brushes.get(
                 warning_level
             )
 
-            if color is None:
+            if brush is None:
                 continue
 
             polygon = QPolygonF(
@@ -4282,19 +4303,8 @@ class BlakePfdDemo(QWidget):
                 ]
             )
 
-            painter.setPen(
-                QPen(
-                    QColor(
-                        35,
-                        35,
-                        35,
-                    ),
-                    1,
-                )
-            )
-
             painter.setBrush(
-                QBrush(color)
+                brush
             )
 
             painter.drawConvexPolygon(
