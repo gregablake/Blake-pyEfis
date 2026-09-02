@@ -176,10 +176,13 @@ class TerrainProjectionComputer:
                 triangle.third_index,
             )
 
-            if any(
-                index < 0
-                or index >= vertex_count
-                for index in indices
+            if (
+                triangle.first_index < 0
+                or triangle.first_index >= vertex_count
+                or triangle.second_index < 0
+                or triangle.second_index >= vertex_count
+                or triangle.third_index < 0
+                or triangle.third_index >= vertex_count
             ):
                 return ProjectedTerrain(
                     message="TERRAIN TRIANGLE INVALID",
