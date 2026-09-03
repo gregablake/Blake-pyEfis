@@ -38,7 +38,15 @@ from pyefis.user.blake_pfd.pages.map_page import (
 from pyefis.user.blake_pfd.pages.settings_page import (
     SettingsPage,
 )
-from pyefis.user.blake_pfd.obstacles import ObstacleComputer
+from pyefis.user.blake_pfd.obstacle_database import (
+    ObstacleDatabase,
+)
+from pyefis.user.blake_pfd.obstacle_runtime import (
+    ObstacleRuntimeProvider,
+)
+from pyefis.user.blake_pfd.obstacles import (
+    ObstacleState,
+)
 from pyefis.user.blake_pfd.route_manager import RouteManager
 from pyefis.user.blake_pfd.safe_taxi import SafeTaxiComputer
 from pyefis.user.blake_pfd.sensors_sim import SimulatedSensorSource
@@ -795,7 +803,14 @@ class BlakePfdDemo(QWidget):
             )
         )
 
-        self.obstacles = ObstacleComputer()
+        self.obstacles = (
+            ObstacleRuntimeProvider(
+                ObstacleDatabase(
+                    self.config.synthetic_vision
+                    .obstacle_database_path
+                )
+            )
+        )
         self.weather = WeatherReader()
         self.event_manager = EventManager(self)
         self.flight_state_manager = FlightStateManager()
@@ -3613,12 +3628,35 @@ class BlakePfdDemo(QWidget):
             )
 
         if features.show_obstacles:
-            obstacle_state = self.obstacles.update(
-                aircraft_lat=39.1031,
-                aircraft_lon=-84.5120,
-                aircraft_alt_ft=self.pfd.pressure_alt_ft,
+            if self.pfd.position_valid:
+                obstacle_state = (
+                    self.obstacles.update(
+                        aircraft_lat=(
+                            self.pfd.latitude_deg
+                        ),
+                        aircraft_lon=(
+                            self.pfd.longitude_deg
+                        ),
+                        aircraft_alt_ft=(
+                            self.pfd.pressure_alt_ft
+                        ),
+                    )
+                )
+            else:
+                obstacle_state = (
+                    ObstacleState(
+                        ok=False,
+                        nearby=[],
+                        warning=False,
+                    )
+                )
+
+            self.draw_obstacle_overlay(
+                painter,
+                obstacle_state,
+                width,
+                height,
             )
-            self.draw_obstacle_overlay(painter, obstacle_state, width, height)
 
         if features.show_traffic and self.config.stratux.enabled:
             self.draw_traffic_overlay(painter, self.stratux.read(), width, height)
@@ -6074,30 +6112,161 @@ class BlakePfdDemo(QWidget):
         painter.setFont(QFont("Arial", 18, QFont.Weight.Bold))
         painter.drawText(QRectF(0, 55, width, 40), Qt.AlignmentFlag.AlignCenter, f"TERRAIN {terrain_state.clearance_ft:.0f} FT")
 
-    def draw_obstacle_overlay(self, painter: QPainter, obstacle_state, width: int, height: int) -> None:
-        if not obstacle_state.nearby:
-            return
-
+    def draw_obstacle_overlay(
+        self,
+        painter: QPainter,
+        obstacle_state,
+        width: int,
+        height: int,
+    ) -> None:
         box_x = 20
         box_y = 195
         box_w = 260
         box_h = 90
 
-        color = QColor(255, 0, 0) if obstacle_state.warning else QColor(255, 220, 0)
+        if not obstacle_state.ok:
+            color = QColor(
+                255,
+                180,
+                0,
+            )
 
-        painter.fillRect(box_x, box_y, box_w, box_h, QColor(0, 0, 0))
-        painter.setPen(QPen(color, 2))
-        painter.drawRect(box_x, box_y, box_w, box_h)
+            painter.fillRect(
+                box_x,
+                box_y,
+                box_w,
+                box_h,
+                QColor(
+                    0,
+                    0,
+                    0,
+                ),
+            )
 
-        painter.setFont(QFont("Arial", 12, QFont.Weight.Bold))
+            painter.setPen(
+                QPen(
+                    color,
+                    2,
+                )
+            )
+
+            painter.drawRect(
+                box_x,
+                box_y,
+                box_w,
+                box_h,
+            )
+
+            painter.setFont(
+                QFont(
+                    "Arial",
+                    12,
+                    QFont.Weight.Bold,
+                )
+            )
+
+            painter.setPen(color)
+
+            painter.drawText(
+                box_x + 10,
+                box_y + 30,
+                "OBST DATA",
+            )
+
+            painter.drawText(
+                box_x + 10,
+                box_y + 58,
+                "UNAVAILABLE",
+            )
+
+            return
+
+        if not obstacle_state.nearby:
+            return
+
+        color = (
+            QColor(
+                255,
+                0,
+                0,
+            )
+            if obstacle_state.warning
+            else QColor(
+                255,
+                220,
+                0,
+            )
+        )
+
+        painter.fillRect(
+            box_x,
+            box_y,
+            box_w,
+            box_h,
+            QColor(
+                0,
+                0,
+                0,
+            ),
+        )
+
+        painter.setPen(
+            QPen(
+                color,
+                2,
+            )
+        )
+
+        painter.drawRect(
+            box_x,
+            box_y,
+            box_w,
+            box_h,
+        )
+
+        painter.setFont(
+            QFont(
+                "Arial",
+                12,
+                QFont.Weight.Bold,
+            )
+        )
+
         painter.setPen(color)
-        painter.drawText(box_x + 10, box_y + 25, "OBSTACLE")
 
-        obstacle = obstacle_state.nearby[0]
+        painter.drawText(
+            box_x + 10,
+            box_y + 25,
+            "OBSTACLE",
+        )
 
-        painter.setPen(QColor(255, 255, 255))
-        painter.drawText(box_x + 10, box_y + 52, f"{obstacle.ident}")
-        painter.drawText(box_x + 10, box_y + 76, f"{obstacle.distance_nm:.1f}NM BRG {obstacle.bearing_deg:.0f}°")
+        obstacle = (
+            obstacle_state.nearby[0]
+        )
+
+        painter.setPen(
+            QColor(
+                255,
+                255,
+                255,
+            )
+        )
+
+        painter.drawText(
+            box_x + 10,
+            box_y + 52,
+            f"{obstacle.ident}",
+        )
+
+        painter.drawText(
+            box_x + 10,
+            box_y + 76,
+            (
+                f"{obstacle.distance_nm:.1f}NM "
+                f"BRG "
+                f"{obstacle.bearing_deg:.0f}°"
+            ),
+        )
 
     def draw_safe_taxi_map(self, painter: QPainter, taxi_state, width: int, height: int) -> None:
         painter.fillRect(0, 0, width, height, QColor(15, 15, 15))

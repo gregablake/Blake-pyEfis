@@ -61,7 +61,7 @@ altitude:
 
 synthetic_vision:
   terrain_database_path: ''
-  obstacle_database_path: ''
+  obstacle_database_path: '~/.local/share/blake_pyefis/obstacles.sqlite'
   airport_database_path: ''
   
 guidance:
