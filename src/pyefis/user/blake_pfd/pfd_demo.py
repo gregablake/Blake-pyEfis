@@ -132,6 +132,14 @@ from pyefis.user.blake_pfd.core.hits_guidance import (
 from pyefis.user.blake_pfd.core.runway_geometry import (
     RunwayGeometryComputer,
 )
+from pyefis.user.blake_pfd.core.safe_taxi_ground_gate import SafeTaxiGroundGate
+from pyefis.user.blake_pfd.core.safe_taxi_projection import (
+    SafeTaxiMapProjector,
+)
+from pyefis.user.blake_pfd.core.safe_taxi_display_gate import (
+    evaluate_safe_taxi_inputs,
+    safe_taxi_takeover_allowed,
+)
 
 from pyefis.user.blake_pfd.core.runway_projection import (
     RunwayProjectionComputer,
@@ -440,6 +448,12 @@ class BlakePfdDemo(QWidget):
             RunwayGeometryComputer()
         )
 
+        self.safe_taxi_projector = (
+            SafeTaxiMapProjector(
+                range_ft=3500.0,
+            )
+        )
+
         self.runway_projection_computer = (
             RunwayProjectionComputer()
         )
@@ -578,7 +592,15 @@ class BlakePfdDemo(QWidget):
             self.touch_guidance_menu.state
         )
 
-        self.safe_taxi = SafeTaxiComputer()
+        self.safe_taxi = SafeTaxiComputer(
+            database=self.database,
+            config=self.config.safe_taxi,
+        )
+
+        self.safe_taxi_ground_gate = (
+            SafeTaxiGroundGate()
+        )
+
         self.moving_map = MovingMapComputer()
 
         self.map_range_nm = float(
@@ -1216,7 +1238,7 @@ class BlakePfdDemo(QWidget):
                     pfd.longitude_deg
                 ),
                 aircraft_alt_ft=(
-                    pfd.pressure_alt_ft
+                    pfd.indicated_alt_ft
                 ),
                 heading_deg=(
                     current_heading
@@ -1618,7 +1640,7 @@ class BlakePfdDemo(QWidget):
                     self.emergency_airport_manager.update(
                         airports=nearby_airports,
                         aircraft_altitude_ft=(
-                            self.pfd.pressure_alt_ft
+                            self.pfd.indicated_alt_ft
                         ),
                         terrain_elevation_ft=0.0,
                         wind_speed_kt=(
@@ -1710,7 +1732,7 @@ class BlakePfdDemo(QWidget):
                             self.pfd.track_deg
                         ),
                         aircraft_altitude_ft=(
-                            self.pfd.pressure_alt_ft
+                            self.pfd.indicated_alt_ft
                         ),
                         vertical_speed_fpm=(
                             self.pfd.vsi_fpm
@@ -1762,7 +1784,7 @@ class BlakePfdDemo(QWidget):
                 self.cfit_state = (
                     self.cfit_manager.update(
                         aircraft_altitude_ft=(
-                            self.pfd.pressure_alt_ft
+                            self.pfd.indicated_alt_ft
                         ),
                         vertical_speed_fpm=(
                             self.pfd.vsi_fpm
@@ -1819,7 +1841,7 @@ class BlakePfdDemo(QWidget):
             self.energy_state = (
                 self.energy_state_calculator.calculate(
                     altitude_ft=(
-                        self.pfd.pressure_alt_ft
+                        self.pfd.indicated_alt_ft
                     ),
                     terrain_elevation_ft=(
                         terrain_elevation_ft
@@ -3497,8 +3519,70 @@ class BlakePfdDemo(QWidget):
 
         self.draw_background(painter, width, height)
 
-        taxi_state = self.safe_taxi.update(self.pfd)
-        if features.show_safe_taxi and taxi_state.active:
+        flight_state = getattr(
+            getattr(
+                self,
+                "aircraft",
+                None,
+            ),
+            "flight_state",
+            None,
+        )
+
+        safe_taxi_safety = (
+            evaluate_safe_taxi_inputs(
+                watchdog=(
+                    self.sensor_watchdog_state
+                ),
+                flight_state=flight_state,
+            )
+        )
+
+        watchdog = self.sensor_watchdog_state
+
+        safe_taxi_inputs_fresh = bool(
+            watchdog.position_valid
+            and watchdog.position_fresh
+            and watchdog.air_data_valid
+            and watchdog.air_data_fresh
+        )
+
+        ground_state = (
+            self.safe_taxi_ground_gate.update(
+                flight=self.pfd,
+                flight_state=flight_state,
+                inputs_fresh=(
+                    safe_taxi_inputs_fresh
+                ),
+                now_s=monotonic(),
+            )
+        )
+
+        taxi_state = self.safe_taxi.update(
+            self.pfd,
+            position_fresh=(
+                safe_taxi_safety.position_fresh
+            ),
+            airborne=(
+                safe_taxi_safety.airborne_inhibit
+                or not ground_state.confirmed
+            ),
+        )
+
+        if safe_taxi_takeover_allowed(
+            feature_enabled=(
+                features.show_safe_taxi
+            ),
+            auto_switch_enabled=(
+                self.config.safe_taxi
+                .auto_switch_enabled
+            ),
+            taxi_active=(
+                taxi_state.active
+                and ground_state.confirmed
+            ),
+            safety=safe_taxi_safety,
+        ):
             self.draw_safe_taxi_map(painter, taxi_state, width, height)
 
             self.draw_touch_navigation(
@@ -3616,7 +3700,7 @@ class BlakePfdDemo(QWidget):
 
         if features.show_terrain:
             terrain_state = self.terrain.update(
-                aircraft_alt_ft=self.pfd.pressure_alt_ft,
+                aircraft_alt_ft=self.pfd.indicated_alt_ft,
                 aircraft_lat=39.1031,
                 aircraft_lon=-84.5120,
             )
@@ -3638,7 +3722,7 @@ class BlakePfdDemo(QWidget):
                             self.pfd.longitude_deg
                         ),
                         aircraft_alt_ft=(
-                            self.pfd.pressure_alt_ft
+                            self.pfd.indicated_alt_ft
                         ),
                     )
                 )
@@ -4030,7 +4114,7 @@ class BlakePfdDemo(QWidget):
                 runway=runway,
                 aircraft_lat_deg=pfd.latitude_deg,
                 aircraft_lon_deg=pfd.longitude_deg,
-                aircraft_alt_ft=pfd.pressure_alt_ft,
+                aircraft_alt_ft=pfd.indicated_alt_ft,
             )
         )
 
@@ -4190,7 +4274,7 @@ class BlakePfdDemo(QWidget):
                     pfd.longitude_deg
                 ),
                 aircraft_alt_ft=(
-                    pfd.pressure_alt_ft
+                    pfd.indicated_alt_ft
                 ),
             )
         )
@@ -4216,7 +4300,7 @@ class BlakePfdDemo(QWidget):
             self.synthetic_terrain_classifier.classify(
                 surface=rebased_surface,
                 aircraft_altitude_ft=(
-                    pfd.pressure_alt_ft
+                    pfd.indicated_alt_ft
                 ),
                 vertical_speed_fpm=(
                     pfd.vsi_fpm
@@ -4534,7 +4618,7 @@ class BlakePfdDemo(QWidget):
         tape_y = 95
         tape_h = height - 190
         center_y = tape_y + tape_h // 2
-        alt = pfd.pressure_alt_ft
+        alt = pfd.indicated_alt_ft
 
         painter.fillRect(tape_x, tape_y, tape_w, tape_h, QColor(20, 20, 25))
         painter.setPen(QPen(QColor(210, 210, 210), 2))
@@ -6268,11 +6352,320 @@ class BlakePfdDemo(QWidget):
             ),
         )
 
-    def draw_safe_taxi_map(self, painter: QPainter, taxi_state, width: int, height: int) -> None:
-        painter.fillRect(0, 0, width, height, QColor(15, 15, 15))
-        painter.setPen(QPen(QColor(255, 255, 255), 2))
-        painter.setFont(QFont("Arial", 22, QFont.Weight.Bold))
-        painter.drawText(30, 45, f"SAFE TAXI - {taxi_state.airport_id}")
+    def draw_safe_taxi_map(
+        self,
+        painter: QPainter,
+        taxi_state,
+        width: int,
+        height: int,
+    ) -> None:
+        painter.fillRect(
+            0,
+            0,
+            width,
+            height,
+            QColor(15, 15, 15),
+        )
+
+        painter.setPen(
+            QPen(
+                QColor(255, 255, 255),
+                2,
+            )
+        )
+        painter.setFont(
+            QFont(
+                "Arial",
+                22,
+                QFont.Weight.Bold,
+            )
+        )
+        painter.drawText(
+            30,
+            45,
+            (
+                "SAFE TAXI - "
+                f"{taxi_state.airport_id}"
+            ),
+        )
+
+        painter.setFont(
+            QFont(
+                "Arial",
+                11,
+                QFont.Weight.Bold,
+            )
+        )
+        painter.setPen(
+            QColor(
+                255,
+                180,
+                0,
+            )
+        )
+        painter.drawText(
+            30,
+            68,
+            "RUNWAY-ONLY SURFACE VIEW",
+        )
+
+        if self.pfd is None:
+            painter.drawText(
+                30,
+                95,
+                "POSITION DATA UNAVAILABLE",
+            )
+            return
+
+        runway_records = (
+            self.database.get_runways(
+                taxi_state.airport_id
+            )
+        )
+
+        runway_geometries = []
+
+        for runway in runway_records:
+            geometry = (
+                self.runway_geometry_computer.compute(
+                    runway=runway,
+                    aircraft_lat_deg=(
+                        self.pfd.latitude_deg
+                    ),
+                    aircraft_lon_deg=(
+                        self.pfd.longitude_deg
+                    ),
+                    aircraft_alt_ft=(
+                        self.pfd.indicated_alt_ft
+                    ),
+                )
+            )
+
+            if geometry is not None:
+                runway_geometries.append(
+                    geometry
+                )
+
+        projection = (
+            self.safe_taxi_projector.project(
+                runways=runway_geometries,
+                heading_deg=(
+                    taxi_state.heading_deg
+                ),
+                width_px=width,
+                height_px=height,
+            )
+        )
+
+        if not projection.valid:
+            painter.setPen(
+                QColor(
+                    255,
+                    180,
+                    0,
+                )
+            )
+            painter.drawText(
+                30,
+                95,
+                "SURFACE DATA UNAVAILABLE",
+            )
+            return
+
+        if not projection.runways:
+            painter.setPen(
+                QColor(
+                    255,
+                    180,
+                    0,
+                )
+            )
+            painter.drawText(
+                30,
+                95,
+                "RUNWAY DATA UNAVAILABLE",
+            )
+
+        for runway in projection.runways:
+            polygon = QPolygonF(
+                [
+                    QPointF(
+                        point.x,
+                        point.y,
+                    )
+                    for point in runway.corners
+                ]
+            )
+
+            painter.setBrush(
+                QBrush(
+                    QColor(
+                        70,
+                        70,
+                        70,
+                    )
+                )
+            )
+            painter.setPen(
+                QPen(
+                    QColor(
+                        235,
+                        235,
+                        235,
+                    ),
+                    2,
+                )
+            )
+            painter.drawPolygon(
+                polygon
+            )
+
+            painter.setPen(
+                QPen(
+                    QColor(
+                        255,
+                        255,
+                        255,
+                    ),
+                    1,
+                    Qt.PenStyle.DashLine,
+                )
+            )
+            painter.drawLine(
+                QPointF(
+                    runway.low_center_x,
+                    runway.low_center_y,
+                ),
+                QPointF(
+                    runway.high_center_x,
+                    runway.high_center_y,
+                ),
+            )
+
+            painter.setFont(
+                QFont(
+                    "Arial",
+                    13,
+                    QFont.Weight.Bold,
+                )
+            )
+            painter.setPen(
+                QColor(
+                    255,
+                    255,
+                    255,
+                )
+            )
+
+            if runway.low_ident:
+                painter.drawText(
+                    QPointF(
+                        runway.low_center_x + 8,
+                        runway.low_center_y - 8,
+                    ),
+                    runway.low_ident,
+                )
+
+            if runway.high_ident:
+                painter.drawText(
+                    QPointF(
+                        runway.high_center_x + 8,
+                        runway.high_center_y - 8,
+                    ),
+                    runway.high_ident,
+                )
+
+        # Heading-up display: ownship stays fixed and
+        # points toward the top of the screen.
+        ownship_x = projection.ownship_x
+        ownship_y = projection.ownship_y
+
+        ownship = QPolygonF(
+            [
+                QPointF(
+                    ownship_x,
+                    ownship_y - 18,
+                ),
+                QPointF(
+                    ownship_x - 12,
+                    ownship_y + 14,
+                ),
+                QPointF(
+                    ownship_x,
+                    ownship_y + 8,
+                ),
+                QPointF(
+                    ownship_x + 12,
+                    ownship_y + 14,
+                ),
+            ]
+        )
+
+        painter.setBrush(
+            QBrush(
+                QColor(
+                    255,
+                    0,
+                    255,
+                )
+            )
+        )
+        painter.setPen(
+            QPen(
+                QColor(
+                    255,
+                    255,
+                    255,
+                ),
+                2,
+            )
+        )
+        painter.drawPolygon(
+            ownship
+        )
+
+        painter.setFont(
+            QFont(
+                "Arial",
+                11,
+                QFont.Weight.Bold,
+            )
+        )
+        painter.setPen(
+            QColor(
+                255,
+                255,
+                255,
+            )
+        )
+
+        painter.drawText(
+            30,
+            height - 52,
+            (
+                f"HDG "
+                f"{taxi_state.heading_deg % 360.0:03.0f}°"
+            ),
+        )
+
+        if (
+            taxi_state.airport_distance_nm
+            is not None
+        ):
+            painter.drawText(
+                30,
+                height - 30,
+                (
+                    f"AIRPORT "
+                    f"{taxi_state.airport_distance_nm:.2f} NM"
+                ),
+            )
+
+        painter.drawText(
+            width - 170,
+            height - 30,
+            "RANGE 3500 FT",
+        )
 
     def draw_traffic_overlay(self, painter: QPainter, stratux_state, width: int, height: int) -> None:
         painter.setFont(QFont("Arial", 12, QFont.Weight.Bold))

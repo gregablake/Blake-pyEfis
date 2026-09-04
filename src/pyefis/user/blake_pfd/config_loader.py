@@ -94,6 +94,16 @@ class SyntheticVisionConfig:
     airport_database_path: str = ""
     
 @dataclass
+class SafeTaxiConfig:
+    auto_switch_enabled: bool = False
+    activate_groundspeed_kt: float = 25.0
+    deactivate_groundspeed_kt: float = 35.0
+    max_ias_kt: float = 40.0
+    airport_search_radius_nm: float = 1.5
+    max_airport_elevation_delta_ft: float = 300.0
+
+
+@dataclass
 class GuidanceConfig:
     hits_enabled: bool = True
     flight_director_enabled: bool = True   
@@ -132,6 +142,7 @@ class BlakePfdConfig:
     performance: AircraftPerformanceConfig
     altitude: AltitudeConfig
     synthetic_vision: SyntheticVisionConfig
+    safe_taxi: SafeTaxiConfig
     guidance: GuidanceConfig
     terrain: TerrainConfig
     stratux: StratuxConfig
@@ -232,7 +243,13 @@ def load_config(path: Path = CONFIG_PATH) -> BlakePfdConfig:
                 "synthetic_vision",
                 {},
             )
-        ),  
+        ),
+        safe_taxi=SafeTaxiConfig(
+            **raw.get(
+                "safe_taxi",
+                {},
+            )
+        ),
         guidance=GuidanceConfig(
             **raw.get(
                 "guidance",

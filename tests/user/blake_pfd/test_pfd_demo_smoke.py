@@ -1179,6 +1179,7 @@ def test_synthetic_terrain_small_heading_change_keeps_time_throttle(
             latitude_deg=39.0,
             longitude_deg=-84.0,
             pressure_alt_ft=1500.0,
+            indicated_alt_ft=1500.0,
             heading_deg=100.0,
         )
 
@@ -1275,6 +1276,7 @@ def test_synthetic_terrain_large_heading_change_forces_refresh(
             latitude_deg=39.0,
             longitude_deg=-84.0,
             pressure_alt_ft=1500.0,
+            indicated_alt_ft=1500.0,
             heading_deg=100.0,
         )
 
@@ -1372,6 +1374,7 @@ def test_synthetic_terrain_heading_wraparound_uses_shortest_angle(
             latitude_deg=39.0,
             longitude_deg=-84.0,
             pressure_alt_ft=1500.0,
+            indicated_alt_ft=1500.0,
             heading_deg=359.0,
         )
 
@@ -1470,6 +1473,7 @@ def test_synthetic_terrain_heading_refresh_is_rate_limited(
             latitude_deg=39.0,
             longitude_deg=-84.0,
             pressure_alt_ft=1500.0,
+            indicated_alt_ft=1500.0,
             heading_deg=100.0,
         )
 
@@ -1577,6 +1581,7 @@ def test_synthetic_terrain_nonfinite_heading_fails_closed(
             latitude_deg=39.0,
             longitude_deg=-84.0,
             pressure_alt_ft=1500.0,
+            indicated_alt_ft=1500.0,
             heading_deg=100.0,
         )
 

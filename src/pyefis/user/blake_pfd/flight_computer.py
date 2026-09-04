@@ -5,6 +5,7 @@ from time import monotonic
 
 from pyefis.user.blake_pfd.airdata_calculations import (
     indicated_airspeed_from_dp,
+    indicated_altitude,
     pressure_altitude,
 )
 from pyefis.user.blake_pfd.config_loader import load_config
@@ -24,6 +25,7 @@ class FlightData:
     tas_kt: float = 0.0
 
     pressure_alt_ft: float = 0.0
+    indicated_alt_ft: float = 0.0
     density_alt_ft: float = 0.0
     vsi_fpm: float = 0.0
 
@@ -71,9 +73,24 @@ class FlightComputer:
     def update(self, raw) -> FlightData:
         flight = FlightData()
 
-        flight.ias_kt = indicated_airspeed_from_dp(raw.differential_pressure_pa)
-        flight.pressure_alt_ft = pressure_altitude(raw.static_pressure_pa)
-        flight.vsi_fpm = self.calculate_vsi(flight.pressure_alt_ft)
+        flight.ias_kt = indicated_airspeed_from_dp(
+            raw.differential_pressure_pa
+        )
+
+        flight.pressure_alt_ft = pressure_altitude(
+            raw.static_pressure_pa
+        )
+
+        flight.indicated_alt_ft = indicated_altitude(
+            static_pa=raw.static_pressure_pa,
+            baro_setting_inhg=(
+                self.config.altitude.baro_setting_inhg
+            ),
+        )
+
+        flight.vsi_fpm = self.calculate_vsi(
+            flight.pressure_alt_ft
+        )
 
         flight.tas_kt = true_airspeed_estimate(
             flight.ias_kt,

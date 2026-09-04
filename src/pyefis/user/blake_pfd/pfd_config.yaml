@@ -63,6 +63,14 @@ synthetic_vision:
   terrain_database_path: ''
   obstacle_database_path: '~/.local/share/blake_pyefis/obstacles.sqlite'
   airport_database_path: ''
+
+safe_taxi:
+  auto_switch_enabled: false
+  activate_groundspeed_kt: 25.0
+  deactivate_groundspeed_kt: 35.0
+  max_ias_kt: 40.0
+  airport_search_radius_nm: 1.5
+  max_airport_elevation_delta_ft: 300.0
   
 guidance:
   hits_enabled: true
@@ -84,13 +92,6 @@ stratux:
   host: 192.168.10.1
   gdl90_port: 4000
 
-safe_taxi:
-  enabled: true
-  auto_switch_groundspeed_kt: 25
-  airport_id: KHAO
-  airport_name: Butler County Regional
-  airport_lat: 39.3638
-  airport_lon: -84.522
 
 route:
   auto_sequence: true
