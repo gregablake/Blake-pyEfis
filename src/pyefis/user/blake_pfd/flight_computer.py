@@ -9,6 +9,9 @@ from pyefis.user.blake_pfd.airdata_calculations import (
     pressure_altitude,
 )
 from pyefis.user.blake_pfd.config_loader import load_config
+from pyefis.user.blake_pfd.core.baro_setting_controller import (
+    BaroSettingController,
+)
 from pyefis.user.blake_pfd.database_importer import AviationDatabase
 from pyefis.user.blake_pfd.nav_math import NavPoint, calculate_nav_solution
 from pyefis.user.blake_pfd.performance_calculations import (
@@ -65,6 +68,15 @@ class FlightComputer:
 
         self.config = load_config()
 
+        self.baro_setting_controller = (
+            BaroSettingController(
+                initial_inhg=(
+                    self.config.altitude
+                    .baro_setting_inhg
+                ),
+            )
+        )
+
         self.database = AviationDatabase()
         self.database.load_all()
 
@@ -84,7 +96,8 @@ class FlightComputer:
         flight.indicated_alt_ft = indicated_altitude(
             static_pa=raw.static_pressure_pa,
             baro_setting_inhg=(
-                self.config.altitude.baro_setting_inhg
+                self.baro_setting_controller
+                .setting_inhg
             ),
         )
 

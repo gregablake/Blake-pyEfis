@@ -45,7 +45,11 @@ def test_standard_setting_keeps_indicated_and_pressure_altitude_equal() -> None:
 def test_nonstandard_setting_changes_only_indicated_altitude() -> None:
     computer = FlightComputer()
 
-    computer.config.altitude.baro_setting_inhg = 30.42
+    assert (
+        computer.baro_setting_controller
+        .set_setting(30.42)
+        is True
+    )
 
     result = computer.update(make_raw())
 
@@ -56,4 +60,67 @@ def test_nonstandard_setting_changes_only_indicated_altitude() -> None:
 
     assert result.indicated_alt_ft > (
         result.pressure_alt_ft + 400.0
+    )
+
+
+def test_flight_computer_exposes_runtime_baro_controller() -> None:
+    computer = FlightComputer()
+
+    assert (
+        computer.baro_setting_controller.setting_inhg
+        == pytest.approx(
+            computer.config.altitude.baro_setting_inhg
+        )
+    )
+
+
+def test_runtime_baro_adjustment_changes_indicated_altitude_only() -> None:
+    computer = FlightComputer()
+
+    before = computer.update(
+        make_raw()
+    )
+
+    for _ in range(50):
+        computer.baro_setting_controller.increment()
+
+    after = computer.update(
+        make_raw()
+    )
+
+    assert after.pressure_alt_ft == pytest.approx(
+        before.pressure_alt_ft,
+        abs=0.01,
+    )
+
+    assert after.indicated_alt_ft > (
+        before.indicated_alt_ft + 400.0
+    )
+
+
+def test_invalid_runtime_baro_does_not_corrupt_flight_altitude() -> None:
+    computer = FlightComputer()
+
+    before = computer.update(
+        make_raw()
+    )
+
+    assert (
+        computer.baro_setting_controller
+        .set_setting(float("nan"))
+        is False
+    )
+
+    after = computer.update(
+        make_raw()
+    )
+
+    assert after.pressure_alt_ft == pytest.approx(
+        before.pressure_alt_ft,
+        abs=0.01,
+    )
+
+    assert after.indicated_alt_ft == pytest.approx(
+        before.indicated_alt_ft,
+        abs=0.01,
     )

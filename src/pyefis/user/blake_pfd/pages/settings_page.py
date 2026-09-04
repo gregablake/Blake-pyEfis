@@ -143,3 +143,146 @@ class SettingsPage:
                 ),
                 state_text,
             )
+
+        # ----------------------------------------------------
+        # Runtime BARO control
+        #
+        # Use the same geometry object as mousePressEvent()
+        # so the visible buttons and active touch regions
+        # remain identical.
+        # ----------------------------------------------------
+
+        app.touch_baro_state = (
+            app.touch_baro_setting.layout(
+                screen_width=width,
+                screen_height=height,
+            )
+        )
+
+        if app.touch_baro_state.valid:
+            baro_state = app.touch_baro_state
+
+            baro_value = (
+                app.flight_computer
+                .baro_setting_controller
+                .setting_inhg
+            )
+
+            font.setPointSize(18)
+            font.setBold(True)
+            painter.setFont(font)
+
+            # Decrement button
+            painter.setBrush(
+                QBrush(
+                    QColor(
+                        55,
+                        55,
+                        68,
+                        245,
+                    )
+                )
+            )
+
+            painter.setPen(
+                QPen(
+                    QColor(
+                        255,
+                        255,
+                        255,
+                    ),
+                    2,
+                )
+            )
+
+            painter.drawRoundedRect(
+                QRectF(
+                    baro_state.decrement_bounds.x,
+                    baro_state.decrement_bounds.y,
+                    baro_state.decrement_bounds.width,
+                    baro_state.decrement_bounds.height,
+                ),
+                10.0,
+                10.0,
+            )
+
+            painter.drawText(
+                QRectF(
+                    baro_state.decrement_bounds.x,
+                    baro_state.decrement_bounds.y,
+                    baro_state.decrement_bounds.width,
+                    baro_state.decrement_bounds.height,
+                ),
+                Qt.AlignmentFlag.AlignCenter,
+                "-",
+            )
+
+            # Current BARO value
+            painter.setBrush(
+                QBrush(
+                    QColor(
+                        32,
+                        42,
+                        58,
+                        245,
+                    )
+                )
+            )
+
+            painter.drawRoundedRect(
+                QRectF(
+                    baro_state.value_bounds.x,
+                    baro_state.value_bounds.y,
+                    baro_state.value_bounds.width,
+                    baro_state.value_bounds.height,
+                ),
+                10.0,
+                10.0,
+            )
+
+            painter.drawText(
+                QRectF(
+                    baro_state.value_bounds.x,
+                    baro_state.value_bounds.y,
+                    baro_state.value_bounds.width,
+                    baro_state.value_bounds.height,
+                ),
+                Qt.AlignmentFlag.AlignCenter,
+                (
+                    f"BARO {baro_value:.2f} IN"
+                ),
+            )
+
+            # Increment button
+            painter.setBrush(
+                QBrush(
+                    QColor(
+                        55,
+                        55,
+                        68,
+                        245,
+                    )
+                )
+            )
+
+            painter.drawRoundedRect(
+                QRectF(
+                    baro_state.increment_bounds.x,
+                    baro_state.increment_bounds.y,
+                    baro_state.increment_bounds.width,
+                    baro_state.increment_bounds.height,
+                ),
+                10.0,
+                10.0,
+            )
+
+            painter.drawText(
+                QRectF(
+                    baro_state.increment_bounds.x,
+                    baro_state.increment_bounds.y,
+                    baro_state.increment_bounds.width,
+                    baro_state.increment_bounds.height,
+                ),
+                Qt.AlignmentFlag.AlignCenter,
+                "+",
+            )

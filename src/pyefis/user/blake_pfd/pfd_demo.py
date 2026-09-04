@@ -178,6 +178,10 @@ from pyefis.user.blake_pfd.core.touch_settings import (
     TouchSettings,
 )
 
+from pyefis.user.blake_pfd.core.touch_baro_setting import (
+    TouchBaroSetting,
+)
+
 from pyefis.user.blake_pfd.core.touch_map_controls import (
     TouchMapControls,
 )
@@ -536,6 +540,21 @@ class BlakePfdDemo(QWidget):
         )
 
         self.touch_settings = TouchSettings()
+
+        self.touch_baro_setting = (
+            TouchBaroSetting()
+        )
+
+        self.touch_baro_state = (
+            self.touch_baro_setting.layout(
+                screen_width=(
+                    self.config.display.width
+                ),
+                screen_height=(
+                    self.config.display.height
+                ),
+            )
+        )
 
         self.touch_settings_state = (
             self.touch_settings.layout(
@@ -2277,6 +2296,43 @@ class BlakePfdDemo(QWidget):
                             self.guidance_touch_settings
                         ),
                     )
+                )
+
+                self.update()
+                event.accept()
+                return
+
+            self.touch_baro_state = (
+                self.touch_baro_setting.layout(
+                    screen_width=self.width(),
+                    screen_height=self.height(),
+                )
+            )
+
+            baro_action = (
+                self.touch_baro_setting
+                .action_for_touch(
+                    point_x=touch_x,
+                    point_y=touch_y,
+                )
+            )
+
+            if baro_action == "increment":
+                (
+                    self.flight_computer
+                    .baro_setting_controller
+                    .increment()
+                )
+
+                self.update()
+                event.accept()
+                return
+
+            if baro_action == "decrement":
+                (
+                    self.flight_computer
+                    .baro_setting_controller
+                    .decrement()
                 )
 
                 self.update()
@@ -4644,6 +4700,68 @@ class BlakePfdDemo(QWidget):
             QRectF(tape_x + 5, center_y - 25, tape_w - 10, 50),
             Qt.AlignmentFlag.AlignCenter,
             f"{alt:.0f}",
+        )
+
+        # Keep the pilot-selected altimeter setting
+        # continuously visible on the PFD.
+        baro_setting_inhg = (
+            self.flight_computer
+            .baro_setting_controller
+            .setting_inhg
+        )
+
+        baro_box_x = tape_x + 5
+        baro_box_y = tape_y + tape_h - 32
+        baro_box_w = tape_w - 10
+        baro_box_h = 28
+
+        painter.fillRect(
+            baro_box_x,
+            baro_box_y,
+            baro_box_w,
+            baro_box_h,
+            QColor(
+                0,
+                0,
+                0,
+            ),
+        )
+
+        painter.setPen(
+            QPen(
+                QColor(
+                    0,
+                    220,
+                    255,
+                ),
+                1,
+            )
+        )
+
+        painter.drawRect(
+            baro_box_x,
+            baro_box_y,
+            baro_box_w,
+            baro_box_h,
+        )
+
+        painter.setFont(
+            QFont(
+                "Arial",
+                10,
+                QFont.Weight.Bold,
+            )
+        )
+
+        painter.drawText(
+            QRectF(
+                baro_box_x,
+                baro_box_y,
+                baro_box_w,
+                baro_box_h,
+            ),
+            Qt.AlignmentFlag.AlignCenter,
+            f"BARO {baro_setting_inhg:.2f}",
         )
 
     def draw_vsi(
