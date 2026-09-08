@@ -29,6 +29,7 @@ class FlightData:
 
     pressure_alt_ft: float = 0.0
     indicated_alt_ft: float = 0.0
+    baro_setting_inhg: float = 29.92
     density_alt_ft: float = 0.0
     vsi_fpm: float = 0.0
 
@@ -93,11 +94,15 @@ class FlightComputer:
             raw.static_pressure_pa
         )
 
+        flight.baro_setting_inhg = (
+            self.baro_setting_controller
+            .setting_inhg
+        )
+
         flight.indicated_alt_ft = indicated_altitude(
             static_pa=raw.static_pressure_pa,
             baro_setting_inhg=(
-                self.baro_setting_controller
-                .setting_inhg
+                flight.baro_setting_inhg
             ),
         )
 

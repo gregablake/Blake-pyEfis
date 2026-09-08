@@ -1,10 +1,45 @@
 from __future__ import annotations
 
 import csv
+from math import isfinite
 from pathlib import Path
 from time import monotonic
 
+from pyefis.user.blake_pfd.core.baro_setting_controller import (
+    BaroSettingController,
+)
 from pyefis.user.blake_pfd.flight_computer import FlightData
+
+
+STANDARD_BARO_INHG = 29.92
+
+
+def _finite_float(
+    value,
+    fallback: float,
+) -> float:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return fallback
+
+    if not isfinite(number):
+        return fallback
+
+    return number
+
+
+def _validated_replay_baro(
+    value,
+) -> float:
+    controller = BaroSettingController(
+        initial_inhg=STANDARD_BARO_INHG,
+    )
+
+    if controller.set_setting(value):
+        return controller.setting_inhg
+
+    return STANDARD_BARO_INHG
 
 
 class LogReplaySource:
@@ -28,10 +63,37 @@ class LogReplaySource:
 
         row = self.rows[self.index]
 
+        pressure_alt_ft = _finite_float(
+            row.get(
+                "pressure_alt_ft",
+                0.0,
+            ),
+            0.0,
+        )
+
+        indicated_alt_ft = _finite_float(
+            row.get(
+                "indicated_alt_ft",
+                pressure_alt_ft,
+            ),
+            pressure_alt_ft,
+        )
+
+        baro_setting_inhg = (
+            _validated_replay_baro(
+                row.get(
+                    "baro_setting_inhg",
+                    STANDARD_BARO_INHG,
+                )
+            )
+        )
+
         return FlightData(
             ias_kt=float(row.get("ias_kt", 0.0)),
             tas_kt=float(row.get("tas_kt", 0.0)),
-            pressure_alt_ft=float(row.get("pressure_alt_ft", 0.0)),
+            pressure_alt_ft=pressure_alt_ft,
+            indicated_alt_ft=indicated_alt_ft,
+            baro_setting_inhg=baro_setting_inhg,
             density_alt_ft=float(row.get("density_alt_ft", 0.0)),
             vsi_fpm=float(row.get("vsi_fpm", 0.0)),
             heading_deg=float(row.get("heading_deg", 0.0)),

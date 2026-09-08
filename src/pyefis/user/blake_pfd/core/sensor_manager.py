@@ -58,7 +58,13 @@ class SensorManager:
 
     def read_flight(self) -> FlightData:
         if self.replay_source is not None:
-            return self.replay_source.read()
+            flight = self.replay_source.read()
+
+            self.flight_computer.baro_setting_controller.set_setting(
+                flight.baro_setting_inhg
+            )
+
+            return flight
 
         raw = self.flight_sensor_source.read()
         return self.flight_computer.update(raw)
