@@ -10,9 +10,14 @@ from pyefis.user.blake_pfd.pfd_demo import BlakePfdDemo
 
 def make_widget(
     qtbot,
+    tmp_path,
 ):
     widget = BlakePfdDemo(
         use_hardware=False,
+        baro_state_path=(
+            tmp_path
+            / "baro.json"
+        ),
     )
     widget.timer.stop()
 
@@ -46,11 +51,13 @@ def make_widget(
 )
 def test_settings_page_baro_touch_changes_live_controller(
     qtbot,
+    tmp_path,
     action,
     expected,
 ):
     widget = make_widget(
-        qtbot
+        qtbot,
+        tmp_path,
     )
 
     geometry = TouchBaroSetting()

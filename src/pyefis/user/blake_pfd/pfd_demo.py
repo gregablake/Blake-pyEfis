@@ -182,6 +182,10 @@ from pyefis.user.blake_pfd.core.touch_baro_setting import (
     TouchBaroSetting,
 )
 
+from pyefis.user.blake_pfd.core.baro_setting_store import (
+    BaroSettingStore,
+)
+
 from pyefis.user.blake_pfd.core.touch_map_controls import (
     TouchMapControls,
 )
@@ -255,7 +259,12 @@ from pyefis.user.blake_pfd.core.advisory_latch import (
 
 
 class BlakePfdDemo(QWidget):
-    def __init__(self, use_hardware: bool = False, replay_log: str | None = None) -> None:
+    def __init__(
+        self,
+        use_hardware: bool = False,
+        replay_log: str | None = None,
+        baro_state_path: str | Path | None = None,
+    ) -> None:
         super().__init__()
 
         self.config = load_config()
@@ -445,6 +454,44 @@ class BlakePfdDemo(QWidget):
 
         self.route_manager = RouteManager()
         self.flight_computer = FlightComputer()
+
+        if baro_state_path is None:
+            baro_state_path = (
+                Path.home()
+                / ".local"
+                / "state"
+                / "blake_pyefis"
+                / "baro_setting.json"
+            )
+
+        self.baro_setting_store = (
+            BaroSettingStore(
+                baro_state_path
+            )
+        )
+
+        self.baro_persistence_enabled = (
+            replay_log is None
+        )
+
+        if self.baro_persistence_enabled:
+            persisted_baro = (
+                self.baro_setting_store.load(
+                    default_inhg=(
+                        self.flight_computer
+                        .baro_setting_controller
+                        .setting_inhg
+                    )
+                )
+            )
+
+            (
+                self.flight_computer
+                .baro_setting_controller
+                .set_setting(
+                    persisted_baro
+                )
+            )
 
         self.synthetic_vision = SyntheticVisionComputer()
 
@@ -2318,22 +2365,38 @@ class BlakePfdDemo(QWidget):
             )
 
             if baro_action == "increment":
-                (
+                new_baro_setting = (
                     self.flight_computer
                     .baro_setting_controller
                     .increment()
                 )
+
+                if self.baro_persistence_enabled:
+                    try:
+                        self.baro_setting_store.save(
+                            new_baro_setting
+                        )
+                    except OSError:
+                        self.baro_persistence_enabled = False
 
                 self.update()
                 event.accept()
                 return
 
             if baro_action == "decrement":
-                (
+                new_baro_setting = (
                     self.flight_computer
                     .baro_setting_controller
                     .decrement()
                 )
+
+                if self.baro_persistence_enabled:
+                    try:
+                        self.baro_setting_store.save(
+                            new_baro_setting
+                        )
+                    except OSError:
+                        self.baro_persistence_enabled = False
 
                 self.update()
                 event.accept()
