@@ -32,6 +32,47 @@ class ObstacleState:
     warning: bool = False
 
 
+def obstacle_is_threat(
+    *,
+    obstacle: Obstacle,
+    aircraft_alt_ft: float,
+    warning_distance_nm: float,
+    warning_clearance_ft: float,
+) -> bool:
+    values = (
+        obstacle.distance_nm,
+        obstacle.elevation_ft,
+        aircraft_alt_ft,
+        warning_distance_nm,
+        warning_clearance_ft,
+    )
+
+    if not all(
+        isfinite(value)
+        for value in values
+    ):
+        return False
+
+    if (
+        obstacle.distance_nm < 0.0
+        or warning_distance_nm <= 0.0
+        or warning_clearance_ft < 0.0
+    ):
+        return False
+
+    vertical_clearance_ft = (
+        aircraft_alt_ft
+        - obstacle.elevation_ft
+    )
+
+    return (
+        obstacle.distance_nm
+        < warning_distance_nm
+        and vertical_clearance_ft
+        < warning_clearance_ft
+    )
+
+
 class ObstacleComputer:
     def __init__(
         self,
@@ -152,16 +193,15 @@ class ObstacleComputer:
                 bearing_deg=bearing_deg,
             )
 
-            vertical_clearance_ft = (
-                aircraft_alt_ft
-                - obstacle.elevation_ft
-            )
-
-            threat = (
-                distance_nm
-                < self.warning_distance_nm
-                and vertical_clearance_ft
-                < self.warning_clearance_ft
+            threat = obstacle_is_threat(
+                obstacle=computed,
+                aircraft_alt_ft=aircraft_alt_ft,
+                warning_distance_nm=(
+                    self.warning_distance_nm
+                ),
+                warning_clearance_ft=(
+                    self.warning_clearance_ft
+                ),
             )
 
             nearby_with_threat.append(

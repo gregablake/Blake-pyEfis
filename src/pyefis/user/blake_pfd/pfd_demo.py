@@ -47,6 +47,9 @@ from pyefis.user.blake_pfd.obstacle_runtime import (
 from pyefis.user.blake_pfd.obstacles import (
     ObstacleState,
 )
+from pyefis.user.blake_pfd.core.obstacle_projection import (
+    ObstacleProjectionComputer,
+)
 from pyefis.user.blake_pfd.route_manager import RouteManager
 from pyefis.user.blake_pfd.safe_taxi import SafeTaxiComputer
 from pyefis.user.blake_pfd.sensors_sim import SimulatedSensorSource
@@ -899,6 +902,11 @@ class BlakePfdDemo(QWidget):
                 )
             )
         )
+
+        self.obstacle_projection_computer = (
+            ObstacleProjectionComputer()
+        )
+
         self.weather = WeatherReader()
         self.event_manager = EventManager(self)
         self.flight_state_manager = FlightStateManager()
@@ -3721,6 +3729,32 @@ class BlakePfdDemo(QWidget):
                 height,
             )
 
+        obstacle_state = None
+
+        if features.show_obstacles:
+            if self.pfd.position_valid:
+                obstacle_state = (
+                    self.obstacles.update(
+                        aircraft_lat=(
+                            self.pfd.latitude_deg
+                        ),
+                        aircraft_lon=(
+                            self.pfd.longitude_deg
+                        ),
+                        aircraft_alt_ft=(
+                            self.pfd.indicated_alt_ft
+                        ),
+                    )
+                )
+            else:
+                obstacle_state = (
+                    ObstacleState(
+                        ok=False,
+                        nearby=[],
+                        warning=False,
+                    )
+                )
+
         if (
             features.show_synthetic_vision
             and (
@@ -3733,6 +3767,9 @@ class BlakePfdDemo(QWidget):
                 self.pfd,
                 width,
                 height,
+                obstacle_state=(
+                    obstacle_state
+                ),
             )
 
         if features.show_attitude:
@@ -3830,30 +3867,10 @@ class BlakePfdDemo(QWidget):
                 height,
             )
 
-        if features.show_obstacles:
-            if self.pfd.position_valid:
-                obstacle_state = (
-                    self.obstacles.update(
-                        aircraft_lat=(
-                            self.pfd.latitude_deg
-                        ),
-                        aircraft_lon=(
-                            self.pfd.longitude_deg
-                        ),
-                        aircraft_alt_ft=(
-                            self.pfd.indicated_alt_ft
-                        ),
-                    )
-                )
-            else:
-                obstacle_state = (
-                    ObstacleState(
-                        ok=False,
-                        nearby=[],
-                        warning=False,
-                    )
-                )
-
+        if (
+            features.show_obstacles
+            and obstacle_state is not None
+        ):
             self.draw_obstacle_overlay(
                 painter,
                 obstacle_state,
@@ -4551,12 +4568,149 @@ class BlakePfdDemo(QWidget):
 
         painter.restore()
 
+    def draw_synthetic_obstacles(
+        self,
+        painter: QPainter,
+        pfd: FlightData,
+        obstacle_state,
+        width: int,
+        height: int,
+    ) -> None:
+        if pfd is None:
+            return
+
+        if (
+            obstacle_state is None
+            or not obstacle_state.ok
+            or not obstacle_state.nearby
+        ):
+            return
+
+        watchdog = (
+            self.sensor_watchdog_state
+        )
+
+        if not (
+            watchdog.position_valid
+            and watchdog.position_fresh
+            and watchdog.attitude_valid
+            and watchdog.attitude_fresh
+            and watchdog.air_data_valid
+            and watchdog.air_data_fresh
+        ):
+            return
+
+        projected = (
+            self.obstacle_projection_computer
+            .project(
+                obstacles=obstacle_state.nearby,
+                aircraft_alt_ft=(
+                    pfd.indicated_alt_ft
+                ),
+                heading_deg=pfd.heading_deg,
+                pitch_deg=pfd.pitch_deg,
+                roll_deg=pfd.roll_deg,
+                width_px=width,
+                height_px=height,
+                warning_distance_nm=(
+                    self.obstacles
+                    .warning_distance_nm
+                ),
+                warning_clearance_ft=(
+                    self.obstacles
+                    .warning_clearance_ft
+                ),
+            )
+        )
+
+        # Tests may exercise projection without a
+        # QPainter. Projection itself must still run.
+        if painter is None:
+            return
+
+        if not projected:
+            return
+
+        painter.save()
+
+        painter.setBrush(
+            QBrush(
+                Qt.BrushStyle.NoBrush
+            )
+        )
+
+        symbol_radius = 6.0
+
+        for obstacle in projected:
+            x = obstacle.x_px
+            y = obstacle.y_px
+
+            color = (
+                QColor(
+                    255,
+                    0,
+                    0,
+                )
+                if obstacle.threat
+                else QColor(
+                    255,
+                    220,
+                    0,
+                )
+            )
+
+            painter.setPen(
+                QPen(
+                    color,
+                    2,
+                )
+            )
+
+            diamond = QPolygonF(
+                [
+                    QPointF(
+                        x,
+                        y - symbol_radius,
+                    ),
+                    QPointF(
+                        x + symbol_radius,
+                        y,
+                    ),
+                    QPointF(
+                        x,
+                        y + symbol_radius,
+                    ),
+                    QPointF(
+                        x - symbol_radius,
+                        y,
+                    ),
+                ]
+            )
+
+            painter.drawPolygon(
+                diamond
+            )
+
+            painter.drawLine(
+                QPointF(
+                    x,
+                    y + symbol_radius,
+                ),
+                QPointF(
+                    x,
+                    y + symbol_radius + 8.0,
+                ),
+            )
+
+        painter.restore()
+
     def draw_synthetic_vision(
         self,
         painter: QPainter,
         pfd: FlightData,
         width: int,
         height: int,
+        obstacle_state=None,
     ) -> None:
         scene = self.synthetic_vision.update(pfd)
 
@@ -4570,6 +4724,14 @@ class BlakePfdDemo(QWidget):
         self.draw_synthetic_runway(
             painter,
             pfd,
+            width,
+            height,
+        )
+
+        self.draw_synthetic_obstacles(
+            painter,
+            pfd,
+            obstacle_state,
             width,
             height,
         )
