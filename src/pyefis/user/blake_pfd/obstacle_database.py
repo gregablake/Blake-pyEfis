@@ -252,7 +252,7 @@ class ObstacleDatabase:
         self,
         database_path: str | Path,
         *,
-        max_age_days: float = 30.0,
+        max_age_days: float = 7.0,
         now_provider: Callable[
             [],
             float,

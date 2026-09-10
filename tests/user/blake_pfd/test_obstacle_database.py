@@ -454,3 +454,77 @@ def test_tilde_database_path_expands(
     ] == [
         "HOME"
     ]
+
+
+def test_default_database_age_accepts_seven_days(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "DOF.CSV"
+    database = tmp_path / "obstacles.sqlite"
+
+    write_source(
+        source,
+        [
+            row(
+                ident="SEVEN_DAYS",
+                lat_deg=39.01,
+                lon_deg=-84.0,
+            )
+        ],
+    )
+
+    ObstacleDatabaseBuilder().build(
+        source,
+        database,
+    )
+
+    result = ObstacleDatabase(
+        database,
+        now_provider=lambda: (
+            source.stat().st_mtime
+            + 7.0 * 86400.0
+        ),
+    ).query_candidates(
+        aircraft_lat_deg=39.0,
+        aircraft_lon_deg=-84.0,
+        max_distance_nm=10.0,
+    )
+
+    assert result is not None
+
+
+def test_default_database_age_rejects_eight_days(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "DOF.CSV"
+    database = tmp_path / "obstacles.sqlite"
+
+    write_source(
+        source,
+        [
+            row(
+                ident="EIGHT_DAYS",
+                lat_deg=39.01,
+                lon_deg=-84.0,
+            )
+        ],
+    )
+
+    ObstacleDatabaseBuilder().build(
+        source,
+        database,
+    )
+
+    result = ObstacleDatabase(
+        database,
+        now_provider=lambda: (
+            source.stat().st_mtime
+            + 8.0 * 86400.0
+        ),
+    ).query_candidates(
+        aircraft_lat_deg=39.0,
+        aircraft_lon_deg=-84.0,
+        max_distance_nm=10.0,
+    )
+
+    assert result is None
