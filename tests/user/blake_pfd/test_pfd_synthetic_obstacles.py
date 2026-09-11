@@ -458,3 +458,74 @@ def test_synthetic_obstacle_colors_are_per_object(
     ]
 
     widget.close()
+
+
+def test_obstacle_overlay_annunciates_unavailable_data(
+    qtbot,
+    tmp_path,
+):
+    widget = BlakePfdDemo(
+        use_hardware=False,
+        baro_state_path=(
+            tmp_path
+            / "baro.json"
+        ),
+    )
+
+    widget.timer.stop()
+    qtbot.addWidget(widget)
+
+    state = ObstacleState(
+        ok=False,
+        nearby=[],
+        warning=False,
+    )
+
+    drawn_text = []
+
+    class FakePainter:
+        def fillRect(
+            self,
+            *args,
+        ):
+            pass
+
+        def setPen(
+            self,
+            *args,
+        ):
+            pass
+
+        def drawRect(
+            self,
+            *args,
+        ):
+            pass
+
+        def setFont(
+            self,
+            *args,
+        ):
+            pass
+
+        def drawText(
+            self,
+            *args,
+        ):
+            drawn_text.append(
+                args[-1]
+            )
+
+    widget.draw_obstacle_overlay(
+        FakePainter(),
+        state,
+        1024,
+        600,
+    )
+
+    assert drawn_text == [
+        "OBST DATA",
+        "UNAVAILABLE",
+    ]
+
+    widget.close()
