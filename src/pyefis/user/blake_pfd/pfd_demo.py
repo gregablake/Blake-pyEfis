@@ -3732,7 +3732,15 @@ class BlakePfdDemo(QWidget):
         obstacle_state = None
 
         if features.show_obstacles:
-            if self.pfd.position_valid:
+            obstacle_inputs_fresh = bool(
+                self.pfd.position_valid
+                and watchdog.position_valid
+                and watchdog.position_fresh
+                and watchdog.air_data_valid
+                and watchdog.air_data_fresh
+            )
+
+            if obstacle_inputs_fresh:
                 obstacle_state = (
                     self.obstacles.update(
                         aircraft_lat=(

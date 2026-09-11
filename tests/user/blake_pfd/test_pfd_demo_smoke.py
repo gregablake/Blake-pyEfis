@@ -1678,3 +1678,169 @@ def test_synthetic_terrain_uses_nearfield_biased_mesh(
         widget.close()
         widget.deleteLater()
         qapp.processEvents()
+
+
+def _render_obstacle_gate_widget(widget):
+    image = QImage(
+        1280,
+        720,
+        QImage.Format.Format_ARGB32,
+    )
+    image.fill(0)
+
+    painter = QPainter(image)
+
+    try:
+        widget.render(painter)
+    finally:
+        painter.end()
+
+
+def test_obstacle_runtime_gate_rejects_stale_position(
+    qapp: QApplication,
+) -> None:
+    widget = BlakePfdDemo(
+        use_hardware=False,
+    )
+
+    widget.timer.stop()
+    widget.resize(1280, 720)
+
+    try:
+        widget.update_data()
+
+        # Critical regression condition:
+        # PFD position itself remains valid, but the
+        # watchdog says that position is stale.
+        assert widget.pfd.position_valid is True
+
+        widget.sensor_watchdog_state = (
+            widget.sensor_watchdog.evaluate(
+                flight_data_available=True,
+                position_valid=True,
+                position_fresh=False,
+                attitude_valid=True,
+                attitude_fresh=True,
+                air_data_valid=True,
+                air_data_fresh=True,
+            )
+        )
+
+        class MustNotUpdate:
+            def update(self, **kwargs):
+                raise AssertionError(
+                    "stale GPS must not update obstacle runtime"
+                )
+
+        widget.obstacles = MustNotUpdate()
+
+        _render_obstacle_gate_widget(widget)
+
+    finally:
+        widget.close()
+        widget.deleteLater()
+        qapp.processEvents()
+
+
+def test_obstacle_runtime_gate_rejects_stale_air_data(
+    qapp: QApplication,
+) -> None:
+    widget = BlakePfdDemo(
+        use_hardware=False,
+    )
+
+    widget.timer.stop()
+    widget.resize(1280, 720)
+
+    try:
+        widget.update_data()
+
+        assert widget.pfd.position_valid is True
+
+        widget.sensor_watchdog_state = (
+            widget.sensor_watchdog.evaluate(
+                flight_data_available=True,
+                position_valid=True,
+                position_fresh=True,
+                attitude_valid=True,
+                attitude_fresh=True,
+                air_data_valid=True,
+                air_data_fresh=False,
+            )
+        )
+
+        class MustNotUpdate:
+            def update(self, **kwargs):
+                raise AssertionError(
+                    "stale air data must not update obstacle runtime"
+                )
+
+        widget.obstacles = MustNotUpdate()
+
+        _render_obstacle_gate_widget(widget)
+
+    finally:
+        widget.close()
+        widget.deleteLater()
+        qapp.processEvents()
+
+
+def test_obstacle_runtime_gate_accepts_fresh_inputs(
+    qapp: QApplication,
+) -> None:
+    from pyefis.user.blake_pfd.obstacles import (
+        ObstacleState,
+    )
+
+    widget = BlakePfdDemo(
+        use_hardware=False,
+    )
+
+    widget.timer.stop()
+    widget.resize(1280, 720)
+
+    try:
+        widget.update_data()
+
+        assert widget.pfd.position_valid is True
+
+        widget.sensor_watchdog_state = (
+            widget.sensor_watchdog.evaluate(
+                flight_data_available=True,
+                position_valid=True,
+                position_fresh=True,
+                attitude_valid=True,
+                attitude_fresh=True,
+                air_data_valid=True,
+                air_data_fresh=True,
+            )
+        )
+
+        expected_lat = widget.pfd.latitude_deg
+        expected_lon = widget.pfd.longitude_deg
+        expected_alt = widget.pfd.indicated_alt_ft
+
+        calls = []
+
+        class RecordingObstacles:
+            def update(self, **kwargs):
+                calls.append(kwargs)
+                return ObstacleState(
+                    ok=True,
+                    nearby=[],
+                    warning=False,
+                )
+
+        widget.obstacles = RecordingObstacles()
+
+        _render_obstacle_gate_widget(widget)
+
+        assert len(calls) == 1
+        assert calls[0]["aircraft_lat"] == expected_lat
+        assert calls[0]["aircraft_lon"] == expected_lon
+        assert calls[0]["aircraft_alt_ft"] == expected_alt
+
+    finally:
+        widget.close()
+        widget.deleteLater()
+        qapp.processEvents()
