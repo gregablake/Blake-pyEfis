@@ -447,12 +447,12 @@ def test_synthetic_obstacle_colors_are_per_object(
     assert pen_colors == [
         (
             255,
-            0,
+            220,
             0,
         ),
         (
             255,
-            220,
+            0,
             0,
         ),
     ]
@@ -526,6 +526,123 @@ def test_obstacle_overlay_annunciates_unavailable_data(
     assert drawn_text == [
         "OBST DATA",
         "UNAVAILABLE",
+    ]
+
+    widget.close()
+
+
+def test_synthetic_obstacle_threats_draw_after_non_threats(
+    qtbot,
+    tmp_path,
+):
+    widget = BlakePfdDemo(
+        use_hardware=False,
+        baro_state_path=(
+            tmp_path
+            / "baro.json"
+        ),
+    )
+
+    widget.timer.stop()
+    qtbot.addWidget(widget)
+
+    widget.sensor_watchdog_state = (
+        make_fresh_watchdog()
+    )
+
+    pfd = SimpleNamespace(
+        indicated_alt_ft=2000.0,
+        heading_deg=0.0,
+        pitch_deg=0.0,
+        roll_deg=0.0,
+    )
+
+    class FakeProjector:
+        def project(
+            self,
+            **kwargs,
+        ):
+            # Deliberately return the RED threat first.
+            # Safe rendering must still paint it last.
+            return [
+                SimpleNamespace(
+                    ident="THREAT",
+                    x_px=500.0,
+                    y_px=250.0,
+                    threat=True,
+                ),
+                SimpleNamespace(
+                    ident="SAFE",
+                    x_px=500.0,
+                    y_px=250.0,
+                    threat=False,
+                ),
+            ]
+
+    widget.obstacle_projection_computer = (
+        FakeProjector()
+    )
+
+    drawn_colors = []
+
+    class FakePainter:
+        def save(self):
+            pass
+
+        def restore(self):
+            pass
+
+        def setBrush(
+            self,
+            brush,
+        ):
+            pass
+
+        def setPen(
+            self,
+            pen,
+        ):
+            color = pen.color()
+            drawn_colors.append(
+                (
+                    color.red(),
+                    color.green(),
+                    color.blue(),
+                )
+            )
+
+        def drawPolygon(
+            self,
+            polygon,
+        ):
+            pass
+
+        def drawLine(
+            self,
+            start,
+            end,
+        ):
+            pass
+
+    widget.draw_synthetic_obstacles(
+        FakePainter(),
+        pfd,
+        make_obstacle_state(),
+        1024,
+        600,
+    )
+
+    assert drawn_colors == [
+        (
+            255,
+            220,
+            0,
+        ),
+        (
+            255,
+            0,
+            0,
+        ),
     ]
 
     widget.close()

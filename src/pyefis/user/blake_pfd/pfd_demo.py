@@ -4649,7 +4649,14 @@ class BlakePfdDemo(QWidget):
 
         symbol_radius = 6.0
 
-        for obstacle in projected:
+        # Draw non-threats first so RED threats always
+        # remain visually dominant when symbols overlap.
+        obstacles_to_draw = sorted(
+            projected,
+            key=lambda obstacle: obstacle.threat,
+        )
+
+        for obstacle in obstacles_to_draw:
             x = obstacle.x_px
             y = obstacle.y_px
 
