@@ -4649,11 +4649,66 @@ class BlakePfdDemo(QWidget):
 
         symbol_radius = 6.0
 
-        # Draw non-threats first so RED threats always
-        # remain visually dominant when symbols overlap.
-        obstacles_to_draw = sorted(
-            projected,
-            key=lambda obstacle: obstacle.threat,
+        # Declutter YELLOW obstacles in screen space.
+        # Keep the nearest obstacle in each cluster.
+        # RED threats are never removed and are always
+        # drawn last so they remain visually dominant.
+        non_threats = sorted(
+            (
+                obstacle
+                for obstacle in projected
+                if not obstacle.threat
+            ),
+            key=lambda obstacle: getattr(
+                obstacle,
+                "distance_nm",
+                float("inf"),
+            ),
+        )
+
+        min_spacing_px = 24.0
+        min_spacing_sq = (
+            min_spacing_px
+            * min_spacing_px
+        )
+
+        decluttered_non_threats = []
+
+        for obstacle in non_threats:
+            overlaps = any(
+                (
+                    (
+                        obstacle.x_px
+                        - kept.x_px
+                    )
+                    ** 2
+                    + (
+                        obstacle.y_px
+                        - kept.y_px
+                    )
+                    ** 2
+                )
+                < min_spacing_sq
+                for kept
+                in decluttered_non_threats
+            )
+
+            if overlaps:
+                continue
+
+            decluttered_non_threats.append(
+                obstacle
+            )
+
+        threats = [
+            obstacle
+            for obstacle in projected
+            if obstacle.threat
+        ]
+
+        obstacles_to_draw = (
+            decluttered_non_threats
+            + threats
         )
 
         for obstacle in obstacles_to_draw:

@@ -646,3 +646,142 @@ def test_synthetic_obstacle_threats_draw_after_non_threats(
     ]
 
     widget.close()
+
+
+def test_synthetic_obstacles_declutter_non_threats_but_keep_all_threats(
+    qtbot,
+    tmp_path,
+):
+    widget = BlakePfdDemo(
+        use_hardware=False,
+        baro_state_path=(
+            tmp_path
+            / "baro.json"
+        ),
+    )
+
+    widget.timer.stop()
+    qtbot.addWidget(widget)
+
+    widget.sensor_watchdog_state = (
+        make_fresh_watchdog()
+    )
+
+    pfd = SimpleNamespace(
+        indicated_alt_ft=2000.0,
+        heading_deg=0.0,
+        pitch_deg=0.0,
+        roll_deg=0.0,
+    )
+
+    class FakeProjector:
+        def project(
+            self,
+            **kwargs,
+        ):
+            return [
+                SimpleNamespace(
+                    ident="YELLOW-NEAR",
+                    x_px=400.0,
+                    y_px=250.0,
+                    distance_nm=1.0,
+                    threat=False,
+                ),
+                SimpleNamespace(
+                    ident="YELLOW-CLUSTER",
+                    x_px=410.0,
+                    y_px=255.0,
+                    distance_nm=2.0,
+                    threat=False,
+                ),
+                SimpleNamespace(
+                    ident="YELLOW-FAR",
+                    x_px=650.0,
+                    y_px=250.0,
+                    distance_nm=3.0,
+                    threat=False,
+                ),
+                SimpleNamespace(
+                    ident="THREAT-A",
+                    x_px=405.0,
+                    y_px=250.0,
+                    distance_nm=1.0,
+                    threat=True,
+                ),
+                SimpleNamespace(
+                    ident="THREAT-B",
+                    x_px=410.0,
+                    y_px=255.0,
+                    distance_nm=1.5,
+                    threat=True,
+                ),
+            ]
+
+    widget.obstacle_projection_computer = (
+        FakeProjector()
+    )
+
+    drawn_colors = []
+
+    class FakePainter:
+        def save(self):
+            pass
+
+        def restore(self):
+            pass
+
+        def setBrush(
+            self,
+            brush,
+        ):
+            pass
+
+        def setPen(
+            self,
+            pen,
+        ):
+            color = pen.color()
+            drawn_colors.append(
+                (
+                    color.red(),
+                    color.green(),
+                    color.blue(),
+                )
+            )
+
+        def drawPolygon(
+            self,
+            polygon,
+        ):
+            pass
+
+        def drawLine(
+            self,
+            start,
+            end,
+        ):
+            pass
+
+    widget.draw_synthetic_obstacles(
+        FakePainter(),
+        pfd,
+        make_obstacle_state(),
+        1024,
+        600,
+    )
+
+    yellow = (
+        255,
+        220,
+        0,
+    )
+    red = (
+        255,
+        0,
+        0,
+    )
+
+    assert drawn_colors.count(yellow) == 2
+    assert drawn_colors.count(red) == 2
+
+    widget.close()
