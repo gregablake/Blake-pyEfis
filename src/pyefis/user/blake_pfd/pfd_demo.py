@@ -3677,6 +3677,16 @@ class BlakePfdDemo(QWidget):
 
         watchdog = self.sensor_watchdog_state
 
+        # Geographic overlays must never silently
+        # fall back to a fixed/demo aircraft
+        # position.  Only current, validated GPS
+        # position is usable.
+        position_usable = bool(
+            self.pfd.position_valid
+            and watchdog.position_valid
+            and watchdog.position_fresh
+        )
+
         safe_taxi_inputs_fresh = bool(
             watchdog.position_valid
             and watchdog.position_fresh
@@ -3934,14 +3944,23 @@ class BlakePfdDemo(QWidget):
         if declutter_level <= 0 and features.show_nearest_airports:
             self.draw_nearest_airports_overlay(painter, self.pfd, width, height)
 
-        if declutter_level <= 0 and features.show_moving_map:
+        if (
+            declutter_level <= 0
+            and features.show_moving_map
+            and position_usable
+        ):
             map_state = self.moving_map.update(
                 database=self.database,
-                aircraft_lat=39.1031,
-                aircraft_lon=-84.5120,
+                aircraft_lat=self.pfd.latitude_deg,
+                aircraft_lon=self.pfd.longitude_deg,
                 range_nm=self.map_range_nm,
             )
-            self.draw_moving_map_overlay(painter, map_state, width, height)
+            self.draw_moving_map_overlay(
+                painter,
+                map_state,
+                width,
+                height,
+            )
 
         if declutter_level <= 0 and features.show_route:
             self.draw_route_overlay(painter, width, height)
@@ -3968,12 +3987,32 @@ class BlakePfdDemo(QWidget):
             self.draw_vnav_info_box(painter, self.pfd, width, height)
 
         if features.show_terrain:
-            terrain_state = self.terrain.update(
-                aircraft_alt_ft=self.pfd.indicated_alt_ft,
-                aircraft_lat=39.1031,
-                aircraft_lon=-84.5120,
+            terrain_inputs_usable = bool(
+                position_usable
+                and watchdog.air_data_valid
+                and watchdog.air_data_fresh
             )
-            self.draw_terrain_status_box(painter, terrain_state, width, height)
+
+            if terrain_inputs_usable:
+                terrain_state = self.terrain.update(
+                    aircraft_alt_ft=(
+                        self.pfd.indicated_alt_ft
+                    ),
+                    aircraft_lat=(
+                        self.pfd.latitude_deg
+                    ),
+                    aircraft_lon=(
+                        self.pfd.longitude_deg
+                    ),
+                )
+
+                self.draw_terrain_status_box(
+                    painter,
+                    terrain_state,
+                    width,
+                    height,
+                )
+
             self.draw_terrain_warning_banner(
                 painter,
                 width,
@@ -4353,17 +4392,38 @@ class BlakePfdDemo(QWidget):
 
     def draw_declutter_level_0_overlays(self, painter: QPainter, width: int, height: int, features) -> None:
         # Draw overlays that are shown only when declutter level is 0
-        if features.show_nearest_airports:
-            self.draw_nearest_airports_overlay(painter, self.pfd, width, height)
+        watchdog = self.sensor_watchdog_state
 
-        if features.show_moving_map:
+        position_usable = bool(
+            self.pfd.position_valid
+            and watchdog.position_valid
+            and watchdog.position_fresh
+        )
+
+        if features.show_nearest_airports:
+            self.draw_nearest_airports_overlay(
+                painter,
+                self.pfd,
+                width,
+                height,
+            )
+
+        if (
+            features.show_moving_map
+            and position_usable
+        ):
             map_state = self.moving_map.update(
                 database=self.database,
-                aircraft_lat=39.1031,
-                aircraft_lon=-84.5120,
+                aircraft_lat=self.pfd.latitude_deg,
+                aircraft_lon=self.pfd.longitude_deg,
                 range_nm=self.map_range_nm,
             )
-            self.draw_moving_map_overlay(painter, map_state, width, height)
+            self.draw_moving_map_overlay(
+                painter,
+                map_state,
+                width,
+                height,
+            )
 
         if features.show_route:
             self.draw_route_overlay(painter, width, height)
@@ -6035,7 +6095,20 @@ class BlakePfdDemo(QWidget):
             )
         )
 
-        nearest = self.database.nearest_airports(39.1031, -84.5120, max_results=5)
+        watchdog = self.sensor_watchdog_state
+
+        if not (
+            pfd.position_valid
+            and watchdog.position_valid
+            and watchdog.position_fresh
+        ):
+            return
+
+        nearest = self.database.nearest_airports(
+            pfd.latitude_deg,
+            pfd.longitude_deg,
+            max_results=5,
+        )
 
         box_x, box_y, box_w, box_h = 20, height - 210, 330, 165
         painter.setPen(QPen(QColor(255, 255, 255), 2))

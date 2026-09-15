@@ -1844,3 +1844,268 @@ def test_obstacle_runtime_gate_accepts_fresh_inputs(
         widget.close()
         widget.deleteLater()
         qapp.processEvents()
+
+
+def test_moving_map_uses_live_fresh_position(
+    qapp: QApplication,
+) -> None:
+    from types import SimpleNamespace
+
+    widget = BlakePfdDemo(
+        use_hardware=False,
+    )
+
+    widget.timer.stop()
+    widget.resize(1280, 720)
+
+    calls = []
+
+    class RecordingMap:
+        def update(self, **kwargs):
+            calls.append(kwargs)
+            return SimpleNamespace()
+
+    try:
+        widget.update_data()
+
+        widget.pfd.position_valid = True
+        widget.pfd.latitude_deg = 41.2345
+        widget.pfd.longitude_deg = -82.3456
+
+        widget.sensor_watchdog_state = (
+            widget.sensor_watchdog.evaluate(
+                flight_data_available=True,
+                position_valid=True,
+                position_fresh=True,
+                attitude_valid=True,
+                attitude_fresh=True,
+                air_data_valid=True,
+                air_data_fresh=True,
+            )
+        )
+
+        widget.moving_map = RecordingMap()
+
+        widget.draw_moving_map_overlay = (
+            lambda *args, **kwargs: None
+        )
+
+        _render_obstacle_gate_widget(widget)
+
+        assert len(calls) == 1
+
+        assert (
+            calls[0]["aircraft_lat"]
+            == 41.2345
+        )
+
+        assert (
+            calls[0]["aircraft_lon"]
+            == -82.3456
+        )
+
+    finally:
+        widget.close()
+        widget.deleteLater()
+        qapp.processEvents()
+
+
+def test_moving_map_rejects_stale_position(
+    qapp: QApplication,
+) -> None:
+    widget = BlakePfdDemo(
+        use_hardware=False,
+    )
+
+    widget.timer.stop()
+    widget.resize(1280, 720)
+
+    class MustNotUpdate:
+        def update(self, **kwargs):
+            raise AssertionError(
+                "stale GPS must not update moving map"
+            )
+
+    try:
+        widget.update_data()
+
+        assert widget.pfd.position_valid is True
+
+        widget.sensor_watchdog_state = (
+            widget.sensor_watchdog.evaluate(
+                flight_data_available=True,
+                position_valid=True,
+                position_fresh=False,
+                attitude_valid=True,
+                attitude_fresh=True,
+                air_data_valid=True,
+                air_data_fresh=True,
+            )
+        )
+
+        widget.moving_map = MustNotUpdate()
+
+        _render_obstacle_gate_widget(widget)
+
+    finally:
+        widget.close()
+        widget.deleteLater()
+        qapp.processEvents()
+
+
+def test_terrain_status_uses_live_fresh_position(
+    qapp: QApplication,
+) -> None:
+    from types import SimpleNamespace
+
+    widget = BlakePfdDemo(
+        use_hardware=False,
+    )
+
+    widget.timer.stop()
+    widget.resize(1280, 720)
+
+    calls = []
+
+    class RecordingTerrain:
+        def update(self, **kwargs):
+            calls.append(kwargs)
+
+            return SimpleNamespace(
+                ok=True,
+                terrain_elevation_ft=700.0,
+                clearance_ft=800.0,
+                warning_level="none",
+            )
+
+    try:
+        widget.update_data()
+
+        widget.pfd.position_valid = True
+        widget.pfd.latitude_deg = 40.9876
+        widget.pfd.longitude_deg = -83.7654
+        widget.pfd.indicated_alt_ft = 2345.0
+
+        widget.sensor_watchdog_state = (
+            widget.sensor_watchdog.evaluate(
+                flight_data_available=True,
+                position_valid=True,
+                position_fresh=True,
+                attitude_valid=True,
+                attitude_fresh=True,
+                air_data_valid=True,
+                air_data_fresh=True,
+            )
+        )
+
+        widget.terrain = RecordingTerrain()
+
+        widget.draw_terrain_status_box = (
+            lambda *args, **kwargs: None
+        )
+
+        _render_obstacle_gate_widget(widget)
+
+        assert len(calls) == 1
+
+        assert (
+            calls[0]["aircraft_lat"]
+            == 40.9876
+        )
+
+        assert (
+            calls[0]["aircraft_lon"]
+            == -83.7654
+        )
+
+        assert (
+            calls[0]["aircraft_alt_ft"]
+            == 2345.0
+        )
+
+    finally:
+        widget.close()
+        widget.deleteLater()
+        qapp.processEvents()
+
+
+def test_terrain_status_rejects_stale_position(
+    qapp: QApplication,
+) -> None:
+    widget = BlakePfdDemo(
+        use_hardware=False,
+    )
+
+    widget.timer.stop()
+    widget.resize(1280, 720)
+
+    class MustNotUpdate:
+        def update(self, **kwargs):
+            raise AssertionError(
+                "stale GPS must not update terrain status"
+            )
+
+    try:
+        widget.update_data()
+
+        widget.sensor_watchdog_state = (
+            widget.sensor_watchdog.evaluate(
+                flight_data_available=True,
+                position_valid=True,
+                position_fresh=False,
+                attitude_valid=True,
+                attitude_fresh=True,
+                air_data_valid=True,
+                air_data_fresh=True,
+            )
+        )
+
+        widget.terrain = MustNotUpdate()
+
+        _render_obstacle_gate_widget(widget)
+
+    finally:
+        widget.close()
+        widget.deleteLater()
+        qapp.processEvents()
+
+
+def test_terrain_status_rejects_stale_air_data(
+    qapp: QApplication,
+) -> None:
+    widget = BlakePfdDemo(
+        use_hardware=False,
+    )
+
+    widget.timer.stop()
+    widget.resize(1280, 720)
+
+    class MustNotUpdate:
+        def update(self, **kwargs):
+            raise AssertionError(
+                "stale air data must not update terrain status"
+            )
+
+    try:
+        widget.update_data()
+
+        widget.sensor_watchdog_state = (
+            widget.sensor_watchdog.evaluate(
+                flight_data_available=True,
+                position_valid=True,
+                position_fresh=True,
+                attitude_valid=True,
+                attitude_fresh=True,
+                air_data_valid=True,
+                air_data_fresh=False,
+            )
+        )
+
+        widget.terrain = MustNotUpdate()
+
+        _render_obstacle_gate_widget(widget)
+
+    finally:
+        widget.close()
+        widget.deleteLater()
+        qapp.processEvents()
