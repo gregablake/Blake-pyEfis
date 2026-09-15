@@ -17,6 +17,7 @@ from pyefis.user.blake_pfd.audio_alerts import AudioAlertManager
 from pyefis.user.blake_pfd.config_loader import load_config
 from pyefis.user.blake_pfd.core.page_manager import PageManager
 from pyefis.user.blake_pfd.core.page_renderer import PageRenderer
+from pyefis.user.blake_pfd.core.pfd_layout import PfdLayout
 from pyefis.user.blake_pfd.core.warning_manager import WarningManager
 from pyefis.user.blake_pfd.database_importer import AviationDatabase
 from pyefis.user.blake_pfd.ems_alert_history import EmsAlertHistory
@@ -55,6 +56,9 @@ from pyefis.user.blake_pfd.safe_taxi import SafeTaxiComputer
 from pyefis.user.blake_pfd.sensors_sim import SimulatedSensorSource
 from pyefis.user.blake_pfd.startup_check import run_startup_check
 from pyefis.user.blake_pfd.stratux_reader import StratuxReader
+from pyefis.user.blake_pfd.core.traffic_geometry import (
+    calculate_traffic_geometry,
+)
 from pyefis.user.blake_pfd.synthetic_vision import (
     SyntheticVisionComputer,
     project_object_to_screen,
@@ -3641,6 +3645,12 @@ class BlakePfdDemo(QWidget):
 
         width = self.width()
         height = self.height()
+
+        layout = PfdLayout.build(
+            width,
+            height,
+        )
+
         features = self.config.features
         declutter_level = self.config.declutter.level
 
@@ -3781,32 +3791,106 @@ class BlakePfdDemo(QWidget):
             )
 
         if features.show_attitude:
+            painter.save()
+
+            painter.translate(
+                layout.flight_view.x,
+                layout.flight_view.y,
+            )
+
+            painter.setClipRect(
+                0,
+                0,
+                layout.flight_view.width,
+                layout.flight_view.height,
+            )
+
             self.draw_hits_guidance(
                 painter,
-                width,
-                height,
+                layout.flight_view.width,
+                layout.flight_view.height,
             )
 
             self.draw_flight_director(
                 painter,
-                width,
-                height,
+                layout.flight_view.width,
+                layout.flight_view.height,
             )
+
+            painter.restore()
 
         if (
             self.guidance_touch_settings
             .flight_path_marker_enabled
         ):
+            painter.save()
+
+            painter.translate(
+                layout.flight_view.x,
+                layout.flight_view.y,
+            )
+
+            painter.setClipRect(
+                0,
+                0,
+                layout.flight_view.width,
+                layout.flight_view.height,
+            )
+
             self.draw_flight_path_marker(
                 painter,
-                width,
-                height,
+                layout.flight_view.width,
+                layout.flight_view.height,
             )
+
+            painter.restore()
         if features.show_airspeed:
-            self.draw_airspeed_tape(painter, self.pfd, width, height)
+            painter.save()
+
+            painter.translate(
+                layout.flight_view.x,
+                layout.flight_view.y,
+            )
+
+            painter.setClipRect(
+                0,
+                0,
+                layout.flight_view.width,
+                layout.flight_view.height,
+            )
+
+            self.draw_airspeed_tape(
+                painter,
+                self.pfd,
+                layout.flight_view.width,
+                layout.flight_view.height,
+            )
+
+            painter.restore()
 
         if features.show_altitude:
-            self.draw_altitude_tape(painter, self.pfd, width, height)
+            painter.save()
+
+            painter.translate(
+                layout.flight_view.x,
+                layout.flight_view.y,
+            )
+
+            painter.setClipRect(
+                0,
+                0,
+                layout.flight_view.width,
+                layout.flight_view.height,
+            )
+
+            self.draw_altitude_tape(
+                painter,
+                self.pfd,
+                layout.flight_view.width,
+                layout.flight_view.height,
+            )
+
+            painter.restore()
 
         if features.show_vsi:
             self.draw_vsi(painter, self.pfd, width, height)
@@ -3815,7 +3899,28 @@ class BlakePfdDemo(QWidget):
             self.draw_heading_strip(painter, self.pfd, width, height)
 
         if features.show_hsi:
-            self.draw_hsi_compass_rose(painter, self.pfd, width, height)
+            painter.save()
+
+            painter.translate(
+                layout.flight_view.x,
+                layout.flight_view.y,
+            )
+
+            painter.setClipRect(
+                0,
+                0,
+                layout.flight_view.width,
+                layout.flight_view.height,
+            )
+
+            self.draw_hsi_compass_rose(
+                painter,
+                self.pfd,
+                layout.flight_view.width,
+                layout.flight_view.height,
+            )
+
+            painter.restore()
 
         if features.show_turn_rate or features.show_slip_skid:
             self.draw_turn_and_slip(painter, self.pfd, width, height)
@@ -3886,15 +3991,59 @@ class BlakePfdDemo(QWidget):
                 height,
             )
 
-        if features.show_traffic and self.config.stratux.enabled:
-            self.draw_traffic_overlay(painter, self.stratux.read(), width, height)
+        stratux_state = None
+        weather_state = None
+
+        # Read Stratux only once per paint cycle.
+        #
+        # Weather is intentionally drawn before
+        # traffic so future NEXRAD graphics remain
+        # underneath traffic targets.
+        if (
+            self.config.stratux.enabled
+            and (
+                features.show_traffic
+                or features.show_weather
+            )
+        ):
+            (
+                stratux_state,
+                weather_state,
+            ) = self._read_stratux_weather_states()
 
         if features.show_weather:
-            self.draw_weather_overlay(painter, self.weather.read(), width, height)
+            if weather_state is None:
+                weather_state = self.weather.read()
+
+            self.draw_weather_overlay(
+                painter,
+                weather_state,
+                width,
+                height,
+            )
+
+        if (
+            features.show_traffic
+            and self.config.stratux.enabled
+            and stratux_state is not None
+        ):
+            self.draw_traffic_overlay(
+                painter,
+                stratux_state,
+                width,
+                height,
+            )
         self.draw_aircraft_state_label(
             painter,
             width,
             height,
+        )
+
+        self.draw_compact_engine_overlay(
+            painter,
+            x=layout.left_panel.x + 10,
+            y=layout.left_panel.y + 10,
+            width=layout.left_panel.width - 20,
         )
 
         self.draw_emergency_landing_guidance(
@@ -4507,21 +4656,16 @@ class BlakePfdDemo(QWidget):
         center_x = width // 2
         center_y = height // 2
 
-        horizon_width = int(
-            width * 0.58
-        )
-
-        horizon_height = int(
-            height * 0.70
-        )
+        horizon_width = width
+        horizon_height = height
 
         painter.save()
 
         painter.setClipRect(
-            center_x - horizon_width // 2,
-            center_y - horizon_height // 2,
-            horizon_width,
-            horizon_height,
+            0,
+            0,
+            width,
+            height,
         )
 
         painter.setPen(
@@ -4862,18 +5006,18 @@ class BlakePfdDemo(QWidget):
     def draw_attitude(self, painter: QPainter, pfd: FlightData, width: int, height: int) -> None:
         center_x = width // 2
         center_y = height // 2
-        horizon_width = int(width * 0.58)
-        horizon_height = int(height * 0.70)
+        horizon_width = width
+        horizon_height = height
 
         roll_deg = getattr(pfd, "roll_deg", 0.0)
         pitch_deg = getattr(pfd, "pitch_deg", 0.0)
 
         painter.save()
         painter.setClipRect(
-            center_x - horizon_width // 2,
-            center_y - horizon_height // 2,
-            horizon_width,
-            horizon_height,
+            0,
+            0,
+            width,
+            height,
         )
 
         painter.translate(center_x, center_y)
@@ -4888,14 +5032,6 @@ class BlakePfdDemo(QWidget):
 
         self.draw_pitch_ladder(painter)
         painter.restore()
-
-        painter.setPen(QPen(QColor(180, 180, 180), 2))
-        painter.drawRect(
-            center_x - horizon_width // 2,
-            center_y - horizon_height // 2,
-            horizon_width,
-            horizon_height,
-        )
 
         painter.setPen(QPen(QColor(255, 220, 0), 4))
         painter.drawLine(center_x - 90, center_y, center_x - 25, center_y)
@@ -4940,7 +5076,7 @@ class BlakePfdDemo(QWidget):
         center_y = tape_y + tape_h // 2
         ias = pfd.ias_kt
 
-        painter.fillRect(tape_x, tape_y, tape_w, tape_h, QColor(20, 20, 25))
+        painter.fillRect(tape_x, tape_y, tape_w, tape_h, QColor(15, 15, 20, 140))
         painter.setPen(QPen(QColor(210, 210, 210), 2))
         painter.drawRect(tape_x, tape_y, tape_w, tape_h)
 
@@ -4953,7 +5089,7 @@ class BlakePfdDemo(QWidget):
                 painter.drawLine(tape_x + tape_w - 35, y, tape_x + tape_w - 5, y)
                 painter.drawText(tape_x + 10, y + 5, str(speed))
 
-        painter.fillRect(tape_x + 5, center_y - 25, tape_w - 10, 50, QColor(0, 0, 0))
+        painter.fillRect(tape_x + 5, center_y - 25, tape_w - 10, 50, QColor(0, 0, 0, 210))
         painter.setPen(QPen(QColor(255, 255, 255), 2))
         painter.drawRect(tape_x + 5, center_y - 25, tape_w - 10, 50)
         painter.setFont(QFont("Arial", 22, QFont.Weight.Bold))
@@ -4971,7 +5107,7 @@ class BlakePfdDemo(QWidget):
         center_y = tape_y + tape_h // 2
         alt = pfd.indicated_alt_ft
 
-        painter.fillRect(tape_x, tape_y, tape_w, tape_h, QColor(20, 20, 25))
+        painter.fillRect(tape_x, tape_y, tape_w, tape_h, QColor(15, 15, 20, 140))
         painter.setPen(QPen(QColor(210, 210, 210), 2))
         painter.drawRect(tape_x, tape_y, tape_w, tape_h)
 
@@ -4987,7 +5123,7 @@ class BlakePfdDemo(QWidget):
                 painter.drawLine(tape_x + 5, y, tape_x + 35, y)
                 painter.drawText(tape_x + 42, y + 5, str(altitude))
 
-        painter.fillRect(tape_x + 5, center_y - 25, tape_w - 10, 50, QColor(0, 0, 0))
+        painter.fillRect(tape_x + 5, center_y - 25, tape_w - 10, 50, QColor(0, 0, 0, 210))
         painter.setPen(QPen(QColor(255, 255, 255), 2))
         painter.drawRect(tape_x + 5, center_y - 25, tape_w - 10, 50)
         painter.setFont(QFont("Arial", 20, QFont.Weight.Bold))
@@ -5019,6 +5155,7 @@ class BlakePfdDemo(QWidget):
                 0,
                 0,
                 0,
+                190,
             ),
         )
 
@@ -5268,17 +5405,40 @@ class BlakePfdDemo(QWidget):
 
     def draw_hsi_compass_rose(self, painter: QPainter, pfd: FlightData, width: int, height: int) -> None:
         center_x = width // 2
-        center_y = height - 170
-        radius = 95
+        center_y = height - 100
+        radius = 72
 
         heading = pfd.heading_deg
         desired_track = pfd.desired_track_deg
         bearing = pfd.bearing_deg
 
-        painter.setPen(QPen(QColor(255, 255, 255), 2))
-        painter.drawEllipse(center_x - radius, center_y - radius, radius * 2, radius * 2)
+        painter.setBrush(
+            QBrush(
+                Qt.BrushStyle.NoBrush
+            )
+        )
 
-        painter.setFont(QFont("Arial", 9, QFont.Weight.Bold))
+        painter.setPen(
+            QPen(
+                QColor(255, 255, 255),
+                2,
+            )
+        )
+
+        painter.drawEllipse(
+            center_x - radius,
+            center_y - radius,
+            radius * 2,
+            radius * 2,
+        )
+
+        painter.setFont(
+            QFont(
+                "Arial",
+                8,
+                QFont.Weight.Bold,
+            )
+        )
 
         for deg in range(0, 360, 30):
             relative = (deg - heading + 360) % 360
@@ -5319,7 +5479,7 @@ class BlakePfdDemo(QWidget):
                     displayed_cdi,
                 ),
             )
-            * 35
+            * 27
         )
         offset_angle = dtk_angle + radians(90)
         offset_x = int(cos(offset_angle) * cdi_offset)
@@ -5342,8 +5502,8 @@ class BlakePfdDemo(QWidget):
         painter.setPen(QPen(QColor(255, 255, 255), 2))
         painter.setBrush(QBrush(QColor(255, 255, 255)))
         for dot in [-2, -1, 1, 2]:
-            dot_x = center_x + int(cos(offset_angle) * dot * 18)
-            dot_y = center_y + int(sin(offset_angle) * dot * 18)
+            dot_x = center_x + int(cos(offset_angle) * dot * 14)
+            dot_y = center_y + int(sin(offset_angle) * dot * 14)
             painter.drawEllipse(dot_x - 3, dot_y - 3, 6, 6)
 
         brg_relative = (bearing - heading + 360) % 360
@@ -5447,7 +5607,13 @@ class BlakePfdDemo(QWidget):
             )
 
     def draw_top_data_bar(self, painter: QPainter, pfd: FlightData, width: int) -> None:
-        painter.fillRect(0, 0, width, 55, QColor(0, 0, 0))
+        # GLASS_PANEL_NO_BRUSH
+        painter.setBrush(
+            QBrush(
+                Qt.BrushStyle.NoBrush
+            )
+        )
+
         painter.setPen(QColor(255, 255, 255))
         painter.setFont(QFont("Arial", 14, QFont.Weight.Bold))
 
@@ -5469,12 +5635,12 @@ class BlakePfdDemo(QWidget):
         width: int,
         height: int,
     ) -> None:
-        painter.fillRect(
-            0,
-            height - 35,
-            width,
-            35,
-            QColor(0, 0, 0),
+
+        # GLASS_PANEL_NO_BRUSH
+        painter.setBrush(
+            QBrush(
+                Qt.BrushStyle.NoBrush
+            )
         )
 
         painter.setPen(
@@ -5570,21 +5736,27 @@ class BlakePfdDemo(QWidget):
         )
 
     def draw_vnav_info_box(self, painter: QPainter, pfd: FlightData, width: int, height: int) -> None:
-        box_x = width - 250
-        box_y = 265
-        box_w = 220
-        box_h = 105
+        # GLASS_PANEL_NO_BRUSH
+        painter.setBrush(
+            QBrush(
+                Qt.BrushStyle.NoBrush
+            )
+        )
 
-        painter.fillRect(box_x, box_y, box_w, box_h, QColor(0, 0, 0))
+        box_x = 842
+        box_y = 438
+        box_w = 172
+        box_h = 72
+
         painter.setPen(QPen(QColor(0, 255, 0), 2))
         painter.drawRect(box_x, box_y, box_w, box_h)
 
-        painter.setFont(QFont("Arial", 11, QFont.Weight.Bold))
+        painter.setFont(QFont("Arial", 8, QFont.Weight.Bold))
         painter.setPen(QColor(255, 255, 255))
-        painter.drawText(box_x + 10, box_y + 25, "VNAV")
-        painter.drawText(box_x + 10, box_y + 50, f"TGT ALT {pfd.glidepath_target_alt_ft:.0f}")
-        painter.drawText(box_x + 10, box_y + 75, f"ALT ERR {pfd.glidepath_alt_error_ft:+.0f}")
-        painter.drawText(box_x + 10, box_y + 100, f"GP {self.config.vnav.glidepath_angle_deg:.1f}°")
+        painter.drawText(box_x + 10, box_y + 16, "VNAV")
+        painter.drawText(box_x + 10, box_y + 32, f"TGT ALT {pfd.glidepath_target_alt_ft:.0f}")
+        painter.drawText(box_x + 10, box_y + 48, f"ALT ERR {pfd.glidepath_alt_error_ft:+.0f}")
+        painter.drawText(box_x + 10, box_y + 64, f"GP {self.config.vnav.glidepath_angle_deg:.1f}°")
 
     def draw_waypoint_info_box(
         self,
@@ -5593,6 +5765,13 @@ class BlakePfdDemo(QWidget):
         width: int,
         height: int,
     ) -> None:
+        # GLASS_PANEL_NO_BRUSH
+        painter.setBrush(
+            QBrush(
+                Qt.BrushStyle.NoBrush
+            )
+        )
+
         box_x = width // 2 - 120
         box_y = 60
         box_w = 240
@@ -5641,13 +5820,6 @@ class BlakePfdDemo(QWidget):
                 pfd.course_error_deg
             )
 
-        painter.fillRect(
-            box_x,
-            box_y,
-            box_w,
-            box_h,
-            QColor(0, 0, 0),
-        )
 
         painter.setPen(
             QPen(
@@ -5718,6 +5890,13 @@ class BlakePfdDemo(QWidget):
         width: int,
         height: int,
     ) -> None:
+        # GLASS_PANEL_NO_BRUSH
+        painter.setBrush(
+            QBrush(
+                Qt.BrushStyle.NoBrush
+            )
+        )
+
         active_leg = (
             self.route_manager.get_active_leg()
         )
@@ -5782,13 +5961,6 @@ class BlakePfdDemo(QWidget):
                     f"DIRECT TO {waypoint_id}"
                 )
 
-        painter.fillRect(
-            box_x,
-            box_y,
-            box_w,
-            box_h,
-            QColor(0, 0, 0),
-        )
 
         painter.setPen(
             QPen(
@@ -5853,10 +6025,19 @@ class BlakePfdDemo(QWidget):
         )
 
     def draw_nearest_airports_overlay(self, painter: QPainter, pfd: FlightData, width: int, height: int) -> None:
+        # PFD_HIDE_NEAREST_OVERLAY
+        return
+
+        # GLASS_PANEL_NO_BRUSH
+        painter.setBrush(
+            QBrush(
+                Qt.BrushStyle.NoBrush
+            )
+        )
+
         nearest = self.database.nearest_airports(39.1031, -84.5120, max_results=5)
 
         box_x, box_y, box_w, box_h = 20, height - 210, 330, 165
-        painter.fillRect(box_x, box_y, box_w, box_h, QColor(0, 0, 0))
         painter.setPen(QPen(QColor(255, 255, 255), 2))
         painter.drawRect(box_x, box_y, box_w, box_h)
 
@@ -5876,18 +6057,18 @@ class BlakePfdDemo(QWidget):
         width: int,
         height: int,
     ) -> None:
-        box_x = 20
-        box_y = 300
-        box_w = 300
-        box_h = 220
-
-        painter.fillRect(
-            box_x,
-            box_y,
-            box_w,
-            box_h,
-            QColor(0, 0, 0),
+        # GLASS_PANEL_NO_BRUSH
+        painter.setBrush(
+            QBrush(
+                Qt.BrushStyle.NoBrush
+            )
         )
+
+        box_x = 10
+        box_y = 430
+        box_w = 160
+        box_h = 130
+
         painter.setPen(
             QPen(
                 QColor(0, 180, 255),
@@ -6416,23 +6597,36 @@ class BlakePfdDemo(QWidget):
                 ),
             )
     def draw_route_overlay(self, painter: QPainter, width: int, height: int) -> None:
+        # GLASS_PANEL_NO_BRUSH
+        painter.setBrush(
+            QBrush(
+                Qt.BrushStyle.NoBrush
+            )
+        )
+
         route = self.route_manager.load_route()
         active_leg = self.route_manager.get_active_leg()
 
-        box_x, box_y, box_w, box_h = width - 360, 120, 340, 135
-        painter.fillRect(box_x, box_y, box_w, box_h, QColor(0, 0, 0))
+        box_x, box_y, box_w, box_h = 842, 188, 172, 88
         painter.setPen(QPen(QColor(255, 255, 255), 2))
         painter.drawRect(box_x, box_y, box_w, box_h)
 
-        painter.setFont(QFont("Arial", 11, QFont.Weight.Bold))
-        painter.drawText(box_x + 10, box_y + 25, f"ROUTE: {route.get('route_id', 'NO ROUTE')}")
-        painter.drawText(box_x + 10, box_y + 55, " → ".join(route.get("waypoints", []))[:35])
+        painter.setFont(QFont("Arial", 8, QFont.Weight.Bold))
+        painter.drawText(box_x + 10, box_y + 18, f"ROUTE: {route.get('route_id', 'NO ROUTE')}")
+        painter.drawText(box_x + 10, box_y + 36, " → ".join(route.get("waypoints", []))[:18])
 
         if active_leg:
-            painter.drawText(box_x + 10, box_y + 85, f"LEG: {active_leg.from_ident} → {active_leg.to_ident}")
-            painter.drawText(box_x + 10, box_y + 112, f"DTK: {active_leg.desired_track_deg:.0f}°")
+            painter.drawText(box_x + 10, box_y + 54, f"LEG: {active_leg.from_ident} → {active_leg.to_ident}")
+            painter.drawText(box_x + 10, box_y + 72, f"DTK: {active_leg.desired_track_deg:.0f}°")
 
     def draw_selected_airport_info(self, painter: QPainter, width: int, height: int) -> None:
+        # GLASS_PANEL_NO_BRUSH
+        painter.setBrush(
+            QBrush(
+                Qt.BrushStyle.NoBrush
+            )
+        )
+
         airport_id = self.config.navigation.selected_waypoint_id
         airport = self.database.get_airport(airport_id)
 
@@ -6442,37 +6636,63 @@ class BlakePfdDemo(QWidget):
         runway = self.database.best_runway(airport_id)
         freqs = self.database.get_frequencies(airport_id)
 
-        box_x = width - 360
-        box_y = height - 350
-        box_w = 340
-        box_h = 300
+        box_x = 842
+        box_y = 282
+        box_w = 172
+        box_h = 150
 
-        painter.fillRect(box_x, box_y, box_w, box_h, QColor(0, 0, 0))
         painter.setPen(QPen(QColor(255, 255, 255), 2))
         painter.drawRect(box_x, box_y, box_w, box_h)
 
-        painter.setFont(QFont("Arial", 11, QFont.Weight.Bold))
-        painter.drawText(box_x + 10, box_y + 25, f"{airport.ident} - {airport.name[:26]}")
-        painter.drawText(box_x + 10, box_y + 55, f"Elev: {airport.elevation_ft:.0f} ft")
+        painter.setFont(QFont("Arial", 8, QFont.Weight.Bold))
+        painter.drawText(box_x + 10, box_y + 18, f"{airport.ident} - {airport.name[:12]}")
+        painter.drawText(box_x + 10, box_y + 38, f"Elev: {airport.elevation_ft:.0f} ft")
 
         if runway:
-            painter.drawText(box_x + 10, box_y + 85, f"RWY {runway.le_ident}/{runway.he_ident}")
-            painter.drawText(box_x + 10, box_y + 110, f"{runway.length_ft:.0f} x {runway.width_ft:.0f} ft {runway.surface[:10]}")
+            painter.drawText(box_x + 10, box_y + 58, f"RWY {runway.le_ident}/{runway.he_ident}")
+            painter.drawText(box_x + 10, box_y + 74, f"{runway.length_ft:.0f} x {runway.width_ft:.0f} ft {runway.surface[:10]}")
 
-        y = box_y + 145
-        for freq in freqs[:5]:
+        y = box_y + 92
+        for freq in freqs[:1]:
             painter.drawText(box_x + 10, y, f"{freq.type}: {freq.frequency_mhz:.3f}")
-            y += 22
+            y += 16
 
     def draw_startup_status_box(self, painter: QPainter, width: int, height: int) -> None:
+        # GLASS_PANEL_NO_BRUSH
+        painter.setBrush(
+            QBrush(
+                Qt.BrushStyle.NoBrush
+            )
+        )
+
         status = self.startup_status
+
+        if (
+            status.database_ok
+            and status.config_ok
+        ):
+            return
 
         box_x = 20
         box_y = 20
         box_w = 280
         box_h = 65
 
-        painter.fillRect(box_x, box_y, box_w, box_h, QColor(0, 0, 0))
+        # Startup failure must remain readable over
+        # any synthetic-vision background.
+        painter.fillRect(
+            box_x,
+            box_y,
+            box_w,
+            box_h,
+            QColor(
+                0,
+                0,
+                0,
+                225,
+            ),
+        )
+
 
         color = QColor(0, 255, 0) if status.database_ok and status.config_ok else QColor(255, 0, 0)
 
@@ -6487,19 +6707,133 @@ class BlakePfdDemo(QWidget):
         painter.drawText(box_x + 10, box_y + 50, f"APT {status.airports_loaded}  NAV {status.navaids_loaded}")
 
     def draw_sensor_status_panel(self, painter: QPainter, width: int, height: int) -> None:
+        # PFD_HIDE_SIM_SENSOR_PANEL
+        if not self.use_hardware:
+            return
+
+        # GLASS_PANEL_NO_BRUSH
+        painter.setBrush(
+            QBrush(
+                Qt.BrushStyle.NoBrush
+            )
+        )
+
         box_x = 310
         box_y = 20
         box_w = 300
         box_h = 90
 
-        painter.fillRect(box_x, box_y, box_w, box_h, QColor(0, 0, 0))
-        painter.setPen(QPen(QColor(255, 255, 255), 2))
-        painter.drawRect(box_x, box_y, box_w, box_h)
+        status = getattr(
+            self.sensors,
+            "status",
+            None,
+        )
 
-        painter.setFont(QFont("Arial", 11, QFont.Weight.Bold))
+        sensor_problem = (
+            status is None
+            or not all(
+                (
+                    bool(
+                        getattr(
+                            status,
+                            "bno085_ok",
+                            False,
+                        )
+                    ),
+                    bool(
+                        getattr(
+                            status,
+                            "baro_ok",
+                            False,
+                        )
+                    ),
+                    bool(
+                        getattr(
+                            status,
+                            "airspeed_ok",
+                            False,
+                        )
+                    ),
+                    bool(
+                        getattr(
+                            status,
+                            "gps_ok",
+                            False,
+                        )
+                    ),
+                )
+            )
+        )
 
-        mode_text = "HARDWARE" if self.use_hardware else "SIM"
-        painter.setPen(QColor(0, 255, 0) if self.use_hardware else QColor(0, 180, 255))
+        if sensor_problem:
+            painter.fillRect(
+                box_x,
+                box_y,
+                box_w,
+                box_h,
+                QColor(
+                    0,
+                    0,
+                    0,
+                    225,
+                ),
+            )
+
+        border_color = (
+            QColor(
+                255,
+                0,
+                0,
+            )
+            if sensor_problem
+            else QColor(
+                255,
+                255,
+                255,
+            )
+        )
+
+        painter.setPen(
+            QPen(
+                border_color,
+                2,
+            )
+        )
+
+        painter.drawRect(
+            box_x,
+            box_y,
+            box_w,
+            box_h,
+        )
+
+        painter.setFont(
+            QFont(
+                "Arial",
+                11,
+                QFont.Weight.Bold,
+            )
+        )
+
+        mode_text = (
+            "HARDWARE"
+            if self.use_hardware
+            else "SIM"
+        )
+
+        painter.setPen(
+            QColor(
+                255,
+                0,
+                0,
+            )
+            if sensor_problem
+            else QColor(
+                0,
+                255,
+                0,
+            )
+        )
         painter.drawText(box_x + 10, box_y + 24, f"SENSOR MODE: {mode_text}")
 
         if not self.use_hardware:
@@ -6542,6 +6876,16 @@ class BlakePfdDemo(QWidget):
         painter.drawText(box_x + 10, box_y + 76, ok_text("GPS", status.gps_ok))
 
     def draw_sim_profile_box(self, painter: QPainter, width: int, height: int) -> None:
+        # PFD_HIDE_SIM_PROFILE
+        return
+
+        # GLASS_PANEL_NO_BRUSH
+        painter.setBrush(
+            QBrush(
+                Qt.BrushStyle.NoBrush
+            )
+        )
+
         if self.use_hardware:
             return
 
@@ -6552,7 +6896,6 @@ class BlakePfdDemo(QWidget):
         box_w = 230
         box_h = 65
 
-        painter.fillRect(box_x, box_y, box_w, box_h, QColor(0, 0, 0))
         painter.setPen(QPen(QColor(0, 180, 255), 2))
         painter.drawRect(box_x, box_y, box_w, box_h)
 
@@ -6564,12 +6907,34 @@ class BlakePfdDemo(QWidget):
         painter.drawText(box_x + 10, box_y + 50, profile)
 
     def draw_terrain_status_box(self, painter: QPainter, terrain_state, width: int, height: int) -> None:
-        box_x = 20
-        box_y = 95
-        box_w = 230
-        box_h = 90
+        # GLASS_PANEL_NO_BRUSH
+        painter.setBrush(
+            QBrush(
+                Qt.BrushStyle.NoBrush
+            )
+        )
 
-        painter.fillRect(box_x, box_y, box_w, box_h, QColor(0, 0, 0))
+        box_x = 10
+        box_y = 270
+        box_w = 160
+        box_h = 75
+
+        if terrain_state.warning_level in {
+            "yellow",
+            "red",
+        }:
+            painter.fillRect(
+                box_x,
+                box_y,
+                box_w,
+                box_h,
+                QColor(
+                    0,
+                    0,
+                    0,
+                    225,
+                ),
+            )
 
         if terrain_state.warning_level == "red":
             color = QColor(255, 0, 0)
@@ -6581,7 +6946,7 @@ class BlakePfdDemo(QWidget):
         painter.setPen(QPen(color, 2))
         painter.drawRect(box_x, box_y, box_w, box_h)
 
-        painter.setFont(QFont("Arial", 12, QFont.Weight.Bold))
+        painter.setFont(QFont("Arial", 9, QFont.Weight.Bold))
         painter.setPen(color)
         source_label = (
             "SRTM"
@@ -6616,18 +6981,23 @@ class BlakePfdDemo(QWidget):
         width: int,
         height: int,
     ) -> None:
-        box_x = 20
-        box_y = 195
-        box_w = 260
-        box_h = 90
-
-        if not obstacle_state.ok:
-            color = QColor(
-                255,
-                180,
-                0,
+        # GLASS_PANEL_NO_BRUSH
+        if hasattr(
+            painter,
+            "setBrush",
+        ):
+            painter.setBrush(
+                QBrush(
+                    Qt.BrushStyle.NoBrush
+                )
             )
 
+        box_x = 10
+        box_y = 350
+        box_w = 160
+        box_h = 75
+
+        if not obstacle_state.ok:
             painter.fillRect(
                 box_x,
                 box_y,
@@ -6637,8 +7007,16 @@ class BlakePfdDemo(QWidget):
                     0,
                     0,
                     0,
+                    225,
                 ),
             )
+
+            color = QColor(
+                255,
+                180,
+                0,
+            )
+
 
             painter.setPen(
                 QPen(
@@ -6681,6 +7059,19 @@ class BlakePfdDemo(QWidget):
         if not obstacle_state.nearby:
             return
 
+        painter.fillRect(
+            box_x,
+            box_y,
+            box_w,
+            box_h,
+            QColor(
+                0,
+                0,
+                0,
+                225,
+            ),
+        )
+
         color = (
             QColor(
                 255,
@@ -6695,17 +7086,6 @@ class BlakePfdDemo(QWidget):
             )
         )
 
-        painter.fillRect(
-            box_x,
-            box_y,
-            box_w,
-            box_h,
-            QColor(
-                0,
-                0,
-                0,
-            ),
-        )
 
         painter.setPen(
             QPen(
@@ -7080,15 +7460,1088 @@ class BlakePfdDemo(QWidget):
             "RANGE 3500 FT",
         )
 
-    def draw_traffic_overlay(self, painter: QPainter, stratux_state, width: int, height: int) -> None:
-        painter.setFont(QFont("Arial", 12, QFont.Weight.Bold))
-        painter.setPen(QColor(0, 255, 255) if stratux_state.ok else QColor(255, 180, 0))
-        painter.drawText(width - 230, 80, "STRATUX ONLINE" if stratux_state.ok else "STRATUX OFFLINE")
+    def _read_stratux_weather_states(
+        self,
+    ):
+        """
+        Perform exactly one Stratux UDP read and
+        distribute that same receiver state to the
+        traffic and weather subsystems.
+        """
 
-    def draw_weather_overlay(self, painter: QPainter, weather_state, width: int, height: int) -> None:
-        painter.setFont(QFont("Arial", 12, QFont.Weight.Bold))
-        painter.setPen(QColor(0, 255, 0) if weather_state.ok else QColor(255, 180, 0))
-        painter.drawText(width - 230, 105, "WX ONLINE" if weather_state.ok else "WX WAITING")
+        stratux_state = (
+            self.stratux.read()
+        )
+
+        self.weather.ingest_uplinks(
+            getattr(
+                stratux_state,
+                "uplinks",
+                None,
+            )
+            or []
+        )
+
+        weather_state = (
+            self.weather.read()
+        )
+
+        return (
+            stratux_state,
+            weather_state,
+        )
+
+    def draw_traffic_overlay(
+        self,
+        painter: QPainter,
+        stratux_state,
+        width: int,
+        height: int,
+    ) -> None:
+        """
+        Draw validated Stratux traffic over the
+        lower-left local map.
+
+        Traffic is suppressed when Stratux data or
+        ownship GPS position is not fresh.
+
+        ADS-B pressure altitude is compared only
+        against ownship pressure altitude.
+        """
+
+        del width, height
+
+        painter.save()
+
+        try:
+            # Current local-map geometry.
+            #
+            # Keep this synchronized with
+            # draw_moving_map_overlay().
+            box_x = 10
+            box_y = 430
+            box_w = 160
+            box_h = 130
+
+            center_x = (
+                box_x
+                + box_w / 2.0
+            )
+
+            center_y = (
+                box_y
+                + box_h / 2.0
+            )
+
+            radius = (
+                min(
+                    box_w,
+                    box_h,
+                )
+                * 0.42
+            )
+
+            # Compact receiver status.
+            painter.setFont(
+                QFont(
+                    "Arial",
+                    8,
+                    QFont.Weight.Bold,
+                )
+            )
+
+            painter.setPen(
+                QColor(
+                    0,
+                    255,
+                    255,
+                )
+                if stratux_state.ok
+                else QColor(
+                    255,
+                    180,
+                    0,
+                )
+            )
+
+            painter.drawText(
+                108,
+                535,
+                (
+                    "TFC ON"
+                    if stratux_state.ok
+                    else "TFC OFF"
+                ),
+            )
+
+            # Fail closed:
+            # no traffic symbols without fresh
+            # valid receiver data.
+            if not stratux_state.ok:
+                return
+
+            targets = (
+                stratux_state.traffic
+                or []
+            )
+
+            if not targets:
+                return
+
+            pfd = getattr(
+                self,
+                "pfd",
+                None,
+            )
+
+            watchdog = getattr(
+                self,
+                "sensor_watchdog_state",
+                None,
+            )
+
+            if (
+                pfd is None
+                or watchdog is None
+            ):
+                return
+
+            if not bool(
+                getattr(
+                    pfd,
+                    "position_valid",
+                    False,
+                )
+            ):
+                return
+
+            if not bool(
+                getattr(
+                    watchdog,
+                    "position_valid",
+                    False,
+                )
+            ):
+                return
+
+            if not bool(
+                getattr(
+                    watchdog,
+                    "position_fresh",
+                    False,
+                )
+            ):
+                return
+
+            own_lat = getattr(
+                pfd,
+                "latitude_deg",
+                None,
+            )
+
+            own_lon = getattr(
+                pfd,
+                "longitude_deg",
+                None,
+            )
+
+            # Only use ownship pressure altitude
+            # for traffic relative-altitude labels
+            # when air data is valid and fresh.
+            air_data_usable = bool(
+                getattr(
+                    watchdog,
+                    "air_data_valid",
+                    False,
+                )
+                and getattr(
+                    watchdog,
+                    "air_data_fresh",
+                    False,
+                )
+            )
+
+            if air_data_usable:
+                own_pressure_alt = getattr(
+                    pfd,
+                    "pressure_alt_ft",
+                    None,
+                )
+            else:
+                own_pressure_alt = None
+
+            map_range_nm = getattr(
+                self,
+                "map_range_nm",
+                None,
+            )
+
+            try:
+                map_range_nm = float(
+                    map_range_nm
+                )
+            except (
+                TypeError,
+                ValueError,
+            ):
+                return
+
+            if (
+                not isfinite(
+                    map_range_nm
+                )
+                or map_range_nm <= 0.0
+            ):
+                return
+
+            orientation_state = getattr(
+                self,
+                "map_orientation_state",
+                None,
+            )
+
+            reference_deg = getattr(
+                orientation_state,
+                "reference_deg",
+                0.0,
+            )
+
+            try:
+                reference_deg = float(
+                    reference_deg
+                )
+            except (
+                TypeError,
+                ValueError,
+            ):
+                reference_deg = 0.0
+
+            if not isfinite(
+                reference_deg
+            ):
+                reference_deg = 0.0
+
+            visible = []
+
+            for target in targets:
+
+                if not bool(
+                    getattr(
+                        target,
+                        "position_valid",
+                        False,
+                    )
+                ):
+                    continue
+
+                geometry = (
+                    calculate_traffic_geometry(
+                        own_lat_deg=own_lat,
+                        own_lon_deg=own_lon,
+                        own_pressure_alt_ft=(
+                            own_pressure_alt
+                        ),
+                        target_lat_deg=getattr(
+                            target,
+                            "latitude_deg",
+                            None,
+                        ),
+                        target_lon_deg=getattr(
+                            target,
+                            "longitude_deg",
+                            None,
+                        ),
+                        target_pressure_alt_ft=getattr(
+                            target,
+                            "pressure_alt_ft",
+                            None,
+                        ),
+                    )
+                )
+
+                if geometry is None:
+                    continue
+
+                if (
+                    geometry.distance_nm
+                    > map_range_nm
+                ):
+                    continue
+
+                visible.append(
+                    (
+                        bool(
+                            getattr(
+                                target,
+                                "traffic_alert",
+                                False,
+                            )
+                        ),
+                        geometry.distance_nm,
+                        target,
+                        geometry,
+                    )
+                )
+
+            # Alerts first, then nearest targets.
+            visible.sort(
+                key=lambda item: (
+                    not item[0],
+                    item[1],
+                )
+            )
+
+            # Keep the small PFD map readable.
+            visible = visible[:8]
+
+            painter.setBrush(
+                QBrush(
+                    Qt.BrushStyle.NoBrush
+                )
+            )
+
+            for (
+                alert,
+                _distance_nm,
+                target,
+                geometry,
+            ) in visible:
+
+                relative_bearing = (
+                    geometry.bearing_deg
+                    - reference_deg
+                ) % 360.0
+
+                angle = radians(
+                    relative_bearing
+                )
+
+                target_radius = (
+                    radius
+                    * min(
+                        1.0,
+                        geometry.distance_nm
+                        / map_range_nm,
+                    )
+                )
+
+                x = (
+                    center_x
+                    + sin(angle)
+                    * target_radius
+                )
+
+                y = (
+                    center_y
+                    - cos(angle)
+                    * target_radius
+                )
+
+                color = (
+                    QColor(
+                        255,
+                        220,
+                        0,
+                    )
+                    if alert
+                    else QColor(
+                        0,
+                        255,
+                        255,
+                    )
+                )
+
+                painter.setPen(
+                    QPen(
+                        color,
+                        2,
+                    )
+                )
+
+                size = (
+                    6.0
+                    if alert
+                    else 5.0
+                )
+
+                # Hollow diamond traffic symbol.
+                painter.drawPolygon(
+                    QPolygonF(
+                        [
+                            QPointF(
+                                x,
+                                y - size,
+                            ),
+                            QPointF(
+                                x + size,
+                                y,
+                            ),
+                            QPointF(
+                                x,
+                                y + size,
+                            ),
+                            QPointF(
+                                x - size,
+                                y,
+                            ),
+                        ]
+                    )
+                )
+
+                painter.setFont(
+                    QFont(
+                        "Arial",
+                        7,
+                        QFont.Weight.Bold,
+                    )
+                )
+
+                if (
+                    geometry.relative_alt_ft
+                    is None
+                ):
+                    altitude_text = "---"
+                else:
+                    relative_hundreds = int(
+                        round(
+                            geometry.relative_alt_ft
+                            / 100.0
+                        )
+                    )
+
+                    altitude_text = (
+                        f"{relative_hundreds:+03d}"
+                    )
+
+                vertical_speed = getattr(
+                    target,
+                    "vertical_speed_fpm",
+                    None,
+                )
+
+                trend_text = ""
+
+                if (
+                    vertical_speed
+                    is not None
+                ):
+                    try:
+                        vertical_speed = float(
+                            vertical_speed
+                        )
+                    except (
+                        TypeError,
+                        ValueError,
+                    ):
+                        vertical_speed = None
+
+                if (
+                    vertical_speed is not None
+                    and isfinite(
+                        vertical_speed
+                    )
+                ):
+                    if vertical_speed >= 500.0:
+                        trend_text = "↑"
+                    elif vertical_speed <= -500.0:
+                        trend_text = "↓"
+
+                painter.setPen(
+                    color
+                )
+
+                painter.drawText(
+                    int(x + 7),
+                    int(y - 1),
+                    (
+                        altitude_text
+                        + trend_text
+                    ),
+                )
+
+                # Callsign only for a GDL90
+                # traffic-alert target to avoid
+                # excessive map clutter.
+                if alert:
+                    callsign = str(
+                        getattr(
+                            target,
+                            "callsign",
+                            "",
+                        )
+                    ).strip()
+
+                    if callsign:
+                        painter.drawText(
+                            int(x + 7),
+                            int(y + 10),
+                            callsign[:7],
+                        )
+
+        finally:
+            painter.restore()
+
+    def draw_weather_overlay(
+        self,
+        painter: QPainter,
+        weather_state,
+        width: int,
+        height: int,
+    ) -> None:
+        """
+        Draw fresh FIS-B NEXRAD underneath traffic
+        in the lower-left local map.
+
+        Radar plotting fails closed without fresh
+        ownship position.
+
+        FIS-B levels 0/1 are intentionally not
+        painted. Higher precipitation levels use
+        progressively stronger colors.
+        """
+
+        del width, height
+
+        painter.save()
+
+        try:
+            # Must remain synchronized with the
+            # local moving-map / traffic geometry.
+            box_x = 10
+            box_y = 430
+            box_w = 160
+            box_h = 130
+
+            center_x = (
+                box_x
+                + box_w / 2.0
+            )
+
+            center_y = (
+                box_y
+                + box_h / 2.0
+            )
+
+            radius = (
+                min(
+                    box_w,
+                    box_h,
+                )
+                * 0.42
+            )
+
+            pfd = getattr(
+                self,
+                "pfd",
+                None,
+            )
+
+            watchdog = getattr(
+                self,
+                "sensor_watchdog_state",
+                None,
+            )
+
+            position_usable = bool(
+                pfd is not None
+                and watchdog is not None
+                and getattr(
+                    pfd,
+                    "position_valid",
+                    False,
+                )
+                and getattr(
+                    watchdog,
+                    "position_valid",
+                    False,
+                )
+                and getattr(
+                    watchdog,
+                    "position_fresh",
+                    False,
+                )
+            )
+
+            weather_ok = bool(
+                getattr(
+                    weather_state,
+                    "ok",
+                    False,
+                )
+            )
+
+            painter.setFont(
+                QFont(
+                    "Arial",
+                    8,
+                    QFont.Weight.Bold,
+                )
+            )
+
+            if weather_ok:
+                if position_usable:
+                    painter.setPen(
+                        QColor(
+                            0,
+                            255,
+                            0,
+                        )
+                    )
+
+                    status_text = "WX ON"
+                else:
+                    painter.setPen(
+                        QColor(
+                            255,
+                            180,
+                            0,
+                        )
+                    )
+
+                    status_text = "WX POS"
+            else:
+                painter.setPen(
+                    QColor(
+                        255,
+                        180,
+                        0,
+                    )
+                )
+
+                status_text = "WX WAIT"
+
+            painter.drawText(
+                108,
+                549,
+                status_text,
+            )
+
+            if (
+                not weather_ok
+                or not position_usable
+            ):
+                return
+
+            blocks = (
+                getattr(
+                    weather_state,
+                    "nexrad_blocks",
+                    None,
+                )
+                or []
+            )
+
+            if not blocks:
+                return
+
+            own_lat = getattr(
+                pfd,
+                "latitude_deg",
+                None,
+            )
+
+            own_lon = getattr(
+                pfd,
+                "longitude_deg",
+                None,
+            )
+
+            map_range_nm = getattr(
+                self,
+                "map_range_nm",
+                None,
+            )
+
+            try:
+                map_range_nm = float(
+                    map_range_nm
+                )
+            except (
+                TypeError,
+                ValueError,
+            ):
+                return
+
+            if (
+                not isfinite(
+                    map_range_nm
+                )
+                or map_range_nm <= 0.0
+            ):
+                return
+
+            orientation_state = getattr(
+                self,
+                "map_orientation_state",
+                None,
+            )
+
+            reference_deg = getattr(
+                orientation_state,
+                "reference_deg",
+                0.0,
+            )
+
+            try:
+                reference_deg = float(
+                    reference_deg
+                )
+            except (
+                TypeError,
+                ValueError,
+            ):
+                reference_deg = 0.0
+
+            if not isfinite(
+                reference_deg
+            ):
+                reference_deg = 0.0
+
+            def project_point(
+                latitude_deg,
+                longitude_deg,
+            ):
+                geometry = (
+                    calculate_traffic_geometry(
+                        own_lat_deg=own_lat,
+                        own_lon_deg=own_lon,
+                        own_pressure_alt_ft=None,
+                        target_lat_deg=(
+                            latitude_deg
+                        ),
+                        target_lon_deg=(
+                            longitude_deg
+                        ),
+                        target_pressure_alt_ft=None,
+                    )
+                )
+
+                if geometry is None:
+                    return None
+
+                relative_bearing = (
+                    geometry.bearing_deg
+                    - reference_deg
+                ) % 360.0
+
+                angle = radians(
+                    relative_bearing
+                )
+
+                # Do NOT clamp weather to the edge.
+                # Off-range polygons are clipped out.
+                point_radius = (
+                    radius
+                    * geometry.distance_nm
+                    / map_range_nm
+                )
+
+                return QPointF(
+                    center_x
+                    + sin(angle)
+                    * point_radius,
+                    center_y
+                    - cos(angle)
+                    * point_radius,
+                )
+
+            # Radar must stay inside the local map.
+            painter.setClipRect(
+                box_x,
+                box_y,
+                box_w,
+                box_h,
+            )
+
+            painter.setPen(
+                Qt.PenStyle.NoPen
+            )
+
+            # Draw coarse CONUS data first and
+            # higher-detail regional data afterward.
+            #
+            # Scale 2 = coarsest, scale 0 = finest.
+            ordered_blocks = sorted(
+                blocks,
+                key=lambda block: (
+                    0
+                    if int(
+                        getattr(
+                            block,
+                            "product_id",
+                            0,
+                        )
+                    ) == 64
+                    else 1,
+                    -int(
+                        getattr(
+                            block,
+                            "scale_factor",
+                            0,
+                        )
+                    ),
+                ),
+            )
+
+            color_by_level = {
+                2: QColor(
+                    0,
+                    170,
+                    0,
+                    115,
+                ),
+                3: QColor(
+                    0,
+                    230,
+                    0,
+                    135,
+                ),
+                4: QColor(
+                    255,
+                    220,
+                    0,
+                    150,
+                ),
+                5: QColor(
+                    255,
+                    140,
+                    0,
+                    165,
+                ),
+                6: QColor(
+                    255,
+                    0,
+                    0,
+                    180,
+                ),
+                7: QColor(
+                    220,
+                    0,
+                    220,
+                    195,
+                ),
+            }
+
+            for block in ordered_blocks:
+
+                intensity = tuple(
+                    getattr(
+                        block,
+                        "intensity",
+                        (),
+                    )
+                )
+
+                if len(
+                    intensity
+                ) != 128:
+                    continue
+
+                lat_north = float(
+                    block.lat_north_deg
+                )
+
+                lon_west = float(
+                    block.lon_west_deg
+                )
+
+                block_height = float(
+                    block.height_deg
+                )
+
+                block_width = float(
+                    block.width_deg
+                )
+
+                values = (
+                    lat_north,
+                    lon_west,
+                    block_height,
+                    block_width,
+                )
+
+                if not all(
+                    isfinite(value)
+                    for value
+                    in values
+                ):
+                    continue
+
+                if (
+                    block_height <= 0.0
+                    or block_width <= 0.0
+                ):
+                    continue
+
+                # Cheap geographic rejection before
+                # projecting all 165 grid vertices.
+                block_center_lat = (
+                    lat_north
+                    - block_height / 2.0
+                )
+
+                block_center_lon = (
+                    lon_west
+                    + block_width / 2.0
+                )
+
+                center_geometry = (
+                    calculate_traffic_geometry(
+                        own_lat_deg=own_lat,
+                        own_lon_deg=own_lon,
+                        own_pressure_alt_ft=None,
+                        target_lat_deg=(
+                            block_center_lat
+                        ),
+                        target_lon_deg=(
+                            block_center_lon
+                        ),
+                        target_pressure_alt_ft=None,
+                    )
+                )
+
+                if center_geometry is None:
+                    continue
+
+                # Conservative margin. Degrees are
+                # multiplied by 60 NM/degree so we
+                # never reject a potentially visible
+                # block merely for optimization.
+                block_margin_nm = (
+                    max(
+                        block_height,
+                        block_width,
+                    )
+                    * 60.0
+                )
+
+                if (
+                    center_geometry.distance_nm
+                    > (
+                        map_range_nm
+                        + block_margin_nm
+                    )
+                ):
+                    continue
+
+                cell_height = (
+                    block_height
+                    / 4.0
+                )
+
+                cell_width = (
+                    block_width
+                    / 32.0
+                )
+
+                # Project the 5 x 33 grid once.
+                # Each of the 128 cells reuses these
+                # vertices rather than performing
+                # four geographic calculations.
+                grid = []
+
+                grid_valid = True
+
+                for row in range(5):
+                    grid_row = []
+
+                    latitude = (
+                        lat_north
+                        - row
+                        * cell_height
+                    )
+
+                    for column in range(
+                        33
+                    ):
+                        longitude = (
+                            lon_west
+                            + column
+                            * cell_width
+                        )
+
+                        point = project_point(
+                            latitude,
+                            longitude,
+                        )
+
+                        if point is None:
+                            grid_valid = False
+                            break
+
+                        grid_row.append(
+                            point
+                        )
+
+                    if not grid_valid:
+                        break
+
+                    grid.append(
+                        grid_row
+                    )
+
+                if not grid_valid:
+                    continue
+
+                for row in range(4):
+                    for column in range(
+                        32
+                    ):
+                        level = int(
+                            intensity[
+                                column
+                                + row * 32
+                            ]
+                        )
+
+                        # Levels 0/1 are suppressed.
+                        # In particular, Stratux uses
+                        # level 1 for CONUS empty-block
+                        # representation.
+                        color = (
+                            color_by_level.get(
+                                level
+                            )
+                        )
+
+                        if color is None:
+                            continue
+
+                        painter.setBrush(
+                            QBrush(
+                                color
+                            )
+                        )
+
+                        painter.drawPolygon(
+                            QPolygonF(
+                                [
+                                    grid[
+                                        row
+                                    ][
+                                        column
+                                    ],
+                                    grid[
+                                        row
+                                    ][
+                                        column + 1
+                                    ],
+                                    grid[
+                                        row + 1
+                                    ][
+                                        column + 1
+                                    ],
+                                    grid[
+                                        row + 1
+                                    ][
+                                        column
+                                    ],
+                                ]
+                            )
+                        )
+
+        finally:
+            painter.restore()
 
     def draw_emergency_landing_guidance(
         self,
@@ -7284,12 +8737,520 @@ class BlakePfdDemo(QWidget):
 
 
 
+
+    def draw_compact_engine_overlay(
+        self,
+        painter: QPainter,
+        x: int,
+        y: int,
+        width: int,
+    ) -> None:
+        """Always-visible transparent PFD engine strip."""
+
+        painter.save()
+
+        try:
+            painter.setBrush(
+                QBrush(
+                    Qt.BrushStyle.NoBrush
+                )
+            )
+
+            engine_state = getattr(
+                self,
+                "engine_state",
+                None,
+            )
+
+            if engine_state is None:
+                aircraft = getattr(
+                    self,
+                    "aircraft",
+                    None,
+                )
+
+                engine_state = getattr(
+                    aircraft,
+                    "engine_state",
+                    None,
+                )
+
+            painter.setFont(
+                QFont(
+                    "Arial",
+                    10,
+                    QFont.Weight.Bold,
+                )
+            )
+
+            painter.setPen(
+                QColor(
+                    0,
+                    220,
+                    255,
+                )
+            )
+
+            painter.drawText(
+                x,
+                y + 14,
+                "ENGINE",
+            )
+
+            painter.drawLine(
+                x,
+                y + 20,
+                x + width,
+                y + 20,
+            )
+
+            if engine_state is None:
+                painter.setPen(
+                    QColor(
+                        255,
+                        180,
+                        0,
+                    )
+                )
+
+                painter.drawText(
+                    x,
+                    y + 42,
+                    "ENGINE DATA ---",
+                )
+
+                return
+
+            engine = engine_state.data
+
+            sensor_status = getattr(
+                self,
+                "engine_sensor_status",
+                None,
+            )
+
+            def channel_usable(name):
+                if sensor_status is None:
+                    return True
+
+                status = getattr(
+                    sensor_status,
+                    name,
+                    None,
+                )
+
+                if status is None:
+                    return True
+
+                return bool(
+                    status.valid
+                    and status.fresh
+                )
+
+            def unavailable():
+                return QColor(
+                    255,
+                    80,
+                    80,
+                )
+
+            def text_for(
+                value,
+                decimals=0,
+                unit="",
+                usable=True,
+                signed=False,
+            ):
+                if not usable:
+                    return (
+                        f"--- {unit}".rstrip()
+                    )
+
+                if signed:
+                    value_text = (
+                        f"{value:+.{decimals}f}"
+                    )
+                else:
+                    value_text = (
+                        f"{value:.{decimals}f}"
+                    )
+
+                if unit:
+                    return (
+                        f"{value_text} {unit}"
+                    )
+
+                return value_text
+
+            rpm_ok = channel_usable(
+                "rpm"
+            )
+            oil_p_ok = channel_usable(
+                "oil_pressure"
+            )
+            oil_t_ok = channel_usable(
+                "oil_temperature"
+            )
+            fuel_p_ok = channel_usable(
+                "fuel_pressure"
+            )
+            fuel_flow_ok = channel_usable(
+                "fuel_flow"
+            )
+            volts_ok = channel_usable(
+                "volts"
+            )
+            amps_ok = channel_usable(
+                "amps"
+            )
+
+            rpm_color = (
+                self.ems_page.rpm_color(
+                    engine.rpm
+                )
+                if rpm_ok
+                else unavailable()
+            )
+
+            oil_p_color = (
+                self.ems_page
+                .oil_pressure_color(
+                    engine.oil_pressure_psi,
+                    engine.rpm,
+                )
+                if oil_p_ok
+                else unavailable()
+            )
+
+            oil_t_color = (
+                self.ems_page
+                .oil_temp_color(
+                    engine.oil_temp_f
+                )
+                if oil_t_ok
+                else unavailable()
+            )
+
+            volts_color = (
+                self.ems_page
+                .voltage_color(
+                    engine.volts
+                )
+                if volts_ok
+                else unavailable()
+            )
+
+            normal = QColor(
+                255,
+                255,
+                255,
+            )
+
+            rows = [
+                (
+                    "RPM",
+                    text_for(
+                        engine.rpm,
+                        usable=rpm_ok,
+                    ),
+                    rpm_color,
+                ),
+                (
+                    "OIL PSI",
+                    text_for(
+                        engine.oil_pressure_psi,
+                        usable=oil_p_ok,
+                    ),
+                    oil_p_color,
+                ),
+                (
+                    "OIL TEMP",
+                    text_for(
+                        engine.oil_temp_f,
+                        unit="°F",
+                        usable=oil_t_ok,
+                    ),
+                    oil_t_color,
+                ),
+                (
+                    "FUEL PSI",
+                    text_for(
+                        engine.fuel_pressure_psi,
+                        decimals=1,
+                        usable=fuel_p_ok,
+                    ),
+                    (
+                        normal
+                        if fuel_p_ok
+                        else unavailable()
+                    ),
+                ),
+                (
+                    "FLOW",
+                    text_for(
+                        engine.fuel_flow_gph,
+                        decimals=1,
+                        unit="GPH",
+                        usable=fuel_flow_ok,
+                    ),
+                    (
+                        normal
+                        if fuel_flow_ok
+                        else unavailable()
+                    ),
+                ),
+                (
+                    "FUEL",
+                    text_for(
+                        engine.fuel_remaining_gal,
+                        decimals=1,
+                        unit="GAL",
+                    ),
+                    self.ems_page.fuel_color(
+                        engine
+                    ),
+                ),
+                (
+                    "VOLTS",
+                    text_for(
+                        engine.volts,
+                        decimals=1,
+                        unit="V",
+                        usable=volts_ok,
+                    ),
+                    volts_color,
+                ),
+                (
+                    "AMPS",
+                    text_for(
+                        engine.amps,
+                        decimals=1,
+                        unit="A",
+                        usable=amps_ok,
+                        signed=True,
+                    ),
+                    (
+                        normal
+                        if amps_ok
+                        else unavailable()
+                    ),
+                ),
+            ]
+
+            row_y = y + 28
+            row_h = 19
+
+            painter.setFont(
+                QFont(
+                    "Arial",
+                    9,
+                    QFont.Weight.Bold,
+                )
+            )
+
+            for label, value, color in rows:
+                painter.setPen(
+                    QColor(
+                        210,
+                        210,
+                        210,
+                    )
+                )
+
+                painter.drawText(
+                    QRectF(
+                        x,
+                        row_y,
+                        width * 0.52,
+                        row_h,
+                    ),
+                    (
+                        Qt.AlignmentFlag
+                        .AlignLeft
+                        | Qt.AlignmentFlag
+                        .AlignVCenter
+                    ),
+                    label,
+                )
+
+                painter.setPen(
+                    color
+                )
+
+                painter.drawText(
+                    QRectF(
+                        x + width * 0.45,
+                        row_y,
+                        width * 0.55,
+                        row_h,
+                    ),
+                    (
+                        Qt.AlignmentFlag
+                        .AlignRight
+                        | Qt.AlignmentFlag
+                        .AlignVCenter
+                    ),
+                    value,
+                )
+
+                row_y += row_h
+
+            def hottest(
+                values,
+                statuses,
+            ):
+                usable_values = []
+
+                for index, value in enumerate(
+                    values or []
+                ):
+                    if (
+                        statuses is not None
+                        and index < len(statuses)
+                    ):
+                        status = statuses[index]
+
+                        if not (
+                            status.valid
+                            and status.fresh
+                        ):
+                            continue
+
+                    usable_values.append(
+                        float(value)
+                    )
+
+                if not usable_values:
+                    return None
+
+                return max(
+                    usable_values
+                )
+
+            cht_statuses = (
+                getattr(
+                    sensor_status,
+                    "cht",
+                    None,
+                )
+                if sensor_status is not None
+                else None
+            )
+
+            egt_statuses = (
+                getattr(
+                    sensor_status,
+                    "egt",
+                    None,
+                )
+                if sensor_status is not None
+                else None
+            )
+
+            max_cht = hottest(
+                getattr(
+                    engine,
+                    "cht_f",
+                    [],
+                ),
+                cht_statuses,
+            )
+
+            max_egt = hottest(
+                getattr(
+                    engine,
+                    "egt_f",
+                    [],
+                ),
+                egt_statuses,
+            )
+
+            for label, value, color_func in (
+                (
+                    "CHT MAX",
+                    max_cht,
+                    self.ems_page.cht_color,
+                ),
+                (
+                    "EGT MAX",
+                    max_egt,
+                    self.ems_page.egt_color,
+                ),
+            ):
+                painter.setPen(
+                    QColor(
+                        210,
+                        210,
+                        210,
+                    )
+                )
+
+                painter.drawText(
+                    QRectF(
+                        x,
+                        row_y,
+                        width * 0.52,
+                        row_h,
+                    ),
+                    (
+                        Qt.AlignmentFlag
+                        .AlignLeft
+                        | Qt.AlignmentFlag
+                        .AlignVCenter
+                    ),
+                    label,
+                )
+
+                if value is None:
+                    painter.setPen(
+                        unavailable()
+                    )
+                    value_text = "---"
+                else:
+                    painter.setPen(
+                        color_func(
+                            value
+                        )
+                    )
+                    value_text = (
+                        f"{value:.0f}°F"
+                    )
+
+                painter.drawText(
+                    QRectF(
+                        x + width * 0.45,
+                        row_y,
+                        width * 0.55,
+                        row_h,
+                    ),
+                    (
+                        Qt.AlignmentFlag
+                        .AlignRight
+                        | Qt.AlignmentFlag
+                        .AlignVCenter
+                    ),
+                    value_text,
+                )
+
+                row_y += row_h
+
+        finally:
+            painter.restore()
+
+
     def draw_aircraft_state_label(
         self,
         painter: QPainter,
         width: int,
         height: int,
     ) -> None:
+        # GLASS_PANEL_NO_BRUSH
+        painter.setBrush(
+            QBrush(
+                Qt.BrushStyle.NoBrush
+            )
+        )
+
         if not hasattr(self, "aircraft"):
             return
         engine_state = self.aircraft.engine_state
@@ -7306,16 +9267,15 @@ class BlakePfdDemo(QWidget):
         moving = "MOVING" if flight_state.aircraft_moving else "STOPPED"
         airborne = "AIRBORNE" if flight_state.airborne else "GROUND"
 
-        box_w = 250
-        box_h = 154
-        box_x = width - box_w - 30
-        box_y = 58
+        box_w = 172
+        box_h = 145
+        box_x = 842
+        box_y = 45
 
-        painter.fillRect(box_x, box_y, box_w, box_h, QColor(0, 0, 0))
         painter.setPen(QPen(QColor(0, 180, 255), 2))
         painter.drawRect(box_x, box_y, box_w, box_h)
 
-        painter.setFont(QFont("Arial", 11, QFont.Weight.Bold))
+        painter.setFont(QFont("Arial", 8, QFont.Weight.Bold))
         painter.setPen(QColor(0, 180, 255))
         painter.drawText(box_x + 10, box_y + 22, f"PHASE: {phase}")
 
@@ -7337,7 +9297,7 @@ class BlakePfdDemo(QWidget):
         painter.drawText(
             box_x + 10,
             box_y + 84,
-            f"CHECKLIST MODE: {checklist_mode}  U=CLR",
+            f"CKLST {checklist_mode}",
         )
         engine_health = self.aircraft.engine_state.health
         engine_score = engine_health.health_score
@@ -7354,7 +9314,7 @@ class BlakePfdDemo(QWidget):
         painter.drawText(
             box_x + 10,
             box_y + 104,
-            f"ENGINE: {engine_score}% {engine_status}",
+            f"ENG {engine_score}% {engine_status}",
         )
         recommendation = getattr(self, "aircraft_recommendation", None)
 
@@ -7386,14 +9346,14 @@ class BlakePfdDemo(QWidget):
         painter.drawText(
             box_x + 10,
             box_y + 124,
-            f"AI: {title} [{severity}]{urgency_text}{confidence_text}",
+            f"AI {title[:10]} {severity}",
         )
 
         painter.setPen(QColor(255, 255, 255))
         painter.drawText(
             box_x + 10,
             box_y + 144,
-            action[:28],
+            action[:18],
         )
 
     def point(x: float, y: float) -> QPointF:
@@ -7420,6 +9380,13 @@ class BlakePfdDemo(QWidget):
             width: int,
             height: int,
         ) -> None:
+            # GLASS_PANEL_NO_BRUSH
+            painter.setBrush(
+                QBrush(
+                    Qt.BrushStyle.NoBrush
+                )
+            )
+
             state = self.direct_to_guidance_state
 
             if not state.active:
@@ -7430,17 +9397,6 @@ class BlakePfdDemo(QWidget):
             box_x = width // 2 - box_w // 2
             box_y = 245
 
-            painter.fillRect(
-                box_x,
-                box_y,
-                box_w,
-                box_h,
-                QColor(
-                    0,
-                    0,
-                    0,
-                ),
-            )
 
             painter.setPen(
                 QPen(
