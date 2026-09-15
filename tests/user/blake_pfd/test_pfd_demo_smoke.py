@@ -2109,3 +2109,429 @@ def test_terrain_status_rejects_stale_air_data(
         widget.close()
         widget.deleteLater()
         qapp.processEvents()
+
+
+def _force_stale_gps_watchdog_for_update_data(
+    widget,
+):
+    stale_state = (
+        widget.sensor_watchdog.evaluate(
+            flight_data_available=True,
+            position_valid=True,
+            position_fresh=False,
+            attitude_valid=True,
+            attitude_fresh=True,
+            air_data_valid=True,
+            air_data_fresh=True,
+        )
+    )
+
+    widget.sensor_watchdog.evaluate = (
+        lambda **kwargs: stale_state
+    )
+
+    return stale_state
+
+
+def test_runtime_stale_gps_inhibits_navigation_consumers(
+    qapp: QApplication,
+) -> None:
+    from dataclasses import replace
+
+    widget = BlakePfdDemo(
+        use_hardware=False,
+    )
+
+    widget.timer.stop()
+
+    try:
+        widget.guidance_touch_settings = replace(
+            widget.guidance_touch_settings,
+            hits_enabled=True,
+            flight_director_enabled=True,
+        )
+
+        widget.update_data()
+
+        assert widget.pfd is not None
+        assert widget.pfd.position_valid is True
+
+        # Establish valid navigation states first.
+        assert widget.hits_guidance_state.valid is True
+        assert widget.flight_director_state.valid is True
+
+        widget.direct_to_state = (
+            widget.direct_to_manager.activate(
+                aircraft_lat_deg=(
+                    widget.pfd.latitude_deg
+                ),
+                aircraft_lon_deg=(
+                    widget.pfd.longitude_deg
+                ),
+                target_identifier="TEST",
+                target_name="Test Airport",
+                target_lat_deg=(
+                    widget.pfd.latitude_deg
+                    + 0.10
+                ),
+                target_lon_deg=(
+                    widget.pfd.longitude_deg
+                ),
+            )
+        )
+
+        # One fresh update should produce active
+        # Direct-To guidance.
+        widget.update_data()
+
+        assert widget.direct_to_state.active is True
+        assert (
+            widget.direct_to_guidance_state.active
+            is True
+        )
+        assert (
+            widget.direct_to_lateral_guidance_state
+            .active
+            is True
+        )
+
+        def must_not_update_direct_to(**kwargs):
+            raise AssertionError(
+                "stale GPS must not update Direct-To geometry"
+            )
+
+        widget.direct_to_manager.update = (
+            must_not_update_direct_to
+        )
+
+        stale_state = (
+            _force_stale_gps_watchdog_for_update_data(
+                widget
+            )
+        )
+
+        widget.update_data()
+
+        assert (
+            widget.sensor_watchdog_state
+            is stale_state
+        )
+
+        assert (
+            widget.sensor_watchdog_state
+            .position_valid
+            is True
+        )
+        assert (
+            widget.sensor_watchdog_state
+            .position_fresh
+            is False
+        )
+
+        # Keep the selected Direct-To target, but
+        # suppress all guidance derived from stale
+        # ownship position.
+        assert widget.direct_to_state.active is True
+
+        assert (
+            widget.direct_to_guidance_state.active
+            is False
+        )
+
+        assert (
+            widget.direct_to_lateral_guidance_state
+            .active
+            is False
+        )
+
+        assert widget.hits_guidance_state.valid is False
+
+        assert (
+            widget.flight_director_state.valid
+            is False
+        )
+
+        assert (
+            widget.flight_director_state.active
+            is False
+        )
+
+    finally:
+        widget.close()
+        widget.deleteLater()
+        qapp.processEvents()
+
+
+def test_runtime_stale_gps_blocks_emergency_terrain_and_cfit(
+    qapp: QApplication,
+) -> None:
+    widget = BlakePfdDemo(
+        use_hardware=False,
+    )
+
+    widget.timer.stop()
+
+    try:
+        widget.update_data()
+
+        assert widget.pfd is not None
+        assert widget.pfd.position_valid is True
+
+        def must_not_find_airports(**kwargs):
+            raise AssertionError(
+                "stale GPS must not query emergency airports"
+            )
+
+        def must_not_validate_terrain(**kwargs):
+            raise AssertionError(
+                "stale GPS must not validate terrain position"
+            )
+
+        def must_not_update_terrain(**kwargs):
+            raise AssertionError(
+                "stale GPS must not update terrain awareness"
+            )
+
+        def must_not_update_cfit(**kwargs):
+            raise AssertionError(
+                "stale GPS must not update CFIT prediction"
+            )
+
+        (
+            widget.nearby_airport_provider
+            .get_nearby_airports
+        ) = must_not_find_airports
+
+        (
+            widget.terrain_startup_validator
+            .validate
+        ) = must_not_validate_terrain
+
+        (
+            widget.terrain_awareness_manager
+            .update
+        ) = must_not_update_terrain
+
+        widget.cfit_manager.update = (
+            must_not_update_cfit
+        )
+
+        stale_state = (
+            _force_stale_gps_watchdog_for_update_data(
+                widget
+            )
+        )
+
+        widget.update_data()
+
+        assert (
+            widget.sensor_watchdog_state
+            is stale_state
+        )
+
+        assert (
+            widget.emergency_airport_state
+            .result
+            .valid
+            is False
+        )
+
+        assert (
+            widget.terrain_awareness_state.valid
+            is False
+        )
+
+        assert widget.cfit_state.valid is False
+
+    finally:
+        widget.close()
+        widget.deleteLater()
+        qapp.processEvents()
+
+
+def test_direct_to_touch_rejects_stale_gps(
+    qapp: QApplication,
+) -> None:
+    from types import SimpleNamespace
+
+    from PyQt6.QtCore import QPointF, QRectF
+
+    widget = BlakePfdDemo(
+        use_hardware=False,
+    )
+
+    widget.timer.stop()
+    widget.resize(1280, 720)
+
+    try:
+        widget.update_data()
+
+        assert widget.pfd is not None
+        assert widget.pfd.position_valid is True
+
+        widget.page_manager.set_page("MAP")
+
+        # Prevent the normal navigation and map-control
+        # hit testing from intercepting this synthetic
+        # Direct-To button press.
+        widget.touch_navigation.page_for_touch = (
+            lambda **kwargs: None
+        )
+
+        widget.touch_map_controls.action_for_touch = (
+            lambda **kwargs: None
+        )
+
+        widget.direct_to_button_rect = QRectF(
+            400.0,
+            300.0,
+            100.0,
+            50.0,
+        )
+
+        widget.map_airport_selection = (
+            SimpleNamespace(
+                selected=True,
+                identifier="TEST",
+            )
+        )
+
+        widget.database.get_airport = (
+            lambda identifier: SimpleNamespace(
+                ident="TEST",
+                name="Test Airport",
+                lat_deg=(
+                    widget.pfd.latitude_deg
+                    + 0.10
+                ),
+                lon_deg=(
+                    widget.pfd.longitude_deg
+                    + 0.10
+                ),
+            )
+        )
+
+        event = SimpleNamespace(
+            position=(
+                lambda: QPointF(
+                    450.0,
+                    325.0,
+                )
+            ),
+            accept=lambda: None,
+        )
+
+        # GPS remains logically valid, but its
+        # freshness has expired.
+        widget.sensor_watchdog_state = (
+            widget.sensor_watchdog.evaluate(
+                flight_data_available=True,
+                position_valid=True,
+                position_fresh=False,
+                attitude_valid=True,
+                attitude_fresh=True,
+                air_data_valid=True,
+                air_data_fresh=True,
+            )
+        )
+
+        widget.mousePressEvent(event)
+
+        assert widget.direct_to_state.active is False
+
+        # The same pilot action must work once GPS
+        # validity and freshness are both restored.
+        widget.sensor_watchdog_state = (
+            widget.sensor_watchdog.evaluate(
+                flight_data_available=True,
+                position_valid=True,
+                position_fresh=True,
+                attitude_valid=True,
+                attitude_fresh=True,
+                air_data_valid=True,
+                air_data_fresh=True,
+            )
+        )
+
+        widget.mousePressEvent(event)
+
+        assert widget.direct_to_state.active is True
+        assert widget.direct_to_state.identifier == "TEST"
+
+    finally:
+        widget.close()
+        widget.deleteLater()
+        qapp.processEvents()
+
+
+def test_synthetic_runway_rejects_stale_inputs(
+    qapp: QApplication,
+) -> None:
+    widget = BlakePfdDemo(
+        use_hardware=False,
+    )
+
+    widget.timer.stop()
+
+    try:
+        widget.update_data()
+
+        assert widget.pfd is not None
+        assert widget.pfd.position_valid is True
+
+        def must_not_query_runway(*args, **kwargs):
+            raise AssertionError(
+                "stale sensor data must not reach "
+                "synthetic-runway database lookup"
+            )
+
+        widget.database.best_runway = (
+            must_not_query_runway
+        )
+
+        stale_cases = (
+            dict(
+                position_valid=True,
+                position_fresh=False,
+                attitude_valid=True,
+                attitude_fresh=True,
+                air_data_valid=True,
+                air_data_fresh=True,
+            ),
+            dict(
+                position_valid=True,
+                position_fresh=True,
+                attitude_valid=True,
+                attitude_fresh=False,
+                air_data_valid=True,
+                air_data_fresh=True,
+            ),
+            dict(
+                position_valid=True,
+                position_fresh=True,
+                attitude_valid=True,
+                attitude_fresh=True,
+                air_data_valid=True,
+                air_data_fresh=False,
+            ),
+        )
+
+        for case in stale_cases:
+            widget.sensor_watchdog_state = (
+                widget.sensor_watchdog.evaluate(
+                    flight_data_available=True,
+                    **case,
+                )
+            )
+
+            widget.draw_synthetic_runway(
+                None,
+                widget.pfd,
+                1280,
+                720,
+            )
+
+    finally:
+        widget.close()
+        widget.deleteLater()
+        qapp.processEvents()

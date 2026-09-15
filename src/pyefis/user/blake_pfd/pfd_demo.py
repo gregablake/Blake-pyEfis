@@ -1567,6 +1567,28 @@ class BlakePfdDemo(QWidget):
         else:
             self.sensor_fault_message = ""
 
+        watchdog = self.sensor_watchdog_state
+
+        # Navigation/geographic runtime consumers
+        # must treat stale GPS exactly like invalid
+        # GPS.  position_valid alone is not enough.
+        runtime_position_usable = bool(
+            self.pfd is not None
+            and self.pfd.position_valid
+            and watchdog.position_valid
+            and watchdog.position_fresh
+        )
+
+        runtime_air_data_usable = bool(
+            watchdog.air_data_valid
+            and watchdog.air_data_fresh
+        )
+
+        runtime_terrain_inputs_usable = bool(
+            runtime_position_usable
+            and runtime_air_data_usable
+        )
+
         engine = (
             self.engine_state.data
             if self.engine_state is not None
@@ -1606,7 +1628,7 @@ class BlakePfdDemo(QWidget):
                     cdi=self.pfd.cdi,
                     vdi=self.pfd.vdi,
                     navigation_valid=(
-                        self.pfd.position_valid
+                        runtime_position_usable
                         and (
                             self.guidance_touch_settings
                             .hits_enabled
@@ -1630,8 +1652,7 @@ class BlakePfdDemo(QWidget):
 
         if (
             self.direct_to_state.active
-            and self.pfd is not None
-            and self.pfd.position_valid
+            and runtime_position_usable
         ):
             self.direct_to_state = (
                 self.direct_to_manager.update(
@@ -1644,10 +1665,7 @@ class BlakePfdDemo(QWidget):
                 )
             )
 
-        if (
-            self.pfd is not None
-            and self.pfd.position_valid
-        ):
+        if runtime_position_usable:
             self.direct_to_guidance_state = (
                 self.direct_to_guidance.update(
                     direct_to_state=(
@@ -1689,7 +1707,7 @@ class BlakePfdDemo(QWidget):
                     cdi=flight_director_cdi,
                     vdi=self.pfd.vdi,
                     navigation_valid=(
-                        self.pfd.position_valid
+                        runtime_position_usable
                     ),
                     enabled=(
                         self.guidance_touch_settings
@@ -1702,7 +1720,7 @@ class BlakePfdDemo(QWidget):
             # ---------------------------------------------------------
             # Emergency airport analysis
             # ---------------------------------------------------------
-            if self.pfd.position_valid:
+            if runtime_terrain_inputs_usable:
                 nearby_airports = (
                     self.nearby_airport_provider.get_nearby_airports(
                         aircraft_lat_deg=(
@@ -1783,7 +1801,7 @@ class BlakePfdDemo(QWidget):
                     )
                 )
 
-            if self.pfd.position_valid:
+            if runtime_terrain_inputs_usable:
                 self.terrain_startup_status = (
                     self.terrain_startup_validator.validate(
                         terrain_config=(
@@ -1848,7 +1866,7 @@ class BlakePfdDemo(QWidget):
             )
 
             cfit_inputs_valid = (
-                self.pfd.position_valid
+                runtime_terrain_inputs_usable
                 and self.real_terrain_enabled
                 and (
                     self.terrain_startup_status
@@ -2247,6 +2265,15 @@ class BlakePfdDemo(QWidget):
                 if (
                     airport is not None
                     and self.pfd is not None
+                    and self.pfd.position_valid
+                    and (
+                        self.sensor_watchdog_state
+                        .position_valid
+                    )
+                    and (
+                        self.sensor_watchdog_state
+                        .position_fresh
+                    )
                 ):
                     self.direct_to_state = (
                         self.direct_to_manager.activate(
@@ -4443,11 +4470,23 @@ class BlakePfdDemo(QWidget):
         width: int,
         height: int,
     ) -> None:
-        if not getattr(
-            pfd,
-            "position_valid",
-            False,
-        ):
+        watchdog = self.sensor_watchdog_state
+
+        runway_inputs_usable = bool(
+            getattr(
+                pfd,
+                "position_valid",
+                False,
+            )
+            and watchdog.position_valid
+            and watchdog.position_fresh
+            and watchdog.attitude_valid
+            and watchdog.attitude_fresh
+            and watchdog.air_data_valid
+            and watchdog.air_data_fresh
+        )
+
+        if not runway_inputs_usable:
             return
 
         airport_id = (
