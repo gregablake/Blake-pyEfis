@@ -2579,3 +2579,50 @@ def test_aircraft_state_label_survives_missing_engine_state(
         widget.close()
         widget.deleteLater()
         qapp.processEvents()
+
+
+def test_full_pfd_render_survives_missing_engine_state(
+    qapp: QApplication,
+) -> None:
+    widget = BlakePfdDemo(
+        use_hardware=False,
+    )
+
+    widget.timer.stop()
+    widget.resize(
+        1024,
+        600,
+    )
+
+    # Establish the normal runtime state first.
+    widget.update_data()
+
+    assert widget.aircraft is not None
+
+    # Simulate loss of the processed engine state
+    # immediately before an actual complete PFD render.
+    widget.aircraft.engine_state = None
+
+    image = QImage(
+        1024,
+        600,
+        QImage.Format.Format_ARGB32,
+    )
+
+    image.fill(0)
+
+    painter = QPainter(image)
+
+    try:
+        widget.render(
+            painter
+        )
+
+        assert image.isNull() is False
+
+    finally:
+        painter.end()
+
+        widget.close()
+        widget.deleteLater()
+        qapp.processEvents()
