@@ -264,3 +264,229 @@ def test_faa_csv_threat_reaches_pfd_obstacle_painter(
     assert len(lines) == 1
 
     widget.close()
+
+
+def test_faa_csv_threat_reaches_full_pfd_render(
+    qtbot,
+    tmp_path: Path,
+) -> None:
+    from dataclasses import replace
+
+    from PyQt6.QtGui import (
+        QImage,
+        QPainter,
+    )
+
+    from pyefis.user.blake_pfd.pfd_demo import (
+        BlakePfdDemo,
+    )
+
+    source = tmp_path / "FULL_RENDER_DOF.CSV"
+    database_path = (
+        tmp_path
+        / "full_render_obstacles.sqlite"
+    )
+
+    source.write_text(
+        HEADER
+        + (
+            "39-FULL001,O,US,OH,HAMILTON,"
+            "39.363800,-84.505500,"
+            ",,TOWER,1,"
+            "00100,00700,R,5D,M,"
+            "TEST,C,2026260\n"
+        ),
+        encoding="cp1252",
+    )
+
+    count = ObstacleDatabaseBuilder().build(
+        source,
+        database_path,
+    )
+
+    assert count == 1
+
+    database = ObstacleDatabase(
+        database_path,
+        now_provider=lambda: (
+            source.stat().st_mtime
+        ),
+    )
+
+    provider = ObstacleRuntimeProvider(
+        database
+    )
+
+    real_projector = (
+        ObstacleProjectionComputer()
+    )
+
+    projection_calls = []
+
+    class RecordingProjector:
+        def project(
+            self,
+            **kwargs,
+        ):
+            result = real_projector.project(
+                **kwargs
+            )
+
+            projection_calls.append(
+                result
+            )
+
+            return result
+
+    widget = BlakePfdDemo(
+        use_hardware=False,
+        baro_state_path=(
+            tmp_path
+            / "baro.json"
+        ),
+    )
+
+    widget.timer.stop()
+    qtbot.addWidget(widget)
+
+    widget.resize(
+        1024,
+        600,
+    )
+
+    # Establish all normal runtime objects first.
+    widget.update_data()
+
+    assert widget.pfd is not None
+
+    # Force the production full-render obstacle path
+    # on regardless of the normal configuration file.
+    widget.config.features.show_obstacles = True
+    widget.config.features.show_synthetic_vision = True
+
+    widget.guidance_touch_settings = replace(
+        widget.guidance_touch_settings,
+        synthetic_vision_enabled=True,
+    )
+
+    # Keep unrelated terrain graphics out of the
+    # sampled obstacle-symbol area.
+    widget.real_terrain_enabled = False
+
+    widget.obstacles = provider
+    widget.obstacle_projection_computer = (
+        RecordingProjector()
+    )
+
+    # Deterministic ownship geometry near KHAO.
+    widget.pfd.position_valid = True
+    widget.pfd.latitude_deg = 39.3638
+    widget.pfd.longitude_deg = -84.5400
+    widget.pfd.indicated_alt_ft = 1500.0
+    widget.pfd.heading_deg = 92.0
+    widget.pfd.pitch_deg = 0.0
+    widget.pfd.roll_deg = 0.0
+
+    widget.sensor_watchdog_state = (
+        widget.sensor_watchdog.evaluate(
+            flight_data_available=True,
+            position_valid=True,
+            position_fresh=True,
+            attitude_valid=True,
+            attitude_fresh=True,
+            air_data_valid=True,
+            air_data_fresh=True,
+        )
+    )
+
+    image = QImage(
+        1024,
+        600,
+        QImage.Format.Format_ARGB32,
+    )
+
+    image.fill(0)
+
+    painter = QPainter(
+        image
+    )
+
+    try:
+        widget.render(
+            painter
+        )
+
+    finally:
+        painter.end()
+
+    assert image.isNull() is False
+
+    # The complete PFD render must have reached the
+    # real production obstacle projector.
+    assert len(projection_calls) == 1
+
+    projected = projection_calls[0]
+
+    assert len(projected) == 1
+
+    obstacle = projected[0]
+
+    assert obstacle.ident == "39-FULL001"
+    assert obstacle.threat is True
+
+    # Verify that the actual rendered image contains
+    # red obstacle-symbol pixels around the projected
+    # threat location.
+    center_x = int(
+        round(
+            obstacle.x_px
+        )
+    )
+
+    center_y = int(
+        round(
+            obstacle.y_px
+        )
+    )
+
+    red_pixel_found = False
+
+    for y in range(
+        max(
+            0,
+            center_y - 12,
+        ),
+        min(
+            image.height(),
+            center_y + 18,
+        ),
+    ):
+        for x in range(
+            max(
+                0,
+                center_x - 12,
+            ),
+            min(
+                image.width(),
+                center_x + 13,
+            ),
+        ):
+            color = image.pixelColor(
+                x,
+                y,
+            )
+
+            if (
+                color.red() >= 220
+                and color.green() <= 60
+                and color.blue() <= 60
+            ):
+                red_pixel_found = True
+                break
+
+        if red_pixel_found:
+            break
+
+    assert red_pixel_found is True
+
+    widget.close()
