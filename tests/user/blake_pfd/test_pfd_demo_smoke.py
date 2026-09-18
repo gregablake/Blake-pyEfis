@@ -2535,3 +2535,47 @@ def test_synthetic_runway_rejects_stale_inputs(
         widget.close()
         widget.deleteLater()
         qapp.processEvents()
+
+
+def test_aircraft_state_label_survives_missing_engine_state(
+    qapp: QApplication,
+) -> None:
+    from types import SimpleNamespace
+
+    widget = BlakePfdDemo(
+        use_hardware=False,
+    )
+
+    widget.timer.stop()
+
+    image = QImage(
+        1024,
+        600,
+        QImage.Format.Format_ARGB32,
+    )
+
+    image.fill(0)
+
+    painter = QPainter(image)
+
+    try:
+        # Engine data can legitimately be unavailable.
+        # The display must degrade safely, never crash.
+        widget.aircraft = SimpleNamespace(
+            engine_state=None,
+        )
+
+        widget.draw_aircraft_state_label(
+            painter,
+            1024,
+            600,
+        )
+
+        assert image.isNull() is False
+
+    finally:
+        painter.end()
+
+        widget.close()
+        widget.deleteLater()
+        qapp.processEvents()
