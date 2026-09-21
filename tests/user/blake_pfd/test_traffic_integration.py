@@ -1,5 +1,5 @@
 from pathlib import Path
-from math import radians, sin
+from math import radians, sin, cos
 
 from PyQt6.QtGui import (
     QImage,
