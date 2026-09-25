@@ -49,6 +49,8 @@ class RawSensorInputs:
     heading_deg: float = 0.0
     gps_track_deg: float = 0.0
     gps_ground_speed_kt: float = 0.0
+    gps_lat_deg: float = 0.0
+    gps_lon_deg: float = 0.0
 
     waypoint_bearing_deg: float = 0.0
     desired_track_deg: float = 0.0

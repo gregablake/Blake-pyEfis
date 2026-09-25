@@ -19,7 +19,7 @@ This version is intentionally safe:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from math import asin, atan2, cos, degrees, radians, sin
+from math import asin, atan2, cos, degrees, isfinite, radians, sin
 from time import monotonic
 
 from pyefis.user.blake_pfd.airdata import RawSensorInputs
@@ -330,6 +330,8 @@ class GpsReader:
         self.last_success_s: float | None = None
         self.last_track_deg = 0.0
         self.last_ground_speed_kt = 0.0
+        self.last_lat_deg = 0.0
+        self.last_lon_deg = 0.0
 
         # Temporary selected waypoint placeholder.
         # Later this will come from airport/navpoint entry.
@@ -368,23 +370,52 @@ class GpsReader:
             lat = getattr(report, "lat", None)
             lon = getattr(report, "lon", None)
 
-            if lat is not None and lon is not None:
+            try:
+                latitude_deg = float(lat)
+                longitude_deg = float(lon)
+
+                position_valid = (
+                    isfinite(latitude_deg)
+                    and isfinite(longitude_deg)
+                    and -90.0 <= latitude_deg <= 90.0
+                    and -180.0 <= longitude_deg <= 180.0
+                    and not (
+                        latitude_deg == 0.0
+                        and longitude_deg == 0.0
+                    )
+                )
+            except (TypeError, ValueError):
+                position_valid = False
+                latitude_deg = self.last_lat_deg
+                longitude_deg = self.last_lon_deg
+
+            if position_valid:
                 waypoint_bearing_deg = bearing_between_points_deg(
-                    float(lat),
-                    float(lon),
+                    latitude_deg,
+                    longitude_deg,
                     self.selected_waypoint_lat,
                     self.selected_waypoint_lon,
                 )
+
+                self.last_lat_deg = latitude_deg
+                self.last_lon_deg = longitude_deg
+
+                # Position freshness represents the last valid
+                # coordinate fix, not merely any TPV message.
+                self.last_success_s = monotonic()
             else:
+                latitude_deg = self.last_lat_deg
+                longitude_deg = self.last_lon_deg
                 waypoint_bearing_deg = 0.0
 
             self.last_track_deg = track_deg
             self.last_ground_speed_kt = ground_speed_kt
-            self.last_success_s = monotonic()
 
             return {
                 "gps_track_deg": track_deg % 360.0,
                 "gps_ground_speed_kt": ground_speed_kt,
+                "gps_lat_deg": latitude_deg,
+                "gps_lon_deg": longitude_deg,
                 "waypoint_bearing_deg": waypoint_bearing_deg,
                 "desired_track_deg": self.desired_track_deg,
                 "cdi_deflection_nm": 0.0,
@@ -393,13 +424,27 @@ class GpsReader:
 
         except Exception as exc:
             print(f"GPS/gpsd read failed: {exc}")
-            self.ok = False
+
+            # Keep the established gpsd session eligible for retry.
+            # A transient read error must not permanently disable GPS.
+            # Freshness is intentionally not updated here, so repeated
+            # failures will still become GPS DATA STALE fail-closed.
             return self._fallback()
 
     def _fallback(self) -> dict[str, float]:
         return {
             "gps_track_deg": self.last_track_deg,
             "gps_ground_speed_kt": self.last_ground_speed_kt,
+            "gps_lat_deg": getattr(
+                self,
+                "last_lat_deg",
+                0.0,
+            ),
+            "gps_lon_deg": getattr(
+                self,
+                "last_lon_deg",
+                0.0,
+            ),
             "waypoint_bearing_deg": 0.0,
             "desired_track_deg": self.desired_track_deg,
             "cdi_deflection_nm": 0.0,
@@ -463,6 +508,8 @@ class BlakeHardwareSensorSource:
             heading_deg=bno["heading_deg"],
             gps_track_deg=gps["gps_track_deg"],
             gps_ground_speed_kt=gps["gps_ground_speed_kt"],
+            gps_lat_deg=gps["gps_lat_deg"],
+            gps_lon_deg=gps["gps_lon_deg"],
             waypoint_bearing_deg=gps["waypoint_bearing_deg"],
             desired_track_deg=gps["desired_track_deg"],
             cdi_deflection_nm=gps["cdi_deflection_nm"],
