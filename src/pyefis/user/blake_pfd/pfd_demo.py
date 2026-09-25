@@ -3768,7 +3768,11 @@ class BlakePfdDemo(QWidget):
             painter.end()
             return
 
-        if features.show_attitude:
+        if (
+            features.show_attitude
+            and watchdog.attitude_valid
+            and watchdog.attitude_fresh
+        ):
             self.draw_attitude(
                 painter,
                 self.pfd,
@@ -3816,6 +3820,11 @@ class BlakePfdDemo(QWidget):
                 self.guidance_touch_settings
                 .synthetic_vision_enabled
             )
+            and position_usable
+            and watchdog.attitude_valid
+            and watchdog.attitude_fresh
+            and watchdog.air_data_valid
+            and watchdog.air_data_fresh
         ):
             self.draw_synthetic_vision(
                 painter,
@@ -3827,7 +3836,14 @@ class BlakePfdDemo(QWidget):
                 ),
             )
 
-        if features.show_attitude:
+        if (
+            features.show_attitude
+            and position_usable
+            and watchdog.attitude_valid
+            and watchdog.attitude_fresh
+            and watchdog.air_data_valid
+            and watchdog.air_data_fresh
+        ):
             painter.save()
 
             painter.translate(
@@ -3859,6 +3875,11 @@ class BlakePfdDemo(QWidget):
         if (
             self.guidance_touch_settings
             .flight_path_marker_enabled
+            and position_usable
+            and watchdog.attitude_valid
+            and watchdog.attitude_fresh
+            and watchdog.air_data_valid
+            and watchdog.air_data_fresh
         ):
             painter.save()
 
@@ -3881,7 +3902,11 @@ class BlakePfdDemo(QWidget):
             )
 
             painter.restore()
-        if features.show_airspeed:
+        if (
+            features.show_airspeed
+            and watchdog.air_data_valid
+            and watchdog.air_data_fresh
+        ):
             painter.save()
 
             painter.translate(
@@ -3905,7 +3930,11 @@ class BlakePfdDemo(QWidget):
 
             painter.restore()
 
-        if features.show_altitude:
+        if (
+            features.show_altitude
+            and watchdog.air_data_valid
+            and watchdog.air_data_fresh
+        ):
             painter.save()
 
             painter.translate(
@@ -3929,13 +3958,26 @@ class BlakePfdDemo(QWidget):
 
             painter.restore()
 
-        if features.show_vsi:
+        if (
+            features.show_vsi
+            and watchdog.air_data_valid
+            and watchdog.air_data_fresh
+        ):
             self.draw_vsi(painter, self.pfd, width, height)
 
-        if features.show_heading or features.show_hsi:
+        if (
+            (features.show_heading or features.show_hsi)
+            and watchdog.attitude_valid
+            and watchdog.attitude_fresh
+        ):
             self.draw_heading_strip(painter, self.pfd, width, height)
 
-        if features.show_hsi:
+        if (
+            features.show_hsi
+            and position_usable
+            and watchdog.attitude_valid
+            and watchdog.attitude_fresh
+        ):
             painter.save()
 
             painter.translate(
@@ -3959,7 +4001,11 @@ class BlakePfdDemo(QWidget):
 
             painter.restore()
 
-        if features.show_turn_rate or features.show_slip_skid:
+        if (
+            (features.show_turn_rate or features.show_slip_skid)
+            and watchdog.attitude_valid
+            and watchdog.attitude_fresh
+        ):
             self.draw_turn_and_slip(painter, self.pfd, width, height)
 
         if features.show_cdi or (features.show_vdi and self.config.vnav.enabled):
@@ -5657,10 +5703,21 @@ class BlakePfdDemo(QWidget):
 
     def draw_nav_cdi_vdi(self, painter: QPainter, pfd: FlightData, width: int, height: int) -> None:
         features = self.config.features
+        watchdog = self.sensor_watchdog_state
+        position_usable = bool(
+            pfd.position_valid
+            and watchdog.position_valid
+            and watchdog.position_fresh
+        )
+        air_data_usable = bool(
+            watchdog.air_data_valid
+            and watchdog.air_data_fresh
+        )
+
         center_x = width // 2
         center_y = height // 2
 
-        if features.show_cdi:
+        if features.show_cdi and position_usable:
             cdi_y = center_y + 185
             painter.setPen(QPen(QColor(255, 255, 255), 2))
             painter.drawLine(center_x - 125, cdi_y, center_x + 125, cdi_y)
@@ -5691,7 +5748,12 @@ class BlakePfdDemo(QWidget):
             painter.setPen(QPen(QColor(255, 0, 255), 2))
             painter.drawRect(cdi_x - 6, cdi_y - 28, 12, 56)
 
-        if features.show_vdi and self.config.vnav.enabled:
+        if (
+            features.show_vdi
+            and self.config.vnav.enabled
+            and position_usable
+            and air_data_usable
+        ):
             vdi_x = center_x + 290
             vdi_y = center_y - int(max(-1.0, min(1.0, pfd.vdi)) * 90)
 
@@ -5716,14 +5778,51 @@ class BlakePfdDemo(QWidget):
         painter.setPen(QColor(255, 255, 255))
         painter.setFont(QFont("Arial", 14, QFont.Weight.Bold))
 
+        watchdog = self.sensor_watchdog_state
+
+        air_data_usable = bool(
+            watchdog.air_data_valid
+            and watchdog.air_data_fresh
+        )
+        position_usable = bool(
+            pfd.position_valid
+            and watchdog.position_valid
+            and watchdog.position_fresh
+        )
+        attitude_usable = bool(
+            watchdog.attitude_valid
+            and watchdog.attitude_fresh
+        )
+
         parts = []
 
         if self.config.features.show_tas:
-            parts.append(f"TAS {pfd.tas_kt:.0f} KT")
+            parts.append(
+                f"TAS {pfd.tas_kt:.0f} KT"
+                if air_data_usable
+                else "TAS ---"
+            )
+
         if self.config.features.show_ground_speed:
-            parts.append(f"GS {pfd.ground_speed_kt:.0f} KT")
+            parts.append(
+                f"GS {pfd.ground_speed_kt:.0f} KT"
+                if position_usable
+                else "GS ---"
+            )
+
         if self.config.features.show_wind:
-            parts.append(f"WIND {pfd.wind_direction_deg:.0f}°/{pfd.wind_speed_kt:.0f} KT")
+            parts.append(
+                (
+                    f"WIND {pfd.wind_direction_deg:.0f}°/"
+                    f"{pfd.wind_speed_kt:.0f} KT"
+                )
+                if (
+                    air_data_usable
+                    and position_usable
+                    and attitude_usable
+                )
+                else "WIND ---"
+            )
 
         painter.drawText(QRectF(0, 0, width, 55), Qt.AlignmentFlag.AlignCenter, "    ".join(parts))
 
@@ -5757,6 +5856,46 @@ class BlakePfdDemo(QWidget):
                 QFont.Weight.Bold,
             )
         )
+
+        watchdog = self.sensor_watchdog_state
+
+        position_usable = bool(
+            pfd.position_valid
+            and watchdog.position_valid
+            and watchdog.position_fresh
+        )
+
+        if not position_usable:
+            parts = [
+                "TRK ---",
+                "BRG ---",
+                "DTK ---",
+            ]
+
+            if self.config.obs.enabled:
+                parts.append(
+                    f"OBS {self.config.obs.selected_course_deg:.0f}°"
+                )
+
+            parts.append("CDI ---")
+
+            if (
+                self.config.features.show_vdi
+                and self.config.vnav.enabled
+            ):
+                parts.append("VDI ---")
+
+            painter.drawText(
+                QRectF(
+                    0,
+                    height - 35,
+                    width,
+                    35,
+                ),
+                Qt.AlignmentFlag.AlignCenter,
+                "    ".join(parts),
+            )
+            return
 
         if (
             self.direct_to_lateral_guidance_state.active
@@ -5819,9 +5958,15 @@ class BlakePfdDemo(QWidget):
             self.config.features.show_vdi
             and self.config.vnav.enabled
         ):
-            parts.append(
-                f"VDI {pfd.vdi:+.2f}°"
-            )
+            if (
+                watchdog.air_data_valid
+                and watchdog.air_data_fresh
+            ):
+                parts.append(
+                    f"VDI {pfd.vdi:+.2f}°"
+                )
+            else:
+                parts.append("VDI ---")
 
         painter.drawText(
             QRectF(
@@ -5853,8 +5998,32 @@ class BlakePfdDemo(QWidget):
         painter.setFont(QFont("Arial", 8, QFont.Weight.Bold))
         painter.setPen(QColor(255, 255, 255))
         painter.drawText(box_x + 10, box_y + 16, "VNAV")
-        painter.drawText(box_x + 10, box_y + 32, f"TGT ALT {pfd.glidepath_target_alt_ft:.0f}")
-        painter.drawText(box_x + 10, box_y + 48, f"ALT ERR {pfd.glidepath_alt_error_ft:+.0f}")
+        watchdog = self.sensor_watchdog_state
+        position_usable = bool(
+            pfd.position_valid
+            and watchdog.position_valid
+            and watchdog.position_fresh
+        )
+        target_altitude_text = (
+            f"TGT ALT {pfd.glidepath_target_alt_ft:.0f}"
+            if position_usable
+            else "TGT ALT ---"
+        )
+        painter.drawText(box_x + 10, box_y + 32, target_altitude_text)
+        watchdog = self.sensor_watchdog_state
+        vertical_guidance_usable = bool(
+            pfd.position_valid
+            and watchdog.position_valid
+            and watchdog.position_fresh
+            and watchdog.air_data_valid
+            and watchdog.air_data_fresh
+        )
+        altitude_error_text = (
+            f"ALT ERR {pfd.glidepath_alt_error_ft:+.0f}"
+            if vertical_guidance_usable
+            else "ALT ERR ---"
+        )
+        painter.drawText(box_x + 10, box_y + 48, altitude_error_text)
         painter.drawText(box_x + 10, box_y + 64, f"GP {self.config.vnav.glidepath_angle_deg:.1f}°")
 
     def draw_waypoint_info_box(
@@ -5864,6 +6033,13 @@ class BlakePfdDemo(QWidget):
         width: int,
         height: int,
     ) -> None:
+        watchdog = self.sensor_watchdog_state
+        position_usable = bool(
+            pfd.position_valid
+            and watchdog.position_valid
+            and watchdog.position_fresh
+        )
+
         # GLASS_PANEL_NO_BRUSH
         painter.setBrush(
             QBrush(
@@ -5967,19 +6143,20 @@ class BlakePfdDemo(QWidget):
         painter.drawText(
             box_x + 10,
             box_y + 52,
-            f"BRG {bearing_deg:.0f}°",
+            f"BRG {bearing_deg:.0f}°" if position_usable else "BRG ---",
         )
 
         painter.drawText(
             box_x + 120,
             box_y + 52,
-            f"DIS {distance_nm:.1f}NM",
+            f"DIS {distance_nm:.1f}NM" if position_usable else "DIS ---",
         )
 
         painter.drawText(
             box_x + 10,
             box_y + 75,
-            f"CRS ERR {course_error_deg:+.0f}°",
+            f"CRS ERR {course_error_deg:+.0f}°"
+            if position_usable else "CRS ERR ---",
         )
 
     def draw_navigation_status_box(
@@ -5994,6 +6171,13 @@ class BlakePfdDemo(QWidget):
             QBrush(
                 Qt.BrushStyle.NoBrush
             )
+        )
+
+        watchdog = self.sensor_watchdog_state
+        position_usable = bool(
+            pfd.position_valid
+            and watchdog.position_valid
+            and watchdog.position_fresh
         )
 
         active_leg = (
@@ -6108,19 +6292,19 @@ class BlakePfdDemo(QWidget):
         painter.drawText(
             box_x + 10,
             box_y + 52,
-            f"DTK {desired_track_deg:.0f}°",
+            f"DTK {desired_track_deg:.0f}°" if position_usable else "DTK ---",
         )
 
         painter.drawText(
             box_x + 120,
             box_y + 52,
-            f"BRG {bearing_deg:.0f}°",
+            f"BRG {bearing_deg:.0f}°" if position_usable else "BRG ---",
         )
 
         painter.drawText(
             box_x + 10,
             box_y + 76,
-            f"DIS {distance_nm:.1f} NM",
+            f"DIS {distance_nm:.1f} NM" if position_usable else "DIS ---",
         )
 
     def draw_nearest_airports_overlay(self, painter: QPainter, pfd: FlightData, width: int, height: int) -> None:
@@ -9513,6 +9697,14 @@ class BlakePfdDemo(QWidget):
             if not state.active:
                 return
 
+            watchdog = self.sensor_watchdog_state
+            position_usable = bool(
+                self.pfd is not None
+                and self.pfd.position_valid
+                and watchdog.position_valid
+                and watchdog.position_fresh
+            )
+
             box_w = 300
             box_h = 95
             box_x = width // 2 - box_w // 2
@@ -9594,12 +9786,18 @@ class BlakePfdDemo(QWidget):
                 box_x + 10,
                 box_y + 50,
                 (
-                    f"BRG {bearing:.0f}°   "
-                    f"DIS {distance:.1f} NM"
+                    (
+                        f"BRG {bearing:.0f}°   "
+                        f"DIS {distance:.1f} NM"
+                    )
+                    if position_usable
+                    else "BRG ---   DIS ---"
                 ),
             )
 
-            if abs(error) < 1.0:
+            if not position_usable:
+                correction_text = "COURSE ---"
+            elif abs(error) < 1.0:
                 correction_text = "ON COURSE"
             elif error > 0.0:
                 correction_text = (
