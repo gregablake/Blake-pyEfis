@@ -137,8 +137,11 @@ class Bno085Reader:
 
         except Exception as exc:
             print(f"BNO085 read failed: {exc}")
-            self.ok = False
 
+            # Keep an initialized sensor eligible for another read.
+            # A transient I2C error must not permanently disable
+            # AHRS. Freshness is intentionally not updated here,
+            # so repeated failures still fail closed as stale data.
             return {
                 "pitch_deg": 0.0,
                 "roll_deg": 0.0,
@@ -210,8 +213,9 @@ class BaroReader:
 
         except Exception as exc:
             print(f"BMP388 read failed: {exc}")
-            self.ok = False
 
+            # Keep an initialized sensor eligible for another read.
+            # Do not refresh last_success_s on a failed sample.
             return {
                 "static_pressure_pa": 101325.0,
                 "outside_air_temp_c": 15.0,
@@ -286,8 +290,9 @@ class AirspeedReader:
 
         except Exception as exc:
             print(f"ADS1115/MPXV7002DP read failed: {exc}")
-            self.ok = False
 
+            # Keep an initialized ADC/channel eligible for retry.
+            # Do not refresh last_success_s on a failed sample.
             return {
                 "differential_pressure_pa": 0.0,
             }
