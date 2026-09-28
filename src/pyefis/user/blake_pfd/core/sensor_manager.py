@@ -4,6 +4,10 @@ from enum import Enum
 
 from pyefis.user.blake_pfd.engine_data import EngineData
 from pyefis.user.blake_pfd.engine_sim import SimulatedEngineSource
+from pyefis.user.blake_pfd.hardware_engine import (
+    SerialEngineSource,
+    SerialEngineSourceError,
+)
 from pyefis.user.blake_pfd.flight_computer import FlightComputer, FlightData
 from pyefis.user.blake_pfd.hardware_readers import BlakeHardwareSensorSource
 from pyefis.user.blake_pfd.log_replay import LogReplaySource
@@ -44,7 +48,7 @@ class SensorManager:
         )
 
         self.engine_source = (
-            UnavailableEngineSource()
+            SerialEngineSource()
             if use_hardware
             else SimulatedEngineSource()
         )
@@ -70,4 +74,9 @@ class SensorManager:
         return self.flight_computer.update(raw)
 
     def read_engine(self) -> EngineData:
-        return self.engine_source.read()
+        try:
+            return self.engine_source.read()
+        except SerialEngineSourceError as exc:
+            raise EngineDataUnavailableError(
+                "Real engine sensor source is unavailable."
+            ) from exc

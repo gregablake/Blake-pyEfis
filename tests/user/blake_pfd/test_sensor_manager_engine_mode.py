@@ -9,6 +9,7 @@ from pyefis.user.blake_pfd.core.sensor_manager import (
     UnavailableEngineSource,
 )
 from pyefis.user.blake_pfd.engine_sim import SimulatedEngineSource
+from pyefis.user.blake_pfd.hardware_engine import SerialEngineSource
 from pyefis.user.blake_pfd.flight_computer import FlightComputer
 
 
@@ -25,7 +26,7 @@ def test_simulation_mode_uses_simulated_engine_source() -> None:
     )
 
 
-def test_hardware_mode_uses_unavailable_engine_source() -> None:
+def test_hardware_mode_uses_serial_engine_source() -> None:
     manager = SensorManager(
         flight_computer=FlightComputer(),
         use_hardware=True,
@@ -33,6 +34,10 @@ def test_hardware_mode_uses_unavailable_engine_source() -> None:
 
     assert manager.mode is SensorMode.HARDWARE
     assert isinstance(
+        manager.engine_source,
+        SerialEngineSource,
+    )
+    assert not isinstance(
         manager.engine_source,
         UnavailableEngineSource,
     )
@@ -50,7 +55,7 @@ def test_hardware_engine_read_fails_closed() -> None:
 
     with pytest.raises(
         EngineDataUnavailableError,
-        match="Real engine sensor source is not configured",
+        match="Real engine sensor source is unavailable",
     ):
         manager.read_engine()
 

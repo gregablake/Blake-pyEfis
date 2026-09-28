@@ -43,7 +43,8 @@ dependencies = [
     "pycond==20230212",
     # "PyQt6==6.8.0",
     "PyYAML==6.0.1",
-    "python-xlib==0.33"
+    "python-xlib==0.33",
+    "pyserial==3.5"
 ]
 
 [project.optional-dependencies]
