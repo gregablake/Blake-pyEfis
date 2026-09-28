@@ -173,3 +173,268 @@ def test_airspeed_recovers_after_transient_read_exception() -> None:
         second["differential_pressure_pa"]
         - 100.0
     ) < 1e-9
+
+
+class DeadBnoSensor:
+    @property
+    def quaternion(self):
+        raise OSError(
+            "persistent BNO085 I2C failure"
+        )
+
+    @property
+    def acceleration(self):
+        raise OSError(
+            "persistent BNO085 I2C failure"
+        )
+
+
+class DeadBaroSensor:
+    @property
+    def pressure(self):
+        raise OSError(
+            "persistent BMP388 I2C failure"
+        )
+
+    @property
+    def temperature(self):
+        raise OSError(
+            "persistent BMP388 I2C failure"
+        )
+
+
+class DeadAirspeedChannel:
+    @property
+    def voltage(self):
+        raise OSError(
+            "persistent ADS1115 I2C failure"
+        )
+
+
+def test_bno085_releases_dead_sensor_after_repeated_failures() -> None:
+    reader = Bno085Reader.__new__(
+        Bno085Reader
+    )
+
+    reader.ok = True
+    reader.sensor = DeadBnoSensor()
+    reader.last_heading_deg = 0.0
+    reader.last_yaw_deg = 0.0
+    reader.last_update_s = 0.0
+    reader.last_success_s = 10.0
+
+    reader.read()
+    reader.read()
+    reader.read()
+
+    # After repeated failures the dead hardware object should be
+    # released so a later read can perform true reinitialization.
+    assert reader.sensor is None
+
+    # Failed samples must never make old data fresh.
+    assert reader.last_success_s == 10.0
+
+
+def test_baro_releases_dead_sensor_after_repeated_failures() -> None:
+    reader = BaroReader.__new__(
+        BaroReader
+    )
+
+    reader.ok = True
+    reader.sensor = DeadBaroSensor()
+    reader.last_success_s = 20.0
+
+    reader.read()
+    reader.read()
+    reader.read()
+
+    assert reader.sensor is None
+    assert reader.last_success_s == 20.0
+
+
+def test_airspeed_releases_dead_channel_after_repeated_failures() -> None:
+    reader = AirspeedReader.__new__(
+        AirspeedReader
+    )
+
+    reader.ok = True
+    reader.ads = object()
+    reader.channel = DeadAirspeedChannel()
+    reader.last_success_s = 30.0
+
+    reader.sensor_supply_v = 5.0
+    reader.zero_pressure_v = 2.5
+    reader.volts_per_kpa = 1.0
+
+    reader.read()
+    reader.read()
+    reader.read()
+
+    assert reader.channel is None
+    assert reader.last_success_s == 30.0
+
+
+class HealthyBnoSensor:
+    @property
+    def quaternion(self):
+        return (
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+        )
+
+    @property
+    def acceleration(self):
+        return (
+            0.0,
+            0.0,
+            9.80665,
+        )
+
+
+class HealthyBaroSensor:
+    @property
+    def pressure(self):
+        return 1013.25
+
+    @property
+    def temperature(self):
+        return 22.0
+
+
+class HealthyAirspeedChannel:
+    @property
+    def voltage(self):
+        return 2.6
+
+
+def test_bno085_reinitializes_after_dead_sensor_release() -> None:
+    reader = Bno085Reader.__new__(
+        Bno085Reader
+    )
+
+    reader.ok = True
+    reader.sensor = DeadBnoSensor()
+    reader.last_heading_deg = 0.0
+    reader.last_yaw_deg = 0.0
+    reader.last_update_s = 0.0
+    reader.last_success_s = 10.0
+    reader._consecutive_failures = 0
+
+    reader.read()
+    reader.read()
+    reader.read()
+
+    assert reader.sensor is None
+    assert reader.ok is False
+
+    replacement = HealthyBnoSensor()
+    initialize_calls = []
+
+    def initialize():
+        initialize_calls.append(True)
+        reader.sensor = replacement
+        reader.ok = True
+        reader._consecutive_failures = 0
+        return True
+
+    reader._initialize_hardware = initialize
+
+    recovered = reader.read()
+
+    assert len(initialize_calls) == 1
+    assert reader.sensor is replacement
+    assert reader.ok is True
+    assert reader.last_success_s is not None
+    assert recovered["pitch_deg"] == 0.0
+    assert recovered["roll_deg"] == 0.0
+    assert recovered["accel_z_g"] == 1.0
+
+
+def test_baro_reinitializes_after_dead_sensor_release() -> None:
+    reader = BaroReader.__new__(
+        BaroReader
+    )
+
+    reader.ok = True
+    reader.sensor = DeadBaroSensor()
+    reader.last_success_s = 20.0
+    reader._consecutive_failures = 0
+
+    reader.read()
+    reader.read()
+    reader.read()
+
+    assert reader.sensor is None
+    assert reader.ok is False
+
+    replacement = HealthyBaroSensor()
+    initialize_calls = []
+
+    def initialize():
+        initialize_calls.append(True)
+        reader.sensor = replacement
+        reader.ok = True
+        reader._consecutive_failures = 0
+        return True
+
+    reader._initialize_hardware = initialize
+
+    recovered = reader.read()
+
+    assert len(initialize_calls) == 1
+    assert reader.sensor is replacement
+    assert reader.ok is True
+    assert reader.last_success_s is not None
+    assert recovered["static_pressure_pa"] == 101325.0
+    assert recovered["outside_air_temp_c"] == 22.0
+
+
+def test_airspeed_reinitializes_after_dead_channel_release() -> None:
+    reader = AirspeedReader.__new__(
+        AirspeedReader
+    )
+
+    reader.ok = True
+    reader.ads = object()
+    reader.channel = DeadAirspeedChannel()
+    reader.last_success_s = 30.0
+    reader._consecutive_failures = 0
+
+    reader.sensor_supply_v = 5.0
+    reader.zero_pressure_v = 2.5
+    reader.volts_per_kpa = 1.0
+
+    reader.read()
+    reader.read()
+    reader.read()
+
+    assert reader.channel is None
+    assert reader.ok is False
+
+    replacement = HealthyAirspeedChannel()
+    replacement_ads = object()
+    initialize_calls = []
+
+    def initialize():
+        initialize_calls.append(True)
+        reader.ads = replacement_ads
+        reader.channel = replacement
+        reader.ok = True
+        reader._consecutive_failures = 0
+        return True
+
+    reader._initialize_hardware = initialize
+
+    recovered = reader.read()
+
+    assert len(initialize_calls) == 1
+    assert reader.ads is replacement_ads
+    assert reader.channel is replacement
+    assert reader.ok is True
+    assert reader.last_success_s is not None
+    assert abs(
+        recovered["differential_pressure_pa"]
+        - 100.0
+    ) < 1e-9

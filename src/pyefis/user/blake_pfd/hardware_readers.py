@@ -56,7 +56,11 @@ class Bno085Reader:
         self.last_update_s = monotonic()
         self.last_success_s: float | None = None
         self.sensor = None
+        self._consecutive_failures = 0
 
+        self._initialize_hardware()
+
+    def _initialize_hardware(self) -> bool:
         try:
             import board
             import busio
@@ -68,22 +72,30 @@ class Bno085Reader:
             from adafruit_bno08x.i2c import BNO08X_I2C
 
             i2c = busio.I2C(board.SCL, board.SDA)
-            self.sensor = BNO08X_I2C(i2c)
+            sensor = BNO08X_I2C(i2c)
 
-            self.sensor.enable_feature(BNO_REPORT_ACCELEROMETER)
-            self.sensor.enable_feature(BNO_REPORT_GYROSCOPE)
-            self.sensor.enable_feature(BNO_REPORT_ROTATION_VECTOR)
+            sensor.enable_feature(BNO_REPORT_ACCELEROMETER)
+            sensor.enable_feature(BNO_REPORT_GYROSCOPE)
+            sensor.enable_feature(BNO_REPORT_ROTATION_VECTOR)
 
+            self.sensor = sensor
             self.ok = True
+            self._consecutive_failures = 0
+            return True
 
         except Exception as exc:
             print(f"BNO085 not active, using fallback values: {exc}")
+            self.sensor = None
             self.ok = False
+            return False
 
     def read(self) -> dict[str, float]:
         """
         Return AHRS-style data.
         """
+
+        if self.sensor is None:
+            self._initialize_hardware()
 
         if not self.ok or self.sensor is None:
             return {
@@ -119,6 +131,8 @@ class Bno085Reader:
             self.last_heading_deg = yaw_deg
             
             self.last_success_s = now_s
+            self._consecutive_failures = 0
+            self.ok = True
 
             # Convert m/s^2 to g.
             accel_x_g = accel_x / 9.80665
@@ -138,10 +152,23 @@ class Bno085Reader:
         except Exception as exc:
             print(f"BNO085 read failed: {exc}")
 
-            # Keep an initialized sensor eligible for another read.
-            # A transient I2C error must not permanently disable
-            # AHRS. Freshness is intentionally not updated here,
-            # so repeated failures still fail closed as stale data.
+            self._consecutive_failures = (
+                getattr(
+                    self,
+                    "_consecutive_failures",
+                    0,
+                )
+                + 1
+            )
+
+            # Retry brief glitches on the existing object. After
+            # three consecutive failures discard it so the next
+            # read performs a complete hardware reinitialization.
+            if self._consecutive_failures >= 3:
+                self.sensor = None
+                self.ok = False
+
+            # Freshness is intentionally not updated here.
             return {
                 "pitch_deg": 0.0,
                 "roll_deg": 0.0,
@@ -168,29 +195,41 @@ class BaroReader:
         self.ok = False
         self.sensor = None
         self.last_success_s: float | None = None
+        self._consecutive_failures = 0
 
+        self._initialize_hardware()
+
+    def _initialize_hardware(self) -> bool:
         try:
             import board
             import busio
             import adafruit_bmp3xx
 
             i2c = busio.I2C(board.SCL, board.SDA)
-            self.sensor = adafruit_bmp3xx.BMP3XX_I2C(i2c)
+            sensor = adafruit_bmp3xx.BMP3XX_I2C(i2c)
 
             # Sea-level pressure is used internally by the library if using
             # sensor.altitude, but our airdata computer uses raw pressure.
-            self.sensor.sea_level_pressure = 1013.25
+            sensor.sea_level_pressure = 1013.25
 
+            self.sensor = sensor
             self.ok = True
+            self._consecutive_failures = 0
+            return True
 
         except Exception as exc:
             print(f"BMP388 not active, using fallback values: {exc}")
+            self.sensor = None
             self.ok = False
+            return False
 
     def read(self) -> dict[str, float]:
         """
         Return static pressure in Pascals and OAT in Celsius.
         """
+
+        if self.sensor is None:
+            self._initialize_hardware()
 
         if not self.ok or self.sensor is None:
             return {
@@ -205,6 +244,8 @@ class BaroReader:
 
             static_pressure_pa = pressure_hpa * 100.0
             self.last_success_s = monotonic()
+            self._consecutive_failures = 0
+            self.ok = True
             
             return {
                 "static_pressure_pa": static_pressure_pa,
@@ -214,7 +255,19 @@ class BaroReader:
         except Exception as exc:
             print(f"BMP388 read failed: {exc}")
 
-            # Keep an initialized sensor eligible for another read.
+            self._consecutive_failures = (
+                getattr(
+                    self,
+                    "_consecutive_failures",
+                    0,
+                )
+                + 1
+            )
+
+            if self._consecutive_failures >= 3:
+                self.sensor = None
+                self.ok = False
+
             # Do not refresh last_success_s on a failed sample.
             return {
                 "static_pressure_pa": 101325.0,
@@ -244,6 +297,7 @@ class AirspeedReader:
         self.ads = None
         self.channel = None
         self.last_success_s: float | None = None
+        self._consecutive_failures = 0
 
         # Calibration values.
         # These can be adjusted later after real sensor testing.
@@ -251,6 +305,9 @@ class AirspeedReader:
         self.zero_pressure_v = 2.5
         self.volts_per_kpa = 1.0
 
+        self._initialize_hardware()
+
+    def _initialize_hardware(self) -> bool:
         try:
             import board
             import busio
@@ -258,21 +315,31 @@ class AirspeedReader:
             from adafruit_ads1x15.analog_in import AnalogIn
 
             i2c = busio.I2C(board.SCL, board.SDA)
-            self.ads = ADS.ADS1115(i2c)
+            ads = ADS.ADS1115(i2c)
 
             # ADS1115 input A0.
-            self.channel = AnalogIn(self.ads, ADS.P0)
+            channel = AnalogIn(ads, ADS.P0)
 
+            self.ads = ads
+            self.channel = channel
             self.ok = True
+            self._consecutive_failures = 0
+            return True
 
         except Exception as exc:
             print(f"ADS1115/MPXV7002DP not active, using fallback values: {exc}")
+            self.ads = None
+            self.channel = None
             self.ok = False
+            return False
 
     def read(self) -> dict[str, float]:
         """
         Return differential pressure in Pascals.
         """
+
+        if self.channel is None:
+            self._initialize_hardware()
 
         if not self.ok or self.channel is None:
             return {
@@ -283,6 +350,8 @@ class AirspeedReader:
             voltage = float(self.channel.voltage)
             differential_pressure_pa = self.voltage_to_pressure_pa(voltage)
             self.last_success_s = monotonic()
+            self._consecutive_failures = 0
+            self.ok = True
 
             return {
                 "differential_pressure_pa": differential_pressure_pa,
@@ -291,7 +360,20 @@ class AirspeedReader:
         except Exception as exc:
             print(f"ADS1115/MPXV7002DP read failed: {exc}")
 
-            # Keep an initialized ADC/channel eligible for retry.
+            self._consecutive_failures = (
+                getattr(
+                    self,
+                    "_consecutive_failures",
+                    0,
+                )
+                + 1
+            )
+
+            if self._consecutive_failures >= 3:
+                self.ads = None
+                self.channel = None
+                self.ok = False
+
             # Do not refresh last_success_s on a failed sample.
             return {
                 "differential_pressure_pa": 0.0,
