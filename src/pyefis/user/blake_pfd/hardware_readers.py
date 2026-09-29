@@ -436,6 +436,7 @@ class GpsReader:
         self.last_ground_speed_kt = 0.0
         self.last_lat_deg = 0.0
         self.last_lon_deg = 0.0
+        self._consecutive_failures = 0
 
         # Temporary selected waypoint placeholder.
         # Later this will come from airport/navpoint entry.
@@ -443,26 +444,52 @@ class GpsReader:
         self.selected_waypoint_lon = -84.5120
         self.desired_track_deg = 0.0
 
+        self._initialize_hardware()
+
+    def _initialize_hardware(self) -> bool:
         try:
             import gps
 
-            self.gps_session = gps.gps(mode=gps.WATCH_ENABLE | gps.WATCH_NEWSTYLE)
+            session = gps.gps(
+                mode=(
+                    gps.WATCH_ENABLE
+                    | gps.WATCH_NEWSTYLE
+                )
+            )
+
+            self.gps_session = session
             self.ok = True
+            self._consecutive_failures = 0
+            return True
 
         except Exception as exc:
-            print(f"GPS/gpsd not active, using fallback values: {exc}")
+            print(
+                "GPS/gpsd not active, using fallback values: "
+                f"{exc}"
+            )
+            self.gps_session = None
             self.ok = False
+            return False
 
     def read(self) -> dict[str, float]:
         """
         Return GPS/nav data.
         """
 
+        if self.gps_session is None:
+            self._initialize_hardware()
+
         if not self.ok or self.gps_session is None:
             return self._fallback()
 
         try:
             report = self.gps_session.next()
+
+            # Any successful gpsd read proves that the transport
+            # session itself is alive, even when this particular
+            # message is not a usable position fix.
+            self._consecutive_failures = 0
+            self.ok = True
 
             if report.get("class") != "TPV":
                 return self._fallback()
@@ -529,10 +556,25 @@ class GpsReader:
         except Exception as exc:
             print(f"GPS/gpsd read failed: {exc}")
 
-            # Keep the established gpsd session eligible for retry.
-            # A transient read error must not permanently disable GPS.
-            # Freshness is intentionally not updated here, so repeated
-            # failures will still become GPS DATA STALE fail-closed.
+            self._consecutive_failures = (
+                getattr(
+                    self,
+                    "_consecutive_failures",
+                    0,
+                )
+                + 1
+            )
+
+            # Retry brief gpsd read glitches on the existing
+            # session. After three consecutive failures discard
+            # the dead session so the following read performs
+            # a complete gpsd reconnection.
+            if self._consecutive_failures >= 3:
+                self.gps_session = None
+                self.ok = False
+
+            # Freshness is intentionally not updated here, so
+            # repeated failures still fail closed as stale GPS.
             return self._fallback()
 
     def _fallback(self) -> dict[str, float]:

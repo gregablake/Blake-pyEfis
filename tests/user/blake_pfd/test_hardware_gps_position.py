@@ -239,3 +239,104 @@ def test_gps_recovers_after_transient_read_exception() -> None:
     assert second["gps_lat_deg"] == 39.3638
     assert second["gps_lon_deg"] == -84.5220
     assert reader.ok is True
+
+
+class DeadGpsSession:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def next(self):
+        self.calls += 1
+        raise OSError(
+            "persistent gpsd session failure"
+        )
+
+
+def test_gps_releases_dead_session_after_repeated_failures() -> None:
+    session = DeadGpsSession()
+
+    reader = GpsReader.__new__(
+        GpsReader
+    )
+
+    reader.ok = True
+    reader.gps_session = session
+    reader.last_success_s = 25.0
+    reader.last_track_deg = 123.0
+    reader.last_ground_speed_kt = 40.0
+    reader.last_lat_deg = 39.3638
+    reader.last_lon_deg = -84.5220
+
+    reader.selected_waypoint_lat = 39.1031
+    reader.selected_waypoint_lon = -84.5120
+    reader.desired_track_deg = 0.0
+
+    reader._consecutive_failures = 0
+
+    reader.read()
+    reader.read()
+    reader.read()
+
+    assert session.calls == 3
+
+    # Three persistent read failures should release the dead
+    # gpsd session so the next read can reconnect.
+    assert reader.gps_session is None
+    assert reader.ok is False
+
+    # Failed reads must not make the old GPS fix fresh.
+    assert reader.last_success_s == 25.0
+
+
+def test_gps_reconnects_after_dead_session_release() -> None:
+    session = DeadGpsSession()
+
+    reader = GpsReader.__new__(
+        GpsReader
+    )
+
+    reader.ok = True
+    reader.gps_session = session
+    reader.last_success_s = 25.0
+    reader.last_track_deg = 123.0
+    reader.last_ground_speed_kt = 40.0
+    reader.last_lat_deg = 39.3638
+    reader.last_lon_deg = -84.5220
+
+    reader.selected_waypoint_lat = 39.1031
+    reader.selected_waypoint_lon = -84.5120
+    reader.desired_track_deg = 0.0
+    reader._consecutive_failures = 0
+
+    reader.read()
+    reader.read()
+    reader.read()
+
+    assert reader.gps_session is None
+    assert reader.ok is False
+    assert reader.last_success_s == 25.0
+
+    replacement = FakeGpsSession()
+    initialize_calls = []
+
+    def initialize():
+        initialize_calls.append(True)
+        reader.gps_session = replacement
+        reader.ok = True
+        reader._consecutive_failures = 0
+        return True
+
+    reader._initialize_hardware = initialize
+
+    recovered = reader.read()
+
+    assert len(initialize_calls) == 1
+    assert reader.gps_session is replacement
+    assert reader.ok is True
+
+    assert recovered["gps_lat_deg"] == 39.3638
+    assert recovered["gps_lon_deg"] == -84.5220
+
+    # A successful valid fix after reconnection must replace
+    # the old freshness timestamp.
+    assert reader.last_success_s != 25.0
