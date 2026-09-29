@@ -57,6 +57,7 @@ class Bno085Reader:
         self.last_success_s: float | None = None
         self.sensor = None
         self._consecutive_failures = 0
+        self._has_yaw_sample = False
 
         self._initialize_hardware()
 
@@ -81,6 +82,7 @@ class Bno085Reader:
             self.sensor = sensor
             self.ok = True
             self._consecutive_failures = 0
+            self._has_yaw_sample = False
             return True
 
         except Exception as exc:
@@ -122,14 +124,28 @@ class Bno085Reader:
             now_s = monotonic()
             dt_s = now_s - self.last_update_s
 
-            if dt_s > 0.02:
-                yaw_rate_deg_s = angle_delta_deg(yaw_deg, self.last_yaw_deg) / dt_s
+            has_previous_yaw = getattr(
+                self,
+                "_has_yaw_sample",
+                False,
+            )
+
+            if has_previous_yaw and dt_s > 0.02:
+                yaw_rate_deg_s = (
+                    angle_delta_deg(
+                        yaw_deg,
+                        self.last_yaw_deg,
+                    )
+                    / dt_s
+                )
             else:
                 yaw_rate_deg_s = 0.0
 
             self.last_yaw_deg = yaw_deg
             self.last_heading_deg = yaw_deg
-            
+            self.last_update_s = now_s
+            self._has_yaw_sample = True
+
             self.last_success_s = now_s
             self._consecutive_failures = 0
             self.ok = True
@@ -167,6 +183,7 @@ class Bno085Reader:
             if self._consecutive_failures >= 3:
                 self.sensor = None
                 self.ok = False
+                self._has_yaw_sample = False
 
             # Freshness is intentionally not updated here.
             return {

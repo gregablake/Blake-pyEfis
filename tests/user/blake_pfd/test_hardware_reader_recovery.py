@@ -438,3 +438,145 @@ def test_airspeed_reinitializes_after_dead_channel_release() -> None:
         recovered["differential_pressure_pa"]
         - 100.0
     ) < 1e-9
+
+
+def test_bno085_yaw_rate_uses_interval_between_samples(
+    monkeypatch,
+) -> None:
+    import math
+
+    import pyefis.user.blake_pfd.hardware_readers as hw
+
+    class SequentialYawSensor:
+        def __init__(self) -> None:
+            self.yaws = iter(
+                (
+                    10.0,
+                    20.0,
+                )
+            )
+
+        @property
+        def quaternion(self):
+            yaw_deg = next(self.yaws)
+            half_yaw_rad = math.radians(
+                yaw_deg
+            ) / 2.0
+
+            return (
+                0.0,
+                0.0,
+                math.sin(half_yaw_rad),
+                math.cos(half_yaw_rad),
+            )
+
+        @property
+        def acceleration(self):
+            return (
+                0.0,
+                0.0,
+                9.80665,
+            )
+
+    times = iter(
+        (
+            1.0,
+            2.0,
+        )
+    )
+
+    monkeypatch.setattr(
+        hw,
+        "monotonic",
+        lambda: next(times),
+    )
+
+    reader = Bno085Reader.__new__(
+        Bno085Reader
+    )
+
+    reader.ok = True
+    reader.sensor = SequentialYawSensor()
+    reader.last_heading_deg = 0.0
+    reader.last_yaw_deg = 0.0
+    reader.last_update_s = 0.0
+    reader.last_success_s = 0.0
+    reader._consecutive_failures = 0
+    reader._has_yaw_sample = True
+
+    first = reader.read()
+    second = reader.read()
+
+    # 10 degrees of yaw change occurred during each
+    # one-second sample interval.
+    assert abs(
+        first["yaw_rate_deg_s"] - 10.0
+    ) < 1e-9
+
+    assert abs(
+        second["yaw_rate_deg_s"] - 10.0
+    ) < 1e-9
+
+    # The reader must advance its rate-calculation clock
+    # after every successful AHRS sample.
+    assert reader.last_update_s == 2.0
+
+
+def test_bno085_first_valid_sample_has_zero_yaw_rate(
+    monkeypatch,
+) -> None:
+    import math
+
+    import pyefis.user.blake_pfd.hardware_readers as hw
+
+    class InitialYawSensor:
+        @property
+        def quaternion(self):
+            yaw_deg = 90.0
+            half_yaw_rad = math.radians(
+                yaw_deg
+            ) / 2.0
+
+            return (
+                0.0,
+                0.0,
+                math.sin(half_yaw_rad),
+                math.cos(half_yaw_rad),
+            )
+
+        @property
+        def acceleration(self):
+            return (
+                0.0,
+                0.0,
+                9.80665,
+            )
+
+    monkeypatch.setattr(
+        hw,
+        "monotonic",
+        lambda: 10.0,
+    )
+
+    reader = Bno085Reader.__new__(
+        Bno085Reader
+    )
+
+    reader.ok = True
+    reader.sensor = InitialYawSensor()
+    reader.last_heading_deg = 0.0
+    reader.last_yaw_deg = 0.0
+    reader.last_update_s = 0.0
+    reader.last_success_s = None
+    reader._consecutive_failures = 0
+
+    sample = reader.read()
+
+    # There is no previous real AHRS sample yet, so the
+    # first valid attitude must not generate an artificial
+    # turn rate from the default zero-degree heading.
+    assert abs(
+        sample["heading_deg"] - 90.0
+    ) < 1e-9
+
+    assert sample["yaw_rate_deg_s"] == 0.0
