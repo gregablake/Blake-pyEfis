@@ -58,6 +58,8 @@ class Bno085Reader:
         self.sensor = None
         self._consecutive_failures = 0
         self._has_yaw_sample = False
+        self._next_reconnect_s = 0.0
+        self._reconnect_backoff_s = 1.0
 
         self._initialize_hardware()
 
@@ -83,12 +85,21 @@ class Bno085Reader:
             self.ok = True
             self._consecutive_failures = 0
             self._has_yaw_sample = False
+            self._next_reconnect_s = 0.0
             return True
 
         except Exception as exc:
             print(f"BNO085 not active, using fallback values: {exc}")
             self.sensor = None
             self.ok = False
+            self._next_reconnect_s = (
+                monotonic()
+                + getattr(
+                    self,
+                    "_reconnect_backoff_s",
+                    1.0,
+                )
+            )
             return False
 
     def read(self) -> dict[str, float]:
@@ -97,7 +108,25 @@ class Bno085Reader:
         """
 
         if self.sensor is None:
-            self._initialize_hardware()
+            now_s = monotonic()
+            next_reconnect_s = getattr(
+                self,
+                "_next_reconnect_s",
+                0.0,
+            )
+
+            if now_s >= next_reconnect_s:
+                initialized = self._initialize_hardware()
+
+                if not initialized:
+                    self._next_reconnect_s = (
+                        now_s
+                        + getattr(
+                            self,
+                            "_reconnect_backoff_s",
+                            1.0,
+                        )
+                    )
 
         if not self.ok or self.sensor is None:
             return {
@@ -213,6 +242,8 @@ class BaroReader:
         self.sensor = None
         self.last_success_s: float | None = None
         self._consecutive_failures = 0
+        self._next_reconnect_s = 0.0
+        self._reconnect_backoff_s = 1.0
 
         self._initialize_hardware()
 
@@ -232,12 +263,21 @@ class BaroReader:
             self.sensor = sensor
             self.ok = True
             self._consecutive_failures = 0
+            self._next_reconnect_s = 0.0
             return True
 
         except Exception as exc:
             print(f"BMP388 not active, using fallback values: {exc}")
             self.sensor = None
             self.ok = False
+            self._next_reconnect_s = (
+                monotonic()
+                + getattr(
+                    self,
+                    "_reconnect_backoff_s",
+                    1.0,
+                )
+            )
             return False
 
     def read(self) -> dict[str, float]:
@@ -246,7 +286,25 @@ class BaroReader:
         """
 
         if self.sensor is None:
-            self._initialize_hardware()
+            now_s = monotonic()
+            next_reconnect_s = getattr(
+                self,
+                "_next_reconnect_s",
+                0.0,
+            )
+
+            if now_s >= next_reconnect_s:
+                initialized = self._initialize_hardware()
+
+                if not initialized:
+                    self._next_reconnect_s = (
+                        now_s
+                        + getattr(
+                            self,
+                            "_reconnect_backoff_s",
+                            1.0,
+                        )
+                    )
 
         if not self.ok or self.sensor is None:
             return {
@@ -315,6 +373,8 @@ class AirspeedReader:
         self.channel = None
         self.last_success_s: float | None = None
         self._consecutive_failures = 0
+        self._next_reconnect_s = 0.0
+        self._reconnect_backoff_s = 1.0
 
         # Calibration values.
         # These can be adjusted later after real sensor testing.
@@ -341,6 +401,7 @@ class AirspeedReader:
             self.channel = channel
             self.ok = True
             self._consecutive_failures = 0
+            self._next_reconnect_s = 0.0
             return True
 
         except Exception as exc:
@@ -348,6 +409,14 @@ class AirspeedReader:
             self.ads = None
             self.channel = None
             self.ok = False
+            self._next_reconnect_s = (
+                monotonic()
+                + getattr(
+                    self,
+                    "_reconnect_backoff_s",
+                    1.0,
+                )
+            )
             return False
 
     def read(self) -> dict[str, float]:
@@ -356,7 +425,25 @@ class AirspeedReader:
         """
 
         if self.channel is None:
-            self._initialize_hardware()
+            now_s = monotonic()
+            next_reconnect_s = getattr(
+                self,
+                "_next_reconnect_s",
+                0.0,
+            )
+
+            if now_s >= next_reconnect_s:
+                initialized = self._initialize_hardware()
+
+                if not initialized:
+                    self._next_reconnect_s = (
+                        now_s
+                        + getattr(
+                            self,
+                            "_reconnect_backoff_s",
+                            1.0,
+                        )
+                    )
 
         if not self.ok or self.channel is None:
             return {
@@ -437,6 +524,8 @@ class GpsReader:
         self.last_lat_deg = 0.0
         self.last_lon_deg = 0.0
         self._consecutive_failures = 0
+        self._next_reconnect_s = 0.0
+        self._reconnect_backoff_s = 1.0
 
         # Temporary selected waypoint placeholder.
         # Later this will come from airport/navpoint entry.
@@ -460,6 +549,7 @@ class GpsReader:
             self.gps_session = session
             self.ok = True
             self._consecutive_failures = 0
+            self._next_reconnect_s = 0.0
             return True
 
         except Exception as exc:
@@ -469,6 +559,14 @@ class GpsReader:
             )
             self.gps_session = None
             self.ok = False
+            self._next_reconnect_s = (
+                monotonic()
+                + getattr(
+                    self,
+                    "_reconnect_backoff_s",
+                    1.0,
+                )
+            )
             return False
 
     def read(self) -> dict[str, float]:
@@ -477,7 +575,25 @@ class GpsReader:
         """
 
         if self.gps_session is None:
-            self._initialize_hardware()
+            now_s = monotonic()
+            next_reconnect_s = getattr(
+                self,
+                "_next_reconnect_s",
+                0.0,
+            )
+
+            if now_s >= next_reconnect_s:
+                initialized = self._initialize_hardware()
+
+                if not initialized:
+                    self._next_reconnect_s = (
+                        now_s
+                        + getattr(
+                            self,
+                            "_reconnect_backoff_s",
+                            1.0,
+                        )
+                    )
 
         if not self.ok or self.gps_session is None:
             return self._fallback()

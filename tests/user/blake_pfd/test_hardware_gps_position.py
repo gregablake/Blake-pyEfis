@@ -340,3 +340,62 @@ def test_gps_reconnects_after_dead_session_release() -> None:
     # A successful valid fix after reconnection must replace
     # the old freshness timestamp.
     assert reader.last_success_s != 25.0
+
+
+def test_gps_waits_for_reconnect_backoff(
+    monkeypatch,
+) -> None:
+    import pyefis.user.blake_pfd.hardware_readers as hw
+
+    clock = {
+        "now": 5.0,
+    }
+
+    monkeypatch.setattr(
+        hw,
+        "monotonic",
+        lambda: clock["now"],
+    )
+
+    reader = GpsReader.__new__(
+        GpsReader
+    )
+
+    reader.ok = False
+    reader.gps_session = None
+    reader.last_success_s = None
+    reader.last_track_deg = 0.0
+    reader.last_ground_speed_kt = 0.0
+    reader.last_lat_deg = 0.0
+    reader.last_lon_deg = 0.0
+    reader._consecutive_failures = 0
+
+    reader.selected_waypoint_lat = 39.1031
+    reader.selected_waypoint_lon = -84.5120
+    reader.desired_track_deg = 0.0
+
+    reader._next_reconnect_s = 10.0
+
+    initialize_calls = []
+
+    def initialize():
+        initialize_calls.append(
+            clock["now"]
+        )
+        return False
+
+    reader._initialize_hardware = initialize
+
+    reader.read()
+    reader.read()
+    reader.read()
+
+    assert initialize_calls == []
+
+    clock["now"] = 10.0
+
+    reader.read()
+
+    assert initialize_calls == [
+        10.0,
+    ]

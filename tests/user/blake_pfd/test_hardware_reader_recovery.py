@@ -580,3 +580,170 @@ def test_bno085_first_valid_sample_has_zero_yaw_rate(
     ) < 1e-9
 
     assert sample["yaw_rate_deg_s"] == 0.0
+
+
+def test_bno085_waits_for_reconnect_backoff(
+    monkeypatch,
+) -> None:
+    import pyefis.user.blake_pfd.hardware_readers as hw
+
+    clock = {
+        "now": 5.0,
+    }
+
+    monkeypatch.setattr(
+        hw,
+        "monotonic",
+        lambda: clock["now"],
+    )
+
+    reader = Bno085Reader.__new__(
+        Bno085Reader
+    )
+
+    reader.ok = False
+    reader.sensor = None
+    reader.last_heading_deg = 0.0
+    reader.last_yaw_deg = 0.0
+    reader.last_update_s = 0.0
+    reader.last_success_s = None
+    reader._consecutive_failures = 0
+    reader._has_yaw_sample = False
+
+    # Hardware must not be retried before this time.
+    reader._next_reconnect_s = 10.0
+
+    initialize_calls = []
+
+    def initialize():
+        initialize_calls.append(
+            clock["now"]
+        )
+        return False
+
+    reader._initialize_hardware = initialize
+
+    # Multiple PFD reads before the reconnect deadline must
+    # return fallback data without hammering the I2C bus.
+    reader.read()
+    reader.read()
+    reader.read()
+
+    assert initialize_calls == []
+
+    # Once the reconnect deadline arrives, exactly one hardware
+    # initialization attempt is allowed.
+    clock["now"] = 10.0
+
+    reader.read()
+
+    assert initialize_calls == [
+        10.0,
+    ]
+
+
+def test_baro_waits_for_reconnect_backoff(
+    monkeypatch,
+) -> None:
+    import pyefis.user.blake_pfd.hardware_readers as hw
+
+    clock = {
+        "now": 5.0,
+    }
+
+    monkeypatch.setattr(
+        hw,
+        "monotonic",
+        lambda: clock["now"],
+    )
+
+    reader = BaroReader.__new__(
+        BaroReader
+    )
+
+    reader.ok = False
+    reader.sensor = None
+    reader.last_success_s = None
+    reader._consecutive_failures = 0
+
+    reader._next_reconnect_s = 10.0
+
+    initialize_calls = []
+
+    def initialize():
+        initialize_calls.append(
+            clock["now"]
+        )
+        return False
+
+    reader._initialize_hardware = initialize
+
+    reader.read()
+    reader.read()
+    reader.read()
+
+    assert initialize_calls == []
+
+    clock["now"] = 10.0
+
+    reader.read()
+
+    assert initialize_calls == [
+        10.0,
+    ]
+
+
+def test_airspeed_waits_for_reconnect_backoff(
+    monkeypatch,
+) -> None:
+    import pyefis.user.blake_pfd.hardware_readers as hw
+
+    clock = {
+        "now": 5.0,
+    }
+
+    monkeypatch.setattr(
+        hw,
+        "monotonic",
+        lambda: clock["now"],
+    )
+
+    reader = AirspeedReader.__new__(
+        AirspeedReader
+    )
+
+    reader.ok = False
+    reader.ads = None
+    reader.channel = None
+    reader.last_success_s = None
+    reader._consecutive_failures = 0
+
+    reader.sensor_supply_v = 5.0
+    reader.zero_pressure_v = 2.5
+    reader.volts_per_kpa = 1.0
+
+    reader._next_reconnect_s = 10.0
+
+    initialize_calls = []
+
+    def initialize():
+        initialize_calls.append(
+            clock["now"]
+        )
+        return False
+
+    reader._initialize_hardware = initialize
+
+    reader.read()
+    reader.read()
+    reader.read()
+
+    assert initialize_calls == []
+
+    clock["now"] = 10.0
+
+    reader.read()
+
+    assert initialize_calls == [
+        10.0,
+    ]
