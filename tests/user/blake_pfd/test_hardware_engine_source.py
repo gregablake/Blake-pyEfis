@@ -287,3 +287,58 @@ def test_empty_serial_read_does_not_refresh_freshness() -> None:
     # established serial connection.
     assert source._serial is fake_serial
     assert fake_serial.closed is False
+
+
+def test_engine_serial_waits_for_reconnect_backoff(
+    monkeypatch,
+) -> None:
+    import pyefis.user.blake_pfd.hardware_engine as hw_engine
+
+    clock = {
+        "now": 5.0,
+    }
+
+    monkeypatch.setattr(
+        hw_engine,
+        "monotonic",
+        lambda: clock["now"],
+    )
+
+    factory_calls = []
+
+    def failing_factory(**kwargs):
+        factory_calls.append(
+            clock["now"]
+        )
+        raise OSError(
+            "engine controller unavailable"
+        )
+
+    source = SerialEngineSource(
+        serial_factory=failing_factory,
+    )
+
+    source._next_reconnect_s = 10.0
+    source._reconnect_backoff_s = 1.0
+
+    # Repeated PFD reads before the reconnect deadline must
+    # fail closed without repeatedly reopening the serial port.
+    for _ in range(3):
+        with pytest.raises(
+            SerialEngineSourceError,
+        ):
+            source.read()
+
+    assert factory_calls == []
+
+    # At the reconnect deadline one connection attempt is allowed.
+    clock["now"] = 10.0
+
+    with pytest.raises(
+        SerialEngineSourceError,
+    ):
+        source.read()
+
+    assert factory_calls == [
+        10.0,
+    ]

@@ -242,9 +242,28 @@ class SerialEngineSource:
         self._serial_factory = serial_factory
         self._serial = None
 
+        self._next_reconnect_s = 0.0
+        self._reconnect_backoff_s = 1.0
+
     def _connect(self) -> None:
         if self._serial is not None:
             return
+
+        next_reconnect_s = getattr(
+            self,
+            "_next_reconnect_s",
+            0.0,
+        )
+
+        now_s = None
+
+        if next_reconnect_s > 0.0:
+            now_s = monotonic()
+
+            if now_s < next_reconnect_s:
+                raise SerialEngineSourceError(
+                    "Engine serial port unavailable."
+                )
 
         factory = self._serial_factory
 
@@ -259,17 +278,33 @@ class SerialEngineSource:
             factory = serial.Serial
 
         try:
-            self._serial = factory(
+            connection = factory(
                 port=self.port,
                 baudrate=self.baudrate,
                 timeout=self.timeout_s,
             )
+
         except Exception as exc:
             self._serial = None
+
+            if now_s is None:
+                now_s = monotonic()
+
+            self._next_reconnect_s = (
+                now_s
+                + getattr(
+                    self,
+                    "_reconnect_backoff_s",
+                    1.0,
+                )
+            )
 
             raise SerialEngineSourceError(
                 "Engine serial port unavailable."
             ) from exc
+
+        self._serial = connection
+        self._next_reconnect_s = 0.0
 
     def _disconnect(self) -> None:
         connection = self._serial
