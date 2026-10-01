@@ -7,6 +7,10 @@ After=graphical-session.target
 Type=exec
 WorkingDirectory=%h/Blake-pyEfis
 
+# Optional machine-specific hardware configuration.
+# Missing file is allowed because of the leading '-'.
+EnvironmentFile=-%h/.config/blake-pfd/environment
+
 ExecStartPre=/bin/sh -lc 'mkdir -p /tmp/blake_pyefis && rm -f /tmp/blake_pyefis/app.heartbeat && "$HOME/Blake-pyEfis/.venv/bin/python" -c "from time import monotonic; from pathlib import Path; Path('/tmp/blake_pyefis/app.started').write_text(f'{monotonic():.6f}', encoding='utf-8')"'
 
 ExecStart=/bin/sh -lc 'exec "$HOME/Blake-pyEfis/.venv/bin/python" -m pyefis.user.blake_pfd.pfd_demo --hardware'

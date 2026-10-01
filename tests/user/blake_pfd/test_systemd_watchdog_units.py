@@ -83,3 +83,14 @@ def test_watchdog_timer_runs_once_per_second() -> None:
         "Unit=blake-pfd-watchdog.service"
         in text
     )
+
+
+def test_pfd_service_loads_optional_hardware_environment_file() -> None:
+    text = SERVICE_PATH.read_text(
+        encoding="utf-8",
+    )
+
+    assert (
+        "EnvironmentFile=-%h/.config/blake-pfd/environment"
+        in text
+    )
