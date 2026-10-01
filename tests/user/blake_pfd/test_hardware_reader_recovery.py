@@ -747,3 +747,136 @@ def test_airspeed_waits_for_reconnect_backoff(
     assert initialize_calls == [
         10.0,
     ]
+
+
+def test_hardware_source_shares_one_i2c_bus_across_readers(
+    monkeypatch,
+) -> None:
+    import sys
+    import types
+
+    from pyefis.user.blake_pfd.hardware_readers import (
+        BlakeHardwareSensorSource,
+    )
+
+    board = types.ModuleType("board")
+    board.SCL = object()
+    board.SDA = object()
+
+    busio = types.ModuleType("busio")
+    i2c_calls = []
+
+    def make_i2c(scl, sda):
+        bus = object()
+        i2c_calls.append(
+            {
+                "scl": scl,
+                "sda": sda,
+                "bus": bus,
+            }
+        )
+        return bus
+
+    busio.I2C = make_i2c
+
+    bno_root = types.ModuleType(
+        "adafruit_bno08x"
+    )
+    bno_root.BNO_REPORT_ACCELEROMETER = 1
+    bno_root.BNO_REPORT_GYROSCOPE = 2
+    bno_root.BNO_REPORT_ROTATION_VECTOR = 3
+
+    bno_i2c = types.ModuleType(
+        "adafruit_bno08x.i2c"
+    )
+
+    class FakeBno:
+        def __init__(self, i2c):
+            self.i2c = i2c
+
+        def enable_feature(self, feature):
+            pass
+
+    bno_i2c.BNO08X_I2C = FakeBno
+
+    bmp = types.ModuleType(
+        "adafruit_bmp3xx"
+    )
+
+    class FakeBmp:
+        def __init__(self, i2c):
+            self.i2c = i2c
+            self.sea_level_pressure = 1013.25
+
+    bmp.BMP3XX_I2C = FakeBmp
+
+    ads_package = types.ModuleType(
+        "adafruit_ads1x15"
+    )
+    ads_module = types.ModuleType(
+        "adafruit_ads1x15.ads1115"
+    )
+    ads_module.P0 = 0
+
+    class FakeAds:
+        def __init__(self, i2c):
+            self.i2c = i2c
+
+    ads_module.ADS1115 = FakeAds
+    ads_package.ads1115 = ads_module
+
+    analog_module = types.ModuleType(
+        "adafruit_ads1x15.analog_in"
+    )
+
+    class FakeAnalogIn:
+        def __init__(self, ads, pin):
+            self.ads = ads
+            self.pin = pin
+
+    analog_module.AnalogIn = FakeAnalogIn
+
+    monkeypatch.setitem(
+        sys.modules,
+        "board",
+        board,
+    )
+    monkeypatch.setitem(
+        sys.modules,
+        "busio",
+        busio,
+    )
+    monkeypatch.setitem(
+        sys.modules,
+        "adafruit_bno08x",
+        bno_root,
+    )
+    monkeypatch.setitem(
+        sys.modules,
+        "adafruit_bno08x.i2c",
+        bno_i2c,
+    )
+    monkeypatch.setitem(
+        sys.modules,
+        "adafruit_bmp3xx",
+        bmp,
+    )
+    monkeypatch.setitem(
+        sys.modules,
+        "adafruit_ads1x15",
+        ads_package,
+    )
+    monkeypatch.setitem(
+        sys.modules,
+        "adafruit_ads1x15.ads1115",
+        ads_module,
+    )
+    monkeypatch.setitem(
+        sys.modules,
+        "adafruit_ads1x15.analog_in",
+        analog_module,
+    )
+
+    BlakeHardwareSensorSource()
+
+    assert len(i2c_calls) == 1

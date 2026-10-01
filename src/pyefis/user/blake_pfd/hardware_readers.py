@@ -25,6 +25,57 @@ from time import monotonic
 from pyefis.user.blake_pfd.airdata import RawSensorInputs
 
 
+class SharedI2CBus:
+    """
+    Owns the physical Raspberry Pi I2C bus shared by all I2C sensors.
+
+    The bus is created lazily, retained for the lifetime of the hardware
+    source, and reconnect attempts are rate limited if the bus itself is
+    unavailable.
+    """
+
+    def __init__(self) -> None:
+        self.bus = None
+        self._next_reconnect_s = 0.0
+        self._reconnect_backoff_s = 1.0
+
+    def get(self):
+        if self.bus is not None:
+            return self.bus
+
+        now_s = monotonic()
+
+        if now_s < self._next_reconnect_s:
+            return None
+
+        try:
+            import board
+            import busio
+
+            bus = busio.I2C(
+                board.SCL,
+                board.SDA,
+            )
+
+        except Exception as exc:
+            print(
+                "I2C bus not active: "
+                f"{exc}"
+            )
+
+            self.bus = None
+            self._next_reconnect_s = (
+                now_s
+                + self._reconnect_backoff_s
+            )
+            return None
+
+        self.bus = bus
+        self._next_reconnect_s = 0.0
+
+        return bus
+
+
 @dataclass
 class HardwareStatus:
     """
@@ -49,8 +100,16 @@ class Bno085Reader:
     On the Raspberry Pi, install the Adafruit BNO08x library and wire the sensor.
     """
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        i2c_provider: SharedI2CBus | None = None,
+    ) -> None:
         self.ok = False
+        self._i2c_provider = (
+            i2c_provider
+            if i2c_provider is not None
+            else SharedI2CBus()
+        )
         self.last_heading_deg = 0.0
         self.last_yaw_deg = 0.0
         self.last_update_s = monotonic()
@@ -65,8 +124,6 @@ class Bno085Reader:
 
     def _initialize_hardware(self) -> bool:
         try:
-            import board
-            import busio
             from adafruit_bno08x import (
                 BNO_REPORT_ACCELEROMETER,
                 BNO_REPORT_GYROSCOPE,
@@ -74,7 +131,13 @@ class Bno085Reader:
             )
             from adafruit_bno08x.i2c import BNO08X_I2C
 
-            i2c = busio.I2C(board.SCL, board.SDA)
+            i2c = self._i2c_provider.get()
+
+            if i2c is None:
+                raise RuntimeError(
+                    "Shared I2C bus unavailable."
+                )
+
             sensor = BNO08X_I2C(i2c)
 
             sensor.enable_feature(BNO_REPORT_ACCELEROMETER)
@@ -237,8 +300,16 @@ class BaroReader:
     not loose cabin air, if you want EFIS altitude/VSI to agree with pitot/static.
     """
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        i2c_provider: SharedI2CBus | None = None,
+    ) -> None:
         self.ok = False
+        self._i2c_provider = (
+            i2c_provider
+            if i2c_provider is not None
+            else SharedI2CBus()
+        )
         self.sensor = None
         self.last_success_s: float | None = None
         self._consecutive_failures = 0
@@ -249,11 +320,15 @@ class BaroReader:
 
     def _initialize_hardware(self) -> bool:
         try:
-            import board
-            import busio
             import adafruit_bmp3xx
 
-            i2c = busio.I2C(board.SCL, board.SDA)
+            i2c = self._i2c_provider.get()
+
+            if i2c is None:
+                raise RuntimeError(
+                    "Shared I2C bus unavailable."
+                )
+
             sensor = adafruit_bmp3xx.BMP3XX_I2C(i2c)
 
             # Sea-level pressure is used internally by the library if using
@@ -367,8 +442,16 @@ class AirspeedReader:
         pitot pressure - static pressure
     """
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        i2c_provider: SharedI2CBus | None = None,
+    ) -> None:
         self.ok = False
+        self._i2c_provider = (
+            i2c_provider
+            if i2c_provider is not None
+            else SharedI2CBus()
+        )
         self.ads = None
         self.channel = None
         self.last_success_s: float | None = None
@@ -386,12 +469,16 @@ class AirspeedReader:
 
     def _initialize_hardware(self) -> bool:
         try:
-            import board
-            import busio
             import adafruit_ads1x15.ads1115 as ADS
             from adafruit_ads1x15.analog_in import AnalogIn
 
-            i2c = busio.I2C(board.SCL, board.SDA)
+            i2c = self._i2c_provider.get()
+
+            if i2c is None:
+                raise RuntimeError(
+                    "Shared I2C bus unavailable."
+                )
+
             ads = ADS.ADS1115(i2c)
 
             # ADS1115 input A0.
@@ -720,9 +807,17 @@ class BlakeHardwareSensorSource:
     """
 
     def __init__(self) -> None:
-        self.bno085 = Bno085Reader()
-        self.baro = BaroReader()
-        self.airspeed = AirspeedReader()
+        self.i2c = SharedI2CBus()
+
+        self.bno085 = Bno085Reader(
+            i2c_provider=self.i2c,
+        )
+        self.baro = BaroReader(
+            i2c_provider=self.i2c,
+        )
+        self.airspeed = AirspeedReader(
+            i2c_provider=self.i2c,
+        )
         self.gps = GpsReader()
         self.status = HardwareStatus()
 
