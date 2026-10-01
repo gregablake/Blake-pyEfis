@@ -55,6 +55,13 @@ qt = [
     "PyQt6==6.8.0",
 ]
 
+hardware = [
+    "Adafruit-Blinka",
+    "adafruit-circuitpython-bno08x",
+    "adafruit-circuitpython-bmp3xx",
+    "adafruit-circuitpython-ads1x15",
+]
+
 [project.scripts]
 pyefis = "pyefis.main:main"
 
