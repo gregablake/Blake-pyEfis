@@ -342,3 +342,19 @@ def test_engine_serial_waits_for_reconnect_backoff(
     assert factory_calls == [
         10.0,
     ]
+
+
+def test_engine_serial_port_can_be_configured_by_environment(
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv(
+        "BLAKE_PFD_ENGINE_SERIAL_PORT",
+        "/dev/serial/by-id/usb-Blake_EMS",
+    )
+
+    source = SerialEngineSource()
+
+    assert (
+        source.port
+        == "/dev/serial/by-id/usb-Blake_EMS"
+    )

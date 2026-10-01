@@ -26,6 +26,7 @@ No successful parse means last_success_s is NOT refreshed.
 from __future__ import annotations
 
 import json
+import os
 
 from math import isfinite
 from time import monotonic
@@ -228,12 +229,19 @@ class SerialEngineSource:
 
     def __init__(
         self,
-        port: str = "/dev/ttyACM0",
+        port: str | None = None,
         baudrate: int = 115200,
         timeout_s: float = 0.05,
         serial_factory: Callable[..., Any] | None = None,
     ) -> None:
-        self.port = port
+        self.port = (
+            port
+            if port is not None
+            else os.environ.get(
+                "BLAKE_PFD_ENGINE_SERIAL_PORT",
+                "/dev/ttyACM0",
+            )
+        )
         self.baudrate = int(baudrate)
         self.timeout_s = float(timeout_s)
 
