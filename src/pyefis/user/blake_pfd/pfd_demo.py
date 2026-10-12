@@ -8450,12 +8450,79 @@ class BlakePfdDemo(QWidget):
             painter.drawText(box_x + 10, y, f"{airport.ident:<5} {distance_nm:>4.1f}NM {airport.name[:24]}")
             y += 22
 
+    def draw_moving_map(
+        self,
+        painter: QPainter,
+        pfd: FlightData,
+        width: int,
+        height: int,
+    ) -> None:
+        """Full-screen MAP page using the existing moving-map computer.
+
+        A stale/unavailable GPS position must not be used to fetch map airports.
+        This display method does not alter navigation or warning state.
+        """
+        watchdog = getattr(self, "sensor_watchdog_state", None)
+        position_usable = bool(
+            pfd is not None
+            and getattr(pfd, "position_valid", False)
+            and watchdog is not None
+            and getattr(watchdog, "position_valid", False)
+            and getattr(watchdog, "position_fresh", False)
+        )
+        if not position_usable:
+            self.map_airport_markers = []
+            painter.save()
+            painter.setPen(QPen(QColor(255, 180, 0), 2))
+            painter.setFont(QFont("Arial", 14, QFont.Weight.Bold))
+            painter.drawText(
+                QRectF(40, 100, max(100, width - 160), 70),
+                Qt.AlignmentFlag.AlignCenter,
+                "MAP POSITION UNAVAILABLE",
+            )
+            painter.restore()
+            return
+
+        map_state = self.moving_map.update(
+            database=self.database,
+            aircraft_lat=pfd.latitude_deg,
+            aircraft_lon=pfd.longitude_deg,
+            range_nm=self.map_range_nm,
+        )
+        self.draw_moving_map_overlay(
+            painter, map_state, width, height, full_page=True,
+        )
+
+    def draw_touch_map_controls(
+        self,
+        painter: QPainter,
+        width: int,
+        height: int,
+    ) -> None:
+        """Draw MAP controls from the same touch rectangles used for input."""
+        self.touch_map_state = self.touch_map_controls.layout(
+            screen_width=width,
+            screen_height=height,
+        )
+        painter.save()
+        painter.setFont(QFont("Arial", 15, QFont.Weight.Bold))
+        for button in self.touch_map_state.buttons:
+            bounds = button.bounds
+            rect = QRectF(bounds.x, bounds.y, bounds.width, bounds.height)
+            painter.setBrush(QBrush(QColor(27, 47, 67, 238)))
+            painter.setPen(QPen(QColor(0, 185, 245), 2))
+            painter.drawRoundedRect(rect, 9.0, 9.0)
+            painter.setPen(QPen(QColor(245, 245, 245), 1))
+            painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, button.label)
+        painter.restore()
+
     def draw_moving_map_overlay(
         self,
         painter: QPainter,
         map_state,
         width: int,
         height: int,
+        full_page: bool = False,
     ) -> None:
         # GLASS_PANEL_NO_BRUSH
         painter.setBrush(
@@ -8465,10 +8532,17 @@ class BlakePfdDemo(QWidget):
         )
 
         # GARMIN REDESIGN: shared lower-left tabbed pane.
-        box_x = 5
-        box_y = 350
-        box_w = 170
-        box_h = 215
+        if full_page:
+            # Leave the touch-control column and bottom navigation unobscured.
+            box_x = 28
+            box_y = 78
+            box_w = max(170, width - 156)
+            box_h = max(215, height - 166)
+        else:
+            box_x = 5
+            box_y = 350
+            box_w = 170
+            box_h = 215
 
         # ----------------------------------------------------
         # Garmin-style pane frame and tabs.
@@ -8504,93 +8578,92 @@ class BlakePfdDemo(QWidget):
             box_h,
         )
 
-        tab_h = 22
-        tab_w = box_w / 3.0
+        if full_page:
+            # MAP mode has actual zoom/orientation buttons on the right.
+            # Do not display the inset's decorative, noninteractive tabs.
+            tab_h = 0
+            content_top = box_y
+        else:
+            tab_h = 22
+            tab_w = box_w / 3.0
 
-        labels = (
-            "TRAFFIC",
-            "WEATHER",
-            "MAP",
-        )
+            labels = ("TRAFFIC", "WEATHER", "MAP")
 
-        painter.setFont(
-            QFont(
-                "Arial",
-                8,
-                QFont.Weight.Bold,
-            )
-        )
-
-        for index, label in enumerate(labels):
-            tab_x = box_x + int(index * tab_w)
-
-            selected = (
-                label == "WEATHER"
+            painter.setFont(
+                QFont(
+                    "Arial",
+                    8,
+                    QFont.Weight.Bold,
+                )
             )
 
-            painter.setBrush(
-                QBrush(
+            for index, label in enumerate(labels):
+                tab_x = box_x + int(index * tab_w)
+
+                selected = (label == "WEATHER")
+
+                painter.setBrush(
+                    QBrush(
+                        QColor(
+                            20,
+                            65,
+                            88,
+                            255,
+                        )
+                        if selected
+                        else QColor(
+                            12,
+                            24,
+                            36,
+                            250,
+                        )
+                    )
+                )
+
+                painter.setPen(
+                    QPen(
+                        QColor(
+                            115,
+                            115,
+                            120,
+                        ),
+                        1,
+                    )
+                )
+
+                painter.drawRect(
+                    tab_x,
+                    box_y,
+                    int(tab_w),
+                    tab_h,
+                )
+
+                painter.setPen(
                     QColor(
-                        20,
-                        65,
-                        88,
+                        0,
+                        220,
                         255,
                     )
                     if selected
                     else QColor(
-                        12,
-                        24,
-                        36,
-                        250,
+                        205,
+                        205,
+                        205,
                     )
                 )
-            )
 
-            painter.setPen(
-                QPen(
-                    QColor(
-                        115,
-                        115,
-                        120,
+                painter.drawText(
+                    QRectF(
+                        tab_x,
+                        box_y,
+                        tab_w,
+                        tab_h,
                     ),
-                    1,
+                    Qt.AlignmentFlag.AlignCenter,
+                    label,
                 )
-            )
 
-            painter.drawRect(
-                tab_x,
-                box_y,
-                int(tab_w),
-                tab_h,
-            )
-
-            painter.setPen(
-                QColor(
-                    0,
-                    220,
-                    255,
-                )
-                if selected
-                else QColor(
-                    205,
-                    205,
-                    205,
-                )
-            )
-
-            painter.drawText(
-                QRectF(
-                    tab_x,
-                    box_y,
-                    tab_w,
-                    tab_h,
-                ),
-                Qt.AlignmentFlag.AlignCenter,
-                label,
-            )
-
-        # Keep plotted map content below the tab strip.
-        content_top = box_y + tab_h
+            content_top = box_y + tab_h
 
         painter.setPen(
             QPen(
