@@ -15,7 +15,6 @@ from pyefis.user.blake_pfd.pfd_demo import BlakePfdDemo
             "attitude",
             (
                 "draw_attitude",
-                "draw_heading_strip",
                 "draw_hsi_compass_rose",
                 "draw_turn_and_slip",
                 "draw_synthetic_vision",

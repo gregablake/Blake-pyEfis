@@ -30,6 +30,10 @@ class ProjectedObstacle:
     elevation_ft: float
     height_agl_ft: float
     threat: bool
+    # Optional ground-foot projection, for a distance-aware visual mast.
+    # Warning classification continues to use the obstacle TOP only.
+    base_x_px: float | None = None
+    base_y_px: float | None = None
 
 
 class ObstacleProjectionComputer:
@@ -171,6 +175,29 @@ class ObstacleProjectionComputer:
             ):
                 continue
 
+            # Project true obstacle base independently of its top.
+            # These screen pixels affect the mast illustration ONLY.
+            base_x_px = None
+            base_y_px = None
+            if obstacle.height_agl_ft > 0.0:
+                base_camera = self.camera.world_to_camera_prepared(
+                    north_ft=north_ft,
+                    east_ft=east_ft,
+                    up_ft=(
+                        obstacle.elevation_ft
+                        - obstacle.height_agl_ft
+                        - aircraft_alt_ft
+                    ),
+                    orientation=orientation,
+                )
+                if base_camera is not None:
+                    base_screen = self.camera.project_prepared(
+                        base_camera, projection=projection,
+                    )
+                    if base_screen is not None and base_screen.visible:
+                        base_x_px = base_screen.x_px
+                        base_y_px = base_screen.y_px
+
             projected.append(
                 ProjectedObstacle(
                     ident=obstacle.ident,
@@ -188,6 +215,8 @@ class ObstacleProjectionComputer:
                     height_agl_ft=(
                         obstacle.height_agl_ft
                     ),
+                    base_x_px=base_x_px,
+                    base_y_px=base_y_px,
                     threat=obstacle_is_threat(
                         obstacle=obstacle,
                         aircraft_alt_ft=(

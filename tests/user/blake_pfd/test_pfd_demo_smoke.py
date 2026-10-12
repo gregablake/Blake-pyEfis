@@ -1637,6 +1637,8 @@ def test_synthetic_terrain_uses_nearfield_biased_mesh(
 
     widget.timer.stop()
 
+    # BLAKE_TERRAIN_MESH_TEST_V2
+    # Verify the denser visual mesh's exact near/far and lateral pattern.
     try:
         assert (
             widget
@@ -1644,15 +1646,22 @@ def test_synthetic_terrain_uses_nearfield_biased_mesh(
             .forward_distances_nm
         ) == (
             0.125,
+            0.1875,
             0.25,
             0.375,
             0.5,
+            0.625,
             0.75,
             1.0,
+            1.25,
             1.5,
+            1.75,
             2.0,
+            2.5,
             3.0,
+            4.0,
             5.0,
+            6.5,
             8.0,
             10.0,
         )
@@ -1663,13 +1672,23 @@ def test_synthetic_terrain_uses_nearfield_biased_mesh(
             .lateral_fractions
         ) == (
             -1.0,
-            -0.6667,
-            -0.3333,
+            -0.8,
+            -0.6,
+            -0.4,
+            -0.2,
             0.0,
-            0.3333,
-            0.6667,
+            0.2,
+            0.4,
+            0.6,
+            0.8,
             1.0,
         )
+
+        # 19 rows x 11 columns -> 209 vertices and 360 triangles.
+        generator = widget.synthetic_terrain_generator
+        assert generator.half_width_ratio == 0.75
+        assert len(generator.forward_distances_nm) * len(generator.lateral_fractions) == 209
+        assert (len(generator.forward_distances_nm) - 1) * (len(generator.lateral_fractions) - 1) * 2 == 360
 
     finally:
         if widget.timer.isActive():

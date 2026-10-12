@@ -21,6 +21,15 @@ class TextCapturePainter:
     def drawRect(self, *args) -> None:
         pass
 
+    def drawLine(self, *args) -> None:
+        pass
+
+    def save(self) -> None:
+        pass
+
+    def restore(self) -> None:
+        pass
+
     def drawText(self, *args) -> None:
         self.texts.append(args[-1])
 
@@ -61,16 +70,17 @@ def test_top_bar_hides_stale_air_data_but_keeps_fresh_gps(
     painter = TextCapturePainter()
     widget.draw_top_data_bar(painter, widget.pfd, 1024)
 
-    assert len(painter.texts) == 1
-    displayed = painter.texts[0]
+    # Garmin header uses individual fields rather than the old
+    # single text line; disabled TAS/WIND fields must not leak stale
+    # measurements into the new layout.
+    assert len(painter.texts) > 1
+    displayed = " ".join(painter.texts)
+    assert "TAS" not in displayed
+    assert "WIND" not in displayed
 
-    # Air-data-dependent values must be explicitly unavailable.
-    assert "TAS ---" in displayed
-    assert "WIND ---" in displayed
-
-    # Independent, fresh GPS ground speed must remain available.
-    expected_gs = f"GS {widget.pfd.ground_speed_kt:.0f} KT"
-    assert expected_gs in displayed
+    # GPS-derived ground speed remains available even if air data is stale.
+    assert "GS" in painter.texts
+    assert f"{widget.pfd.ground_speed_kt:.0f} KT" in painter.texts
 
     # With fresh GPS but stale air data, preserve track
     # while suppressing altitude-dependent VNAV deviation.
@@ -121,11 +131,14 @@ def test_top_bar_hides_stale_air_data_but_keeps_fresh_gps(
 
     painter = TextCapturePainter()
     widget.draw_top_data_bar(painter, widget.pfd, 1024)
-    displayed = painter.texts[0]
+    displayed = " ".join(painter.texts)
 
-    assert f"TAS {widget.pfd.tas_kt:.0f} KT" in displayed
-    assert "GS ---" in displayed
-    assert "WIND ---" in displayed
+    assert "GS" in painter.texts
+    assert "--- KT" in painter.texts
+    assert "TRK" in painter.texts
+    assert "---" in painter.texts
+    assert "TAS" not in painter.texts
+    assert "WIND" not in painter.texts
 
     # The bottom bar must not present stale GPS-derived
     # navigation values as current readings.
@@ -194,14 +207,10 @@ def test_top_bar_hides_stale_air_data_but_keeps_fresh_gps(
 
     painter = TextCapturePainter()
     widget.draw_top_data_bar(painter, widget.pfd, 1024)
-    displayed = painter.texts[0]
-
-    assert f"TAS {widget.pfd.tas_kt:.0f} KT" in displayed
-    assert f"GS {widget.pfd.ground_speed_kt:.0f} KT" in displayed
-    assert (
-        f"WIND {widget.pfd.wind_direction_deg:.0f}°/"
-        f"{widget.pfd.wind_speed_kt:.0f} KT"
-    ) in displayed
+    assert "GS" in painter.texts
+    assert f"{widget.pfd.ground_speed_kt:.0f} KT" in painter.texts
+    assert "TRK" in painter.texts
+    assert "--- KT" not in painter.texts
 
 
     # Fresh GPS must restore the bottom-bar navigation values.
@@ -307,6 +316,7 @@ def test_top_bar_hides_stale_air_data_but_keeps_fresh_gps(
         def drawPolygon(self, *args) -> None:
             self.vdi_polygons += 1
 
+    widget.config.features.show_hsi = False
     widget.config.features.show_cdi = True
     widget.config.features.show_vdi = True
     widget.config.vnav.enabled = True

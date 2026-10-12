@@ -1,0 +1,56 @@
+FROM --platform=linux/arm64 debian:trixie
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt update && apt install -y \
+    git \
+    python3 \
+    python3-pip \
+    python3-venv \
+    python3-dev \
+    build-essential \
+    i2c-tools \
+    gpsd \
+    gpsd-clients \
+    python3-gps \
+    libgl1 \
+    libegl1 \
+    libxkbcommon0 \
+    libxcb-cursor0 \
+    libxcb-xinerama0 \
+    libdbus-1-3 \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY . /app
+
+RUN python3 -m venv --system-site-packages /app/.venv \
+    && /app/.venv/bin/python -m pip install --upgrade pip \
+    && /app/.venv/bin/python -m pip install -e ".[qt,hardware]"
+
+ENV PATH="/app/.venv/bin:$PATH"
+
+CMD ["python", "-m", "pyefis.user.blake_pfd.pfd_demo"]
+
+USER root
+
+RUN apt-get update && apt-get install -y \
+    xvfb \
+    x11vnc \
+    novnc \
+    websockify \
+    && rm -rf /var/lib/apt/lists/*
+
+# Qt/X11 runtime dependencies for Blake PFD
+RUN apt-get update && apt-get install -y \
+    libxcb-cursor0 \
+    libxcb-xinerama0 \
+    libxcb-icccm4 \
+    libxcb-image0 \
+    libxcb-keysyms1 \
+    libxcb-render-util0 \
+    libxkbcommon-x11-0 \
+    libxcb-shape0 \
+    libxcb-randr0 \
+    && rm -rf /var/lib/apt/lists/*

@@ -133,6 +133,11 @@ class StratuxConfig:
 
 
 @dataclass
+class EmsTestConfig:
+    mode: str = "normal"
+
+
+@dataclass
 class BlakePfdConfig:
     display: DisplayConfig
     sensors: SensorConfig
@@ -155,6 +160,7 @@ class BlakePfdConfig:
     logging: LoggingConfig
     simulation: SimulationConfig
     fuel: FuelConfig
+    ems_test: EmsTestConfig
     audio_alerts: AudioAlertsConfig
     
 @dataclass
@@ -198,9 +204,6 @@ class FuelConfig:
     red_endurance_hr: float = 0.5
     total_gal: float = 24.0
     remaining_gal: float = 24.0
-@dataclass
-class EmsTestConfig:
-    mode: str = "normal"
 @dataclass
 class AudioAlertsConfig:
     enabled: bool = True
@@ -277,6 +280,7 @@ def load_config(path: Path = CONFIG_PATH) -> BlakePfdConfig:
         simulation=SimulationConfig(**raw.get("simulation", {})),
         logging=LoggingConfig(**raw.get("logging", {})),
         fuel=FuelConfig(**raw.get("fuel", {})),
+        ems_test=EmsTestConfig(**raw.get("ems_test", {})),
         audio_alerts=AudioAlertsConfig(**raw.get("audio_alerts", {})),
     )
 

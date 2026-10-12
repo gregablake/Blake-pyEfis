@@ -1,6 +1,7 @@
 from __future__ import annotations
 from dataclasses import replace
 import argparse
+import os
 import sys
 from time import monotonic
 from pathlib import Path
@@ -9,7 +10,7 @@ from pathlib import Path
 
 import yaml
 from PyQt6.QtCore import Qt, QTimer, QRectF, QPointF
-from PyQt6.QtGui import QColor, QFont, QPainter, QPen, QBrush, QPolygonF
+from PyQt6.QtGui import QColor, QFont, QPainter, QPen, QBrush, QPolygonF, QLinearGradient
 from PyQt6.QtWidgets import QApplication, QWidget
 
 from pyefis.user.blake_pfd.airport_info_page import AirportInfoPage
@@ -769,32 +770,94 @@ class BlakePfdDemo(QWidget):
                 elevation_sampler=(
                     self.terrain_sampler
                 ),
+                # BLAKE_TERRAIN_MESH_DETAIL_V1
+                # Higher-density visual mesh; use real sampled elevations.
+                # Preserve the original footprint and near/far boundaries.
+                # The separate terrain-alert/profile pipeline is unchanged.
                 forward_distances_nm=(
                     0.125,
+                    0.1875,
                     0.25,
                     0.375,
                     0.5,
+                    0.625,
                     0.75,
                     1.0,
+                    1.25,
                     1.5,
+                    1.75,
                     2.0,
+                    2.5,
                     3.0,
+                    4.0,
                     5.0,
+                    6.5,
                     8.0,
                     10.0,
                 ),
                 lateral_fractions=(
                     -1.0,
-                    -0.6667,
-                    -0.3333,
+                    -0.8,
+                    -0.6,
+                    -0.4,
+                    -0.2,
                     0.0,
-                    0.3333,
-                    0.6667,
+                    0.2,
+                    0.4,
+                    0.6,
+                    0.8,
                     1.0,
                 ),
                 half_width_ratio=0.75,
             )
         )
+
+        # BLAKE_V6_MOUNTAIN_VISUAL_MESH: denser DISPLAY mesh only.
+        # Existing SRTM sampler, projection and severity thresholds remain.
+        # Only used in the explicitly selected non-hardware mountain scene.
+        if (
+            not use_hardware
+            and os.environ.get("BLAKE_PFD_V6_VISUALS") == "1"
+            and os.environ.get("BLAKE_PFD_MOUNTAIN_DEMO") == "1"
+        ):
+            base_forward = self.synthetic_terrain_generator.forward_distances_nm
+            extra_forward = (
+                0.9, 1.125, 1.625, 2.25, 2.75,
+                3.5, 4.5, 5.75, 7.25, 9.0,
+            )
+            # V8 ridge-only: extend the far field to 18 NM. All elevations
+            # remain real SRTM samples; missing tiles create partial mesh,
+            # never synthetic/fabricated hills. V7 mountain stays unchanged.
+            v8_ridge_mesh = (
+                os.environ.get("BLAKE_PFD_V8_RIDGE_DEMO") == "1"
+                and os.environ.get("BLAKE_PFD_V7_VISUALS") == "1"
+            )
+            if v8_ridge_mesh:
+                extra_forward += (5.5, 6.0, 7.0, 7.5, 8.5, 11.0, 12.0, 13.5, 15.0, 16.5, 18.0)
+            # V10: only the opt-in stationary ridge view uses moderately
+            # denser *real sampled* SRTM geometry. No height interpolation
+            # or terrain warning thresholds are modified.
+            v10_ridge_mesh = (
+                v8_ridge_mesh
+                and os.environ.get("BLAKE_PFD_V10_RIDGE_VISUALS") == "1"
+            )
+            if v10_ridge_mesh:
+                extra_forward += (
+                    1.375, 1.875, 2.375, 3.25,
+                    4.25, 6.25, 9.5, 12.5,
+                )
+            self.synthetic_terrain_generator = TerrainSurfaceGenerator(
+                elevation_sampler=self.terrain_sampler,
+                forward_distances_nm=tuple(sorted(set(base_forward + extra_forward))),
+                lateral_fractions=(
+                    tuple(index / 10.0 for index in range(-10, 11))
+                    if v10_ridge_mesh else
+                    tuple(index / 8.0 for index in range(-8, 9))
+                    if v8_ridge_mesh else
+                    tuple(index / 6.0 for index in range(-6, 7))
+                ),
+                half_width_ratio=0.75,
+            )
 
         self.synthetic_terrain_rebaser = (
             TerrainSurfaceRebaser()
@@ -1019,6 +1082,21 @@ class BlakePfdDemo(QWidget):
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.update_data)
         self.timer.start(50)
+
+    def _automatic_checklist_popup_allowed(self) -> bool:
+        """Disable only automatic checklist takeovers in V6 demo scenes.
+
+        Manual navigation to the checklist and ordinary/hardware flight
+        behavior remain unchanged. This is UI-only; no alert gate is altered.
+        """
+        return not (
+            not self.use_hardware
+            and os.environ.get("BLAKE_PFD_V6_VISUALS") == "1"
+            and (
+                os.environ.get("BLAKE_PFD_MOUNTAIN_DEMO") == "1"
+                or os.environ.get("BLAKE_PFD_SCENIC_DEMO") == "1"
+            )
+        )
 
     def register_pages(self) -> None:
         self.page_manager.register("PFD", "P")
@@ -1964,7 +2042,10 @@ class BlakePfdDemo(QWidget):
                 self.flight_state.phase
             )
 
-            if self.checklist_state.should_popup:
+            if (
+                self.checklist_state.should_popup
+                and self._automatic_checklist_popup_allowed()
+            ):
                 self.page_manager.set_page(
                     "ENGINE_CHECKLIST"
                 )
@@ -2680,6 +2761,8 @@ class BlakePfdDemo(QWidget):
         presentation = (
             self.terrain_warning_presentation
         )
+        if getattr(self, "_v14_cincinnati_profile_enabled", lambda: False)():
+            self._v15_log_warning_transition(presentation)
 
         if not presentation.visible:
             return
@@ -2692,6 +2775,39 @@ class BlakePfdDemo(QWidget):
 
         else:
             color = QColor(255, 180, 0)
+
+        if self._v12_ridge_visuals() or self._v13_cincinnati_diagnostics_enabled():
+            # Red/orange warning remains full-width and equally prominent.
+            # Only the positions and text size change in the opt-in ridge demo.
+            painter.save()
+            painter.fillRect(0, 0, width, 72, color)
+            title_rect, message_rect, detail_rect = (
+                self._v13_cincinnati_warning_rects(width)
+                if self._v13_cincinnati_diagnostics_enabled()
+                else self._v12_warning_text_rects(width)
+            )
+            painter.setPen(Qt.GlobalColor.white)
+            painter.setFont(QFont("DejaVu Sans", 17, QFont.Weight.Bold))
+            painter.drawText(
+                title_rect,
+                Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+                presentation.title,
+            )
+            painter.setFont(QFont("DejaVu Sans", 15, QFont.Weight.Bold))
+            painter.drawText(
+                message_rect,
+                Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+                presentation.message,
+            )
+            if presentation.detail:
+                painter.setFont(QFont("DejaVu Sans", 9))
+                painter.drawText(
+                    detail_rect,
+                    Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+                    presentation.detail,
+                )
+            painter.restore()
+            return
 
         box_height = 72
 
@@ -2735,12 +2851,24 @@ class BlakePfdDemo(QWidget):
 
             painter.setFont(font)
 
-            painter.drawText(
-                width - 250,
-                55,
-                presentation.detail,
-            )
+            if self._v10_ridge_visuals():
+                # V10: preserve exact warning wording and priority, but
+                # fit the secondary detail before the altitude tape.
+                font.setPointSize(9)
+                painter.setFont(font)
+                painter.drawText(
+                    QRectF(width * 0.31, 37, width * 0.35, 28),
+                    Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
+                    presentation.detail,
+                )
+            else:
+                painter.drawText(
+                    width - 250,
+                    55,
+                    presentation.detail,
+                )
 
+    # VISUAL_REFINEMENT_20261008
     def draw_hits_guidance(
         self,
         painter: QPainter,
@@ -2761,8 +2889,9 @@ class BlakePfdDemo(QWidget):
             Qt.BrushStyle.NoBrush
         )
 
+        # Fewer, smaller, low-opacity HITS gates keep the pitch ladder legible.
         for box in reversed(
-            state.boxes
+            state.boxes[-3:]
         ):
             center_x = (
                 box.center_x_fraction
@@ -2776,12 +2905,12 @@ class BlakePfdDemo(QWidget):
 
             box_width = (
                 box.width_fraction
-                * width
+                * width * 0.50
             )
 
             box_height = (
                 box.height_fraction
-                * height
+                * height * 0.50
             )
 
             left = (
@@ -2795,15 +2924,15 @@ class BlakePfdDemo(QWidget):
             )
 
             line_width = (
-                3.0
+                1.25
                 - box.depth_fraction
-                * 1.5
+                * 0.35
             )
 
             opacity = int(
-                255
+                84
                 - box.depth_fraction
-                * 100
+                * 44
             )
 
             painter.setPen(
@@ -2884,9 +3013,9 @@ class BlakePfdDemo(QWidget):
             ),
         )
 
-        horizontal_bar_half_width = 55.0
-        vertical_bar_half_height = 42.0
-        center_gap = 12.0
+        horizontal_bar_half_width = 40.0
+        vertical_bar_half_height = 32.0
+        center_gap = 13.0
 
         painter.save()
 
@@ -2901,7 +3030,7 @@ class BlakePfdDemo(QWidget):
                     0,
                     255,
                 ),
-                6,
+                3,
             )
         )
 
@@ -3667,6 +3796,9 @@ class BlakePfdDemo(QWidget):
         if self.page_renderer.draw_page():
             return
 
+        v14_paint_start = (
+            monotonic() if self._v14_cincinnati_profile_enabled() else None
+        )
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
@@ -3681,6 +3813,8 @@ class BlakePfdDemo(QWidget):
         features = self.config.features
         declutter_level = self.config.declutter.level
 
+        # Never replay threats from an earlier frame or stale position.
+        self._visible_obstacle_threats = []
         self.draw_background(painter, width, height)
 
         flight_state = getattr(
@@ -3766,6 +3900,7 @@ class BlakePfdDemo(QWidget):
             )
             self.draw_warning_strip(painter, width)
             painter.end()
+            self._v14_record_paint(v14_paint_start, monotonic())
             return
 
         if (
@@ -3858,23 +3993,38 @@ class BlakePfdDemo(QWidget):
                 layout.flight_view.height,
             )
 
-            self.draw_hits_guidance(
-                painter,
-                layout.flight_view.width,
-                layout.flight_view.height,
+            # Keep HITS outside the airspeed/altitude tapes and HSI.
+            # The original validated navigation gate remains unchanged.
+            painter.save()
+            painter.setClipRect(
+                QRectF(
+                    100, 36,
+                    max(0, layout.flight_view.width - 200),
+                    max(0, layout.flight_view.height * 0.53),
+                ),
+                Qt.ClipOperation.IntersectClip,
             )
+            if not self._v8_ridge_scene():
+                self.draw_hits_guidance(
+                    painter,
+                    layout.flight_view.width,
+                    layout.flight_view.height,
+                )
+            painter.restore()
 
-            self.draw_flight_director(
-                painter,
-                layout.flight_view.width,
-                layout.flight_view.height,
-            )
+            if not self._v8_ridge_scene():
+                self.draw_flight_director(
+                    painter,
+                    layout.flight_view.width,
+                    layout.flight_view.height,
+                )
 
             painter.restore()
 
         if (
             self.guidance_touch_settings
             .flight_path_marker_enabled
+            and not self._v8_ridge_scene()
             and position_usable
             and watchdog.attitude_valid
             and watchdog.attitude_fresh
@@ -3970,7 +4120,8 @@ class BlakePfdDemo(QWidget):
             and watchdog.attitude_valid
             and watchdog.attitude_fresh
         ):
-            self.draw_heading_strip(painter, self.pfd, width, height)
+            # GARMIN REDESIGN: legacy horizontal heading strip disabled.
+            pass
 
         if (
             features.show_hsi
@@ -4006,13 +4157,28 @@ class BlakePfdDemo(QWidget):
             and watchdog.attitude_valid
             and watchdog.attitude_fresh
         ):
-            self.draw_turn_and_slip(painter, self.pfd, width, height)
+            painter.save()
+            painter.translate(
+                layout.flight_view.x,
+                layout.flight_view.y,
+            )
+            self.draw_turn_and_slip(
+                painter,
+                self.pfd,
+                layout.flight_view.width,
+                layout.flight_view.height,
+            )
+            painter.restore()
 
-        if features.show_cdi or (features.show_vdi and self.config.vnav.enabled):
+        # V9: an explicitly route-free static camera has no CDI/VDI command.
+        if (
+            not self._v8_ridge_scene()
+            and (features.show_cdi or (features.show_vdi and self.config.vnav.enabled))
+        ):
             self.draw_nav_cdi_vdi(painter, self.pfd, width, height)
 
         self.draw_top_data_bar(painter, self.pfd, width)
-        self.draw_bottom_data_bar(painter, self.pfd, width, height)
+        # GARMIN REDESIGN: legacy bottom navigation strip disabled.
 
         if declutter_level <= 0 and features.show_nearest_airports:
             self.draw_nearest_airports_overlay(painter, self.pfd, width, height)
@@ -4028,36 +4194,21 @@ class BlakePfdDemo(QWidget):
                 aircraft_lon=self.pfd.longitude_deg,
                 range_nm=self.map_range_nm,
             )
+            painter.save()
+            painter.setClipRect(5, 350, 170, 215)
             self.draw_moving_map_overlay(
                 painter,
                 map_state,
                 width,
                 height,
             )
+            painter.restore()
 
-        if declutter_level <= 0 and features.show_route:
-            self.draw_route_overlay(painter, width, height)
-
-        if declutter_level <= 0 and features.show_airport_info:
-            self.draw_selected_airport_info(painter, width, height)
-
-        if declutter_level <= 0:
-            self.draw_waypoint_info_box(painter, self.pfd, width, height)
-            self.draw_startup_status_box(painter, width, height)
-            self.draw_sensor_status_panel(painter, width, height)
-            self.draw_sim_profile_box(painter, width, height)
-
-        if declutter_level <= 1:
-            self.draw_navigation_status_box(painter, self.pfd, width, height)
-
-        self.draw_direct_to_guidance_box(
-            painter,
-            width,
-            height,
-        )
-
-        if declutter_level <= 1 and self.config.vnav.enabled:
-            self.draw_vnav_info_box(painter, self.pfd, width, height)
+        # GARMIN REDESIGN:
+        # Legacy waypoint/status/direct-to/VNAV boxes were drawn over the
+        # synthetic-vision and HSI area. Their underlying navigation state
+        # remains active; presentation will move to the Garmin-style
+        # top/right information areas.
 
         if features.show_terrain:
             terrain_inputs_usable = bool(
@@ -4127,24 +4278,30 @@ class BlakePfdDemo(QWidget):
             if weather_state is None:
                 weather_state = self.weather.read()
 
+            painter.save()
+            painter.setClipRect(5, 372, 170, 193)
             self.draw_weather_overlay(
                 painter,
                 weather_state,
                 width,
                 height,
             )
+            painter.restore()
 
         if (
             features.show_traffic
             and self.config.stratux.enabled
             and stratux_state is not None
         ):
+            painter.save()
+            painter.setClipRect(5, 372, 170, 193)
             self.draw_traffic_overlay(
                 painter,
                 stratux_state,
                 width,
                 height,
             )
+            painter.restore()
         self.draw_aircraft_state_label(
             painter,
             width,
@@ -4170,6 +4327,24 @@ class BlakePfdDemo(QWidget):
             height,
         )
 
+        # VISUAL_CLEANUP_20261009: Paint opaque right information panels
+        # AFTER the other noncritical graphic overlays. This prevents
+        # later geometry/labels from bleeding through those panels.
+        # Validated obstacle threats and safety banners remain ABOVE them.
+        if declutter_level <= 0 and (features.show_route or features.show_airport_info):
+            painter.fillRect(width - 6, 48, 6, 275, QColor(8, 12, 20, 255))
+        if declutter_level <= 0 and features.show_route:
+            self.draw_route_overlay(painter, width, height)
+        if declutter_level <= 0 and features.show_airport_info:
+            self.draw_selected_airport_info(painter, width, height)
+
+        # Ensure verified RED synthetic-vision threats remain visible
+        # even where the HSI or other panels overlap their symbols.
+        # Sensor-failure/reboot/startup banners are drawn afterward.
+        # V13: developer overlay is always UNDER higher-priority red threats.
+        self.draw_v13_cincinnati_diagnostics(painter, width)
+        self.draw_priority_obstacle_threats(painter, width, height)
+
         self.draw_sensor_watchdog_banner(
             painter,
             width,
@@ -4187,6 +4362,9 @@ class BlakePfdDemo(QWidget):
             width,
             height,
         )
+        # Last drawing operation: measured rate is shown one frame later.
+        if v14_paint_start is not None:
+            self._v14_record_paint(v14_paint_start, monotonic())
 
     def draw_reboot_recovery_banner(
         self,
@@ -4504,11 +4682,7 @@ class BlakePfdDemo(QWidget):
         if features.show_airport_info:
             self.draw_selected_airport_info(painter, width, height)
 
-        # Always draw these when declutter level is 0
-        self.draw_waypoint_info_box(painter, self.pfd, width, height)
-        self.draw_startup_status_box(painter, width, height)
-        self.draw_sensor_status_panel(painter, width, height)
-        self.draw_sim_profile_box(painter, width, height)
+        # GARMIN REDESIGN: legacy center/status boxes intentionally omitted.
     def draw_synthetic_runway(
         self,
         painter: QPainter,
@@ -4671,6 +4845,790 @@ class BlakePfdDemo(QWidget):
             geometry.high_end.ident,
         )
 
+    # BLAKE_SCENIC_TOPO_CONTOURS_V4
+    @staticmethod
+    def _v4_visuals_enabled() -> bool:
+        # Explicitly opt in; the hardware and standard PFD paths are unchanged.
+        return os.environ.get("BLAKE_PFD_V4_SCENIC_VISUALS") == "1"
+
+    @staticmethod
+    def _v4_contour_segments(a, b, c, *, interval_ft=100.0):
+        """Interpolated contour segments from TRUE triangulated ground elevations.
+
+        Returns (level_ft, point_a, point_b), with each point expressed
+        as (north_ft, east_ft, up_ft) in existing aircraft-relative space.
+        No terrain height, classification, or warning input is modified.
+        """
+        vertices = (a, b, c)
+        if not all(isfinite(v.elevation_ft) for v in vertices):
+            return ()
+        low = min(v.elevation_ft for v in vertices)
+        high = max(v.elevation_ft for v in vertices)
+        if high - low < 1.0 or not isfinite(interval_ft) or interval_ft <= 0.0:
+            return ()
+        first = int(low // interval_ft) + 1
+        last = int(high // interval_ft)
+        # An upper limit prevents unusually steep tiles from overloading
+        # the 20-Hz renderer; visual-only missing contours are acceptable.
+        if last - first > 6:
+            step = max(1, (last - first) // 6 + 1)
+        else:
+            step = 1
+        segments = []
+        for band in range(first, last + 1, step):
+            level = band * interval_ft
+            endpoints = []
+            for left, right in ((a, b), (b, c), (c, a)):
+                e0, e1 = left.elevation_ft, right.elevation_ft
+                if not (min(e0, e1) < level <= max(e0, e1)):
+                    continue
+                t = (level - e0) / (e1 - e0)
+                endpoints.append((
+                    left.north_ft + t * (right.north_ft - left.north_ft),
+                    left.east_ft + t * (right.east_ft - left.east_ft),
+                    left.up_ft + t * (right.up_ft - left.up_ft),
+                ))
+            if len(endpoints) == 2:
+                delta = sum((x - y) ** 2 for x, y in zip(*endpoints))
+                if delta > 0.01:
+                    segments.append((level, endpoints[0], endpoints[1]))
+        return tuple(segments)
+
+    @staticmethod
+    def _v4_non_threat_inside_scenic_view(x, y, width, height):
+        """Keep non-critical symbols off the left/right avionics panels."""
+        return (
+            width * 0.23 <= x <= width * 0.77
+            and height * 0.14 <= y <= height * 0.93
+        )
+
+    # BLAKE_V5_REAL_RELIEF_COMPARISON
+    @staticmethod
+    def _v5_visuals_enabled() -> bool:
+        return os.environ.get("BLAKE_PFD_V5_REAL_RELIEF") == "1"
+
+    # BLAKE_V6_SRTM_STATUS_AND_MOUNTAIN_PRESENTATION
+    @staticmethod
+    def _v6_visuals_enabled() -> bool:
+        return os.environ.get("BLAKE_PFD_V6_VISUALS") == "1"
+
+    def _v6_mountain_scene(self) -> bool:
+        return (
+            self._v6_visuals_enabled()
+            and not getattr(self, "use_hardware", False)
+            and os.environ.get("BLAKE_PFD_MOUNTAIN_DEMO") == "1"
+        )
+
+    def _v6_demo_scene(self) -> bool:
+        return (
+            self._v6_visuals_enabled()
+            and not getattr(self, "use_hardware", False)
+            and (
+                os.environ.get("BLAKE_PFD_MOUNTAIN_DEMO") == "1"
+                or os.environ.get("BLAKE_PFD_SCENIC_DEMO") == "1"
+            )
+        )
+
+    @staticmethod
+    def _v6_srtm_ground_sample(sampler, lat, lon, altitude_ft):
+        """Display-only GND/AGL from the same SRTM sampler as the 3D mesh.
+
+        Return None for invalid coordinates, absent/void data or broken sampler;
+        never synthesize a ground elevation or substitute fallback terrain.
+        """
+        try:
+            lat, lon, altitude_ft = float(lat), float(lon), float(altitude_ft)
+            if (
+                not all(isfinite(n) for n in (lat, lon, altitude_ft))
+                or not -90.0 <= lat <= 90.0
+                or not -180.0 <= lon <= 180.0
+            ):
+                return None
+            ground_ft = sampler(lat, lon)
+            if ground_ft is None or isinstance(ground_ft, bool):
+                return None
+            ground_ft = float(ground_ft)
+            # Reject SRTM void sentinel (-32768) and impossible samples.
+            if not isfinite(ground_ft) or not -1500.0 <= ground_ft <= 30000.0:
+                return None
+            return (ground_ft, altitude_ft - ground_ft)
+        except (ValueError, TypeError, OSError, RuntimeError, IndexError):
+            return None
+
+    def _v6_current_srtm_status(self):
+        pfd = getattr(self, "pfd", None)
+        if pfd is None or not getattr(self, "real_terrain_enabled", False):
+            return None
+        return self._v6_srtm_ground_sample(
+            self.terrain_sampler,
+            pfd.latitude_deg,
+            pfd.longitude_deg,
+            pfd.indicated_alt_ft,
+        )
+
+    # BLAKE_V8_RIDGE_GEOMETRY: diagnostic; no modification to elevations,
+    # terrain warning thresholds, world-to-camera transform, or clipping.
+    def _v8_ridge_scene(self) -> bool:
+        return (
+            self._v6_mountain_scene()
+            and os.environ.get("BLAKE_PFD_V7_VISUALS") == "1"
+            and os.environ.get("BLAKE_PFD_V8_RIDGE_DEMO") == "1"
+        )
+
+    def _v9_high_ridge_scene(self) -> bool:
+        """Optional 15,000-ft comparator, same location/heading as low ridge."""
+        return (
+            self._v8_ridge_scene()
+            and os.environ.get("BLAKE_PFD_V9_HIGH_RIDGE") == "1"
+        )
+
+    # BLAKE_V10_RIDGE_MATERIALS -- strictly optional TEST SCENE visuals.
+    def _v10_ridge_visuals(self) -> bool:
+        return (
+            not getattr(self, "use_hardware", True)
+            and self._v8_ridge_scene()
+            and os.environ.get("BLAKE_PFD_V10_RIDGE_VISUALS") == "1"
+        )
+
+    @staticmethod
+    def _v10_ridge_ground_brush(horizon_height: int) -> QBrush:
+        """Muted earth background behind TRUE SRTM mesh; never a height."""
+        gradient = QLinearGradient(0, 0, 0, max(1, horizon_height * 2))
+        gradient.setColorAt(0.0, QColor(80, 112, 104))
+        gradient.setColorAt(1.0, QColor(43, 74, 67))
+        return QBrush(gradient)
+
+    @staticmethod
+    def _v10_ridge_diagnostic_rects(width: int, height: int):
+        """Keep diagnostic lines strictly left of the altitude tape."""
+        x = width * 0.295
+        w = width * 0.355
+        return (
+            QRectF(x, height * 0.155, w, 16),
+            QRectF(x, height * 0.185, w, 16),
+        )
+
+    @staticmethod
+    def _v10_safe_triangle_brush(points, average_color, vertex_light):
+        """Shade NONHAZARD faces continuously; never distort elevations.
+
+        A linear interpolation is a display-only approximation of blended
+        per-vertex normals. Warning/critical faces never use this brush.
+        """
+        if len(points) != 3 or len(vertex_light) != 3:
+            return QBrush(average_color)
+        low = min(range(3), key=lambda i: vertex_light[i])
+        high = max(range(3), key=lambda i: vertex_light[i])
+        if vertex_light[high] - vertex_light[low] < 0.045:
+            return QBrush(average_color)
+        p0, p1 = points[low], points[high]
+        if (p1.x_px - p0.x_px) ** 2 + (p1.y_px - p0.y_px) ** 2 < 16:
+            return QBrush(average_color)
+        mean_light = max(0.01, sum(vertex_light) / 3.0)
+        gradient = QLinearGradient(
+            QPointF(p0.x_px, p0.y_px), QPointF(p1.x_px, p1.y_px),
+        )
+        for location, index in ((0.0, low), (1.0, high)):
+            scale = min(1.14, max(0.86, vertex_light[index] / mean_light))
+            gradient.setColorAt(location, QColor(
+                min(255, round(average_color.red() * scale)),
+                min(255, round(average_color.green() * scale)),
+                min(255, round(average_color.blue() * scale)),
+            ))
+        return QBrush(gradient)
+
+    # BLAKE_V11_RIDGE_GOURAUD -- display-only smooth shading (ridge demo).
+    def _v11_ridge_visuals(self) -> bool:
+        """Additional opt-in; never active in hardware or normal flight PFD."""
+        return (
+            self._v10_ridge_visuals()
+            and os.environ.get("BLAKE_PFD_V11_RIDGE_SHADING") == "1"
+        )
+
+    # BLAKE_V12_DEPTH_CAMERA -- opt-in stationary ridge visualization ONLY.
+    def _v12_ridge_visuals(self) -> bool:
+        return (
+            self._v11_ridge_visuals()
+            and os.environ.get("BLAKE_PFD_V12_RIDGE_DEPTH") == "1"
+        )
+
+    # BLAKE_V13_CINCINNATI_MOVING: opt-in, non-hardware renderer trial.
+    def _v13_cincinnati_depth_enabled(self) -> bool:
+        return (
+            not getattr(self, "use_hardware", True)
+            and os.environ.get("BLAKE_PFD_SCENIC_DEMO") == "1"
+            and os.environ.get("BLAKE_PFD_MOUNTAIN_DEMO") != "1"
+            and os.environ.get("BLAKE_PFD_V13_CINCINNATI_DEPTH") == "1"
+            and getattr(self, "real_terrain_enabled", False)
+        )
+
+    def _v13_cincinnati_diagnostics_enabled(self) -> bool:
+        return (
+            not getattr(self, "use_hardware", True)
+            and os.environ.get("BLAKE_PFD_SCENIC_DEMO") == "1"
+            and os.environ.get("BLAKE_PFD_MOUNTAIN_DEMO") != "1"
+            and os.environ.get("BLAKE_PFD_V13_CINCINNATI_DIAGNOSTICS") == "1"
+        )
+
+    # BLAKE_V14_CINCINNATI_PERFORMANCE: optional development experiment only.
+    def _v14_cincinnati_optimize_enabled(self) -> bool:
+        return (
+            self._v13_cincinnati_depth_enabled()
+            and os.environ.get("BLAKE_PFD_V14_OPTIMIZE") == "1"
+        )
+
+    def _v14_cincinnati_profile_enabled(self) -> bool:
+        return (
+            self._v13_cincinnati_diagnostics_enabled()
+            and os.environ.get("BLAKE_PFD_V14_PROFILE") == "1"
+        )
+
+    @staticmethod
+    def _v14_vertex_lights(surface, normals, min_elevation, span):
+        """One lighting calculation per true SRTM vertex, NOT per face.
+
+        Frame-local display colors only; never changes elevation, terrain
+        hazard class, threshold, or projected polygon coordinates.
+        """
+        if normals is None or len(normals) != len(surface.vertices):
+            return ()
+        return tuple(
+            BlakePfdDemo._v7_mountain_light(
+                normals, (i, i, i),
+                (vertex.elevation_ft - min_elevation) / span,
+            )
+            for i, vertex in enumerate(surface.vertices)
+        )
+
+    @staticmethod
+    def _v14_gradient_worth_drawing(points, vertex_lights):
+        """Avoid costly software gradients on tiny/near-uniform safe faces."""
+        if len(points) != 3 or len(vertex_lights) != 3:
+            return False
+        try:
+            if not all(isfinite(float(light)) for light in vertex_lights):
+                return False
+        except (TypeError, ValueError, OverflowError):
+            return False
+        if max(vertex_lights) - min(vertex_lights) < 0.07:
+            return False
+        try:
+            x0, y0 = float(points[0].x_px), float(points[0].y_px)
+            x1, y1 = float(points[1].x_px), float(points[1].y_px)
+            x2, y2 = float(points[2].x_px), float(points[2].y_px)
+        except (AttributeError, ValueError, TypeError):
+            return False
+        if not all(isfinite(n) for n in (x0, y0, x1, y1, x2, y2)):
+            return False
+        twice_area = abs((x1-x0)*(y2-y0)-(x2-x0)*(y1-y0))
+        return twice_area >= 2100.0  # 1050 px²; bounded work on ARM64 emulation
+
+    def _v14_record_paint(self, start_s, end_s):
+        """Report UI paint-event cadence, not fabricated screen-refresh FPS."""
+        if start_s is None:
+            return
+        elapsed = end_s - start_s
+        if not (isfinite(elapsed) and 0.0 <= elapsed <= 10.0):
+            self._v14_paint_ms = None
+            self._v14_paint_hz = None
+            self._v14_last_paint_start = None
+            return
+        self._v14_paint_ms = elapsed * 1000.0
+        BlakePfdDemo._v15_record_metric(self, "paint", self._v14_paint_ms)
+        BlakePfdDemo._v15_print_periodic_metrics(self)
+        last_start = getattr(self, "_v14_last_paint_start", None)
+        self._v14_last_paint_start = start_s
+        if last_start is None:
+            self._v14_paint_hz = None
+            return
+        frame_interval = start_s - last_start
+        if not (isfinite(frame_interval) and 0.015 <= frame_interval <= 5.0):
+            self._v14_paint_hz = None
+            return
+        measured = 1.0 / frame_interval
+        previous = getattr(self, "_v14_paint_hz", None)
+        self._v14_paint_hz = (
+            measured if previous is None or not isfinite(previous)
+            else (0.7 * previous + 0.3 * measured)
+        )
+
+    @staticmethod
+    def _v15_sample_percentile(samples, percentile=0.95):
+        """Finite, bounded paint-time summary; development telemetry only."""
+        cleaned = sorted(
+            float(value) for value in samples
+            if isinstance(value, (int, float))
+            and isfinite(value) and 0.0 <= value <= 60_000.0
+        )
+        if not cleaned:
+            return None
+        index = min(len(cleaned) - 1, max(0, int((len(cleaned) - 1) * percentile + 0.999999)))
+        return cleaned[index]
+
+    @staticmethod
+    def _v15_fast_normal_skip(level, optimized, lights):
+        """Only display calculations may be skipped; never hazard classification."""
+        return level in ("WARNING", "CRITICAL") or (
+            level == "NONE" and optimized and bool(lights)
+        )
+
+    def _v15_record_metric(self, name, sample):
+        """In-memory bounded history for actual measured draw durations."""
+        if not isinstance(sample, (int, float)) or not isfinite(sample):
+            return
+        if sample < 0.0 or sample > 60_000.0:
+            return
+        attribute = "_v15_metric_" + name
+        history = getattr(self, attribute, ())
+        setattr(self, attribute, (*history[-23:], float(sample)))
+
+    def _v15_metric_p95(self, name):
+        return self._v15_sample_percentile(
+            getattr(self, "_v15_metric_" + name, ())
+        )
+
+    @staticmethod
+    def _v15_terrain_diagnostic(last_ms, p95_ms):
+        if last_ms is None or not isfinite(last_ms) or last_ms < 0:
+            return "TERR DRAW N/A"
+        if p95_ms is None or not isfinite(p95_ms) or p95_ms < 0:
+            return f"TERR DRAW {last_ms:.0f} ms"
+        return f"TERR {last_ms:.0f} ms | P95 {p95_ms:.0f} ms"
+
+    def _v15_log_warning_transition(self, presentation):
+        """Simulation-only event evidence; no alert timing/severity changes."""
+        state = (
+            (str(presentation.priority), str(presentation.message))
+            if getattr(presentation, "visible", False) else None
+        )
+        previous = getattr(self, "_v15_previous_warning_state", "UNSET")
+        self._v15_previous_warning_state = state
+        if previous == state or (previous == "UNSET" and state is None):
+            return
+        print(
+            "BLAKE_V15_WARN transition "
+            + ("CLEARED" if state is None else f"{state[0]} {state[1]}")
+            + " [presentation-only; thresholds unchanged]",
+            flush=True,
+        )
+
+    def _v15_print_periodic_metrics(self):
+        """Optional stdout breadcrumbs, never a flight-performance assertion."""
+        if os.environ.get("BLAKE_PFD_V15_LOG_METRICS") != "1":
+            return
+        count = getattr(self, "_v15_metric_log_counter", 0) + 1
+        self._v15_metric_log_counter = count
+        if count % 24:
+            return
+        rate = getattr(self, "_v14_paint_hz", None)
+        terrain = self._v15_metric_p95("terrain")
+        total = self._v15_metric_p95("paint")
+        print(
+            "BLAKE_V15_PERF simulated PFD paint Hz="
+            + (f"{rate:.2f}" if rate is not None else "N/A")
+            + " paint_p95_ms="
+            + (f"{total:.1f}" if total is not None else "N/A")
+            + " terrain_p95_ms="
+            + (f"{terrain:.1f}" if terrain is not None else "N/A"),
+            flush=True,
+        )
+
+    @staticmethod
+    def _v14_paint_diagnostic_line(paint_hz, paint_ms):
+        if (
+            paint_hz is None or paint_ms is None
+            or not isfinite(paint_hz) or not isfinite(paint_ms)
+            or paint_hz < 0 or paint_ms < 0
+        ):
+            return "PFD PAINT RATE N/A"
+        return f"PFD PAINT {paint_hz:.1f} Hz | {paint_ms:.0f} ms"
+
+    @staticmethod
+    def _v13_cincinnati_warning_rects(width: int):
+        """Only the center viewport is used; side engine/route panels stay clear."""
+        # PFD artwork is designed for 1024x600, but bounds scale with width.
+        central_left = width * 0.19
+        central_right = width * 0.80
+        span = max(0.0, central_right - central_left)
+        return (
+            QRectF(central_left, 1.0, span * 0.52, 30.0),
+            QRectF(central_left, 32.0, span * 0.52, 35.0),
+            QRectF(central_left + span * 0.54, 34.0,
+                   span * 0.46, 31.0),
+        )
+
+    @staticmethod
+    def _v13_diagnostic_text(pfd, watchdog, render_ms):
+        """Display-only diagnostics. Never substitutes stale/fabricated GPS."""
+        if not (
+            pfd is not None and watchdog is not None
+            and getattr(pfd, "position_valid", False)
+            and getattr(watchdog, "position_valid", False)
+            and getattr(watchdog, "position_fresh", False)
+        ):
+            gps = "GPS UNAVAILABLE"
+        else:
+            try:
+                lat = float(pfd.latitude_deg)
+                lon = float(pfd.longitude_deg)
+                if not (isfinite(lat) and isfinite(lon)
+                        and -90.0 <= lat <= 90.0
+                        and -180.0 <= lon <= 180.0):
+                    raise ValueError("invalid geographic coordinates")
+                gps = f"GPS {lat:+.4f}, {lon:+.4f}"
+            except (TypeError, ValueError, AttributeError):
+                gps = "GPS UNAVAILABLE"
+        if render_ms is None or not isfinite(render_ms) or render_ms < 0:
+            duration = "TERR DRAW N/A"
+        else:
+            duration = f"TERR DRAW {render_ms:.1f} ms"
+        return gps, duration
+
+    def draw_v13_cincinnati_diagnostics(self, painter, width: int) -> None:
+        if not self._v13_cincinnati_diagnostics_enabled():
+            return
+        gps, timing = self._v13_diagnostic_text(
+            self.pfd,
+            self.sensor_watchdog_state,
+            getattr(self, "_v13_terrain_draw_ms", None),
+        )
+        profile = self._v14_cincinnati_profile_enabled()
+        painter.save()
+        # Debug overlay stays beneath red obstacles and safety banners.
+        x = width * 0.29
+        box_width = width * 0.36
+        panel_height = 48 if profile else 34
+        painter.fillRect(QRectF(x, 78, box_width, panel_height),
+                         QColor(7, 19, 32, 170))
+        painter.setPen(QPen(QColor(215, 241, 245), 1.0))
+        painter.setFont(QFont("DejaVu Sans", 8, QFont.Weight.Bold))
+        painter.drawText(QRectF(x + 7, 78, box_width - 14, 17),
+                         Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+                         gps)
+        if not profile:
+            painter.drawText(QRectF(x + 7, 95, box_width - 14, 17),
+                             Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+                             timing)
+        if profile:
+            # V15: bounded rolling P95; no FPS guessed from terrain timing.
+            terrain_p95 = self._v15_metric_p95("terrain")
+            timing = self._v15_terrain_diagnostic(
+                getattr(self, "_v13_terrain_draw_ms", None), terrain_p95
+            )
+            painter.drawText(
+                QRectF(x + 7, 95, box_width - 14, 17),
+                Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+                timing,
+            )
+            painter.drawText(
+                QRectF(x + 7, 111, box_width - 14, 15),
+                Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+                self._v14_paint_diagnostic_line(
+                    getattr(self, "_v14_paint_hz", None),
+                    getattr(self, "_v14_paint_ms", None),
+                ),
+            )
+        painter.restore()
+
+    @staticmethod
+    def _v12_depth_draw_order(surface, camera, heading_deg, pitch_deg, roll_deg):
+        """Back-to-front painter order from true *camera-forward* depth.
+
+        Strictly display-only; original terrain indices and hazard classes are
+        never changed. Fall back to pre-V12 order if projection data are invalid.
+        This is a painter's approximation, NOT a z-buffer or terrain safety tool.
+        """
+        triangles = surface.triangles
+        fallback = tuple(range(len(triangles) - 1, -1, -1))
+        try:
+            orientation = camera.prepare_orientation(
+                heading_deg=heading_deg, pitch_deg=pitch_deg,
+                roll_deg=roll_deg,
+            )
+            if orientation is None:
+                return fallback
+            depths = []
+            for vertex in surface.vertices:
+                point = camera.world_to_camera_prepared(
+                    north_ft=vertex.north_ft,
+                    east_ft=vertex.east_ft,
+                    up_ft=vertex.up_ft,
+                    orientation=orientation,
+                )
+                if point is None or not isfinite(point.forward_ft):
+                    return fallback
+                depths.append(point.forward_ft)
+            return tuple(sorted(
+                range(len(triangles)),
+                key=lambda index: (
+                    -(
+                        depths[triangles[index].first_index]
+                        + depths[triangles[index].second_index]
+                        + depths[triangles[index].third_index]
+                    ) / 3.0,
+                    index,
+                ),
+            ))
+        except (AttributeError, IndexError, TypeError, ValueError):
+            return fallback
+
+    @staticmethod
+    def _v12_depth_colors(surface, original_colors):
+        """Extra subtle distance haze for SAFE SRTM vertices only.
+
+        Uses actual world range; no displacement, no invented terrain elevations.
+        The terrain classifier and alert colors are not inputs here.
+        """
+        if len(original_colors) != len(surface.vertices):
+            return tuple(original_colors)
+        colors = []
+        for vertex, original in zip(surface.vertices, original_colors):
+            distance_nm = (
+                (vertex.north_ft ** 2 + vertex.east_ft ** 2) ** 0.5
+                / 6076.12
+            )
+            haze = min(0.13, max(0.0, (distance_nm - 4.0) / 14.0 * 0.13))
+            colors.append(QColor(*(
+                max(0, min(255, round(channel * (1.0 - haze) + fog * haze)))
+                for channel, fog in zip(original.getRgb()[:3], (145, 167, 179))
+            )))
+        return tuple(colors)
+
+    @staticmethod
+    def _v12_warning_text_rects(width: int):
+        """Keep urgent banner text inside the central avionics viewport."""
+        x = width * 0.184
+        return (
+            QRectF(x, 3.0, width * 0.52, 30.0),
+            QRectF(x, 33.0, width * 0.255, 35.0),
+            QRectF(width * 0.46, 37.0, width * 0.33, 29.0),
+        )
+
+    @staticmethod
+    def _v11_ridge_subdivisions(points) -> int:
+        """Bound work to at most 16 small polygons per large safe face."""
+        if len(points) != 3:
+            return 1
+        maximum_squared = max(
+            (points[i].x_px - points[(i + 1) % 3].x_px) ** 2
+            + (points[i].y_px - points[(i + 1) % 3].y_px) ** 2
+            for i in range(3)
+        )
+        if maximum_squared >= 160.0 ** 2:
+            return 4
+        if maximum_squared >= 88.0 ** 2:
+            return 3
+        if maximum_squared >= 42.0 ** 2:
+            return 2
+        return 1
+
+    @classmethod
+    def _v11_ridge_vertex_colors(cls, surface, vertex_normals):
+        """Stable RGB at each shared TRUE SRTM vertex, lighting-only.
+
+        Shared vertices have identical colors on adjacent safe triangles.
+        No SRTM height, camera coordinate or hazard classification changes.
+        """
+        elevations = [v.elevation_ft for v in surface.vertices]
+        if not elevations or len(elevations) != len(vertex_normals):
+            return ()
+        minimum = min(elevations)
+        span = max(1.0, max(elevations) - minimum)
+        colors = []
+        for i, vertex in enumerate(surface.vertices):
+            relative_height = (vertex.elevation_ft - minimum) / span
+            alpine = max(0.0, min(1.0, (vertex.elevation_ft - 9700.0) / 3900.0))
+            brightness = cls._v7_mountain_light(
+                vertex_normals, (i, i, i), relative_height,
+            )
+            base = (
+                76.0 + 73.0 * alpine,
+                117.0 + 39.0 * alpine,
+                72.0 + 73.0 * alpine,
+            )
+            distance_nm = (
+                (vertex.north_ft ** 2 + vertex.east_ft ** 2) ** 0.5
+                / 6076.12
+            )
+            atmosphere = min(0.43, max(0.0, (distance_nm - 1.5) / 11.0))
+            rgb = tuple(
+                max(0, min(255, round(
+                    component * brightness * (1.0 - atmosphere)
+                    + mist * atmosphere
+                )))
+                for component, mist in zip(base, (126, 149, 151))
+            )
+            colors.append(QColor(*rgb))
+        return tuple(colors)
+
+    @staticmethod
+    def _v11_draw_smooth_triangle(painter, points, vertex_colors) -> int:
+        """Approximate Gouraud shading with bounded screen-space subdivision.
+
+        This *only* renders 2D subpolygons inside a projected safe triangle.
+        The actual triangle geometry, world coordinates and depth are unchanged.
+        Returns number of subpolygons drawn, useful for regressions.
+        """
+        if len(points) != 3 or len(vertex_colors) != 3:
+            return 0
+        divisions = BlakePfdDemo._v11_ridge_subdivisions(points)
+        channels = tuple(color.getRgb()[:3] for color in vertex_colors)
+        nodes = {}
+        for i in range(divisions + 1):
+            for j in range(divisions + 1 - i):
+                weights = (
+                    (divisions - i - j) / divisions,
+                    i / divisions,
+                    j / divisions,
+                )
+                xy = QPointF(
+                    sum(weight * pt.x_px for weight, pt in zip(weights, points)),
+                    sum(weight * pt.y_px for weight, pt in zip(weights, points)),
+                )
+                rgb = tuple(
+                    sum(weight * channels[k][ch] for k, weight in enumerate(weights))
+                    for ch in range(3)
+                )
+                nodes[i, j] = (xy, rgb)
+
+        count = 0
+
+        def draw_cell(keys):
+            nonlocal count
+            p0, c0 = nodes[keys[0]]
+            p1, c1 = nodes[keys[1]]
+            p2, c2 = nodes[keys[2]]
+            color = QColor(*(
+                max(0, min(255, round((c0[ch] + c1[ch] + c2[ch]) / 3.0)))
+                for ch in range(3)
+            ))
+            # Matching thin edge paint hides Qt antialiasing pinholes.
+            painter.setBrush(QBrush(color))
+            painter.setPen(QPen(color, 0.65))
+            painter.drawConvexPolygon(QPolygonF((p0, p1, p2)))
+            count += 1
+
+        for i in range(divisions):
+            for j in range(divisions - i):
+                draw_cell(((i, j), (i + 1, j), (i, j + 1)))
+                if i + j < divisions - 1:
+                    draw_cell(((i + 1, j), (i + 1, j + 1), (i, j + 1)))
+        return count
+
+    @staticmethod
+    def _v8_projected_relief_diagnostic(
+        surface, camera, *, heading_deg, pitch_deg, roll_deg,
+        width_px, height_px, near_plane_ft,
+    ):
+        """Report REAL SRTM relief projected by the existing 3-D camera.
+
+        A visible mesh vertex ABOVE the screen's level horizon is evidence
+        of elevation in view, NOT a computed unobstructed ridgeline.
+        Missing/no-data meshes return None, never an invented peak.
+        """
+        if not surface.valid or not surface.vertices:
+            return None
+        orientation = camera.prepare_orientation(
+            heading_deg=heading_deg, pitch_deg=pitch_deg, roll_deg=roll_deg,
+        )
+        projection = camera.prepare_projection(
+            width_px=width_px, height_px=height_px,
+            near_plane_ft=near_plane_ft,
+        )
+        if orientation is None or projection is None:
+            return None
+        highest_elevation = max(v.elevation_ft for v in surface.vertices)
+        highest_visible_angle_px = 0.0
+        visible_vertex_count = 0
+        for vertex in surface.vertices:
+            point = camera.world_to_camera_prepared(
+                north_ft=vertex.north_ft,
+                east_ft=vertex.east_ft,
+                up_ft=vertex.up_ft,
+                orientation=orientation,
+            )
+            if point is None:
+                continue
+            projected = camera.project_prepared(point, projection=projection)
+            if projected is None or not projected.visible:
+                continue
+            visible_vertex_count += 1
+            highest_visible_angle_px = max(
+                highest_visible_angle_px,
+                0.5 * height_px - projected.y_px,
+            )
+        return (
+            int(round(highest_elevation)),
+            int(visible_vertex_count),
+            int(round(highest_visible_angle_px)),
+        )
+
+    # BLAKE_V7_MOUNTAIN_SMOOTH_LIGHTING -- display-only (no height changes).
+    @staticmethod
+    def _v7_vertex_normals(surface):
+        """Average nearby true terrain-face normals at shared mesh vertices.
+
+        Only the shading receives these normals. The SRTM vertex positions,
+        projection, mesh connectivity and terrain classification are unchanged.
+        """
+        vertices = surface.vertices
+        totals = [[0.0, 0.0, 0.0] for _ in vertices]
+        for triangle in surface.triangles:
+            ia, ib, ic = (
+                triangle.first_index,
+                triangle.second_index,
+                triangle.third_index,
+            )
+            a, b, c = vertices[ia], vertices[ib], vertices[ic]
+            ab_e, ab_n, ab_u = (
+                b.east_ft - a.east_ft,
+                b.north_ft - a.north_ft,
+                b.up_ft - a.up_ft,
+            )
+            ac_e, ac_n, ac_u = (
+                c.east_ft - a.east_ft,
+                c.north_ft - a.north_ft,
+                c.up_ft - a.up_ft,
+            )
+            ne = ab_n * ac_u - ab_u * ac_n
+            nn = ab_u * ac_e - ab_e * ac_u
+            nu = ab_e * ac_n - ab_n * ac_e
+            if nu < 0.0:
+                ne, nn, nu = -ne, -nn, -nu
+            magnitude = (ne * ne + nn * nn + nu * nu) ** 0.5
+            if magnitude <= 1e-8:
+                continue
+            ne, nn, nu = ne / magnitude, nn / magnitude, nu / magnitude
+            for index in (ia, ib, ic):
+                totals[index][0] += ne
+                totals[index][1] += nn
+                totals[index][2] += nu
+        normals = []
+        for ne, nn, nu in totals:
+            magnitude = (ne * ne + nn * nn + nu * nu) ** 0.5
+            if magnitude <= 1e-8:
+                normals.append((0.0, 0.0, 1.0))
+            else:
+                normals.append((ne / magnitude, nn / magnitude, nu / magnitude))
+        return tuple(normals)
+
+    @staticmethod
+    def _v7_mountain_light(vertex_normals, indices, relative_height):
+        """Soft terrain luminance from blended real slopes (not elevation)."""
+        ne = sum(vertex_normals[i][0] for i in indices) / 3.0
+        nn = sum(vertex_normals[i][1] for i in indices) / 3.0
+        nu = sum(vertex_normals[i][2] for i in indices) / 3.0
+        # Boost slope sensitivity in lighting ONLY; geometry remains exact.
+        east, north, up = 2.4 * ne, 2.4 * nn, nu
+        magnitude = (east * east + north * north + up * up) ** 0.5
+        response = (
+            (0.66 * east + 0.43 * north + 0.68 * up) / magnitude
+            if magnitude > 1e-8 else 0.68
+        )
+        return max(0.72, min(1.20,
+            0.80 + 0.35 * response + 0.08 * (relative_height - 0.5)
+        ))
+
     def draw_synthetic_terrain(
         self,
         painter: QPainter,
@@ -4678,6 +5636,8 @@ class BlakePfdDemo(QWidget):
         width: int,
         height: int,
     ) -> None:
+        if self._v13_cincinnati_diagnostics_enabled():
+            self._v13_terrain_draw_ms = None
         if not self.real_terrain_enabled:
             return
 
@@ -4752,6 +5712,12 @@ class BlakePfdDemo(QWidget):
         if not classified.valid:
             return
 
+        # Measure the terrain paint path, excluding I/O, sensors and alerts.
+        v13_draw_started = (
+            monotonic() if self._v13_cincinnati_diagnostics_enabled()
+            else None
+        )
+
         if (
             len(projected.triangles)
             != len(classified.triangles)
@@ -4789,13 +5755,19 @@ class BlakePfdDemo(QWidget):
             ),
         }
 
-        terrain_pen = QPen(
-            QColor(
-                35,
-                35,
-                35,
-            ),
-            1,
+        # BLAKE_TERRAIN_VISUAL_SHADING_V1
+        # Visual enhancement only: retain real SRTM geometry and
+        # all terrain warning classifications without alteration.
+        # Normalize elevation within the *currently displayed* mesh;
+        # this changes color brightness, never terrain height.
+        terrain_elevations = tuple(
+            vertex.elevation_ft
+            for vertex in rebased_surface.vertices
+        )
+        minimum_terrain_elevation = min(terrain_elevations)
+        terrain_elevation_span = max(
+            1.0,
+            max(terrain_elevations) - minimum_terrain_elevation,
         )
 
         center_x = width // 2
@@ -4813,18 +5785,109 @@ class BlakePfdDemo(QWidget):
             height,
         )
 
-        painter.setPen(
-            terrain_pen
-        )
+        # Do not draw a dark wireframe over the terrain. The pen is
+        # instead set to each triangle's own shaded fill color below,
+        # slightly covering anti-aliased gaps between mesh faces.
 
-        # Surface triangles are generated near-to-far.
-        # Paint in reverse order so farther terrain is
-        # laid down before nearer terrain.
-        for index in range(
-            len(projected.triangles) - 1,
-            -1,
-            -1,
-        ):
+        # V5 adds stronger display-only hillshade from the actual 3D mesh.
+        # Both the camera geometry and classifier still receive unmodified SRTM.
+        v5_visuals = self._v5_visuals_enabled() and not getattr(
+            self, "use_hardware", False
+        )
+        # V7: only the explicitly enabled stationary mountain demo. Cache
+        # true mesh normals until the underlying SRTM terrain surface refreshes.
+        v7_mountain = (
+            os.environ.get("BLAKE_PFD_V7_VISUALS") == "1"
+            and self._v6_mountain_scene()
+        )
+        v10_ridge = self._v10_ridge_visuals()
+        v11_ridge = self._v11_ridge_visuals() if v10_ridge else False
+        v12_ridge = self._v12_ridge_visuals() if v11_ridge else False
+        v13_cincinnati = self._v13_cincinnati_depth_enabled()
+        v14_optimize = self._v14_cincinnati_optimize_enabled()
+        v7_vertex_normals = None
+        if v7_mountain or v13_cincinnati:
+            normals_cache = getattr(self, "_v7_normals_cache", None)
+            if normals_cache is not None and normals_cache[0] is surface:
+                v7_vertex_normals = normals_cache[1]
+            else:
+                v7_vertex_normals = self._v7_vertex_normals(rebased_surface)
+                self._v7_normals_cache = (surface, v7_vertex_normals)
+
+        # Scope this cache to the current paint. No stale SRTM or motion data.
+        v14_vertex_light = (
+            self._v14_vertex_lights(
+                rebased_surface, v7_vertex_normals,
+                minimum_terrain_elevation, terrain_elevation_span,
+            ) if v14_optimize else ()
+        )
+        v11_colors = None
+        if v11_ridge and v7_vertex_normals is not None:
+            color_cache = getattr(self, "_v11_colors_cache", None)
+            if color_cache is not None and color_cache[0] is surface:
+                v11_colors = color_cache[1]
+            else:
+                v11_colors = self._v11_ridge_vertex_colors(
+                    rebased_surface, v7_vertex_normals,
+                )
+                self._v11_colors_cache = (surface, v11_colors)
+        if v12_ridge and v11_colors is not None:
+            # One-time color adjustment per terrain refresh, not per frame.
+            enhanced_cache = getattr(self, "_v12_colors_cache", None)
+            if enhanced_cache is not None and enhanced_cache[0] is surface:
+                v11_colors = enhanced_cache[1]
+            else:
+                v11_colors = self._v12_depth_colors(rebased_surface, v11_colors)
+                self._v12_colors_cache = (surface, v11_colors)
+
+        # Scenic-mode topographic contours use the SAME camera/real vertices.
+        # Precompute its orientation only once per frame; standard/hardware
+        # rendering never enters this optional branch.
+        v4_visuals = self._v4_visuals_enabled() and not getattr(
+            self, "use_hardware", False
+        )
+        if v5_visuals and os.environ.get("BLAKE_PFD_V5_CONTOURS") != "1":
+            v4_visuals = False  # no unused camera/projection work
+        topo_camera = self.synthetic_terrain_projection.camera
+        if v4_visuals:
+            topo_orientation = topo_camera.prepare_orientation(
+                heading_deg=pfd.heading_deg,
+                pitch_deg=pfd.pitch_deg,
+                roll_deg=pfd.roll_deg,
+            )
+            topo_projection = topo_camera.prepare_projection(
+                width_px=width, height_px=height,
+                near_plane_ft=self.synthetic_terrain_projection.near_plane_ft,
+            )
+            v4_visuals = topo_orientation is not None and topo_projection is not None
+
+        # V12 opt-in ridge test uses actual camera-forward depth to order
+        # terrain faces. The normal application keeps its proven old order.
+        # Classification lookup ALWAYS uses the original triangle index.
+        if v12_ridge or v13_cincinnati:
+            depth_key = (
+                surface, pfd.indicated_alt_ft,
+                pfd.heading_deg, pfd.pitch_deg, pfd.roll_deg,
+            )
+            depth_cache = getattr(self, "_v12_depth_cache", None)
+            if (
+                depth_cache is not None
+                and depth_cache[0][0] is depth_key[0]
+                and depth_cache[0][1:] == depth_key[1:]
+            ):
+                draw_indices = depth_cache[1]
+            else:
+                draw_indices = self._v12_depth_draw_order(
+                    rebased_surface,
+                    self.synthetic_terrain_projection.camera,
+                    pfd.heading_deg, pfd.pitch_deg, pfd.roll_deg,
+                )
+                self._v12_depth_cache = (depth_key, draw_indices)
+        else:
+            # Previous projection surface ordering; no hardware-mode change.
+            draw_indices = range(len(projected.triangles) - 1, -1, -1)
+
+        for index in draw_indices:
             triangle = (
                 projected.triangles[index]
             )
@@ -4855,15 +5918,360 @@ class BlakePfdDemo(QWidget):
                 ]
             )
 
-            painter.setBrush(
-                brush
-            )
+            # Compute a light-facing normal from the true rebased
+            # triangle geometry. Exaggeration is applied to *light*
+            # contrast only; vertex heights remain unmodified.
+            source_triangle = rebased_surface.triangles[index]
+            a = rebased_surface.vertices[source_triangle.first_index]
+            b = rebased_surface.vertices[source_triangle.second_index]
+            c = rebased_surface.vertices[source_triangle.third_index]
 
-            painter.drawConvexPolygon(
-                polygon
+            # V15: do not recompute a face normal when V14's already
+            # calculated shared-vertex lighting will replace its result.
+            # The RED/ORANGE hazard paths always use their exact base color.
+            skip_face_normal = self._v15_fast_normal_skip(
+                warning_level, v14_optimize, v14_vertex_light
+            )
+            mean_elevation = (
+                a.elevation_ft + b.elevation_ft + c.elevation_ft
+            ) / 3.0
+            relative_height = (
+                (mean_elevation - minimum_terrain_elevation)
+                / terrain_elevation_span
+            )
+            if skip_face_normal:
+                normal_east, normal_north, normal_up = 0.0, 0.0, 1.0
+                brightness = 1.0
+            else:
+                ab_east = b.east_ft - a.east_ft
+                ab_north = b.north_ft - a.north_ft
+                ab_up = b.up_ft - a.up_ft
+                ac_east = c.east_ft - a.east_ft
+                ac_north = c.north_ft - a.north_ft
+                ac_up = c.up_ft - a.up_ft
+
+                normal_east = ab_north * ac_up - ab_up * ac_north
+                normal_north = ab_up * ac_east - ab_east * ac_up
+                normal_up = ab_east * ac_north - ab_north * ac_east
+                if normal_up < 0.0:
+                    normal_east = -normal_east
+                    normal_north = -normal_north
+                    normal_up = -normal_up
+
+                # Amplifying lighting response slightly helps gentle
+                # terrain read clearly without inventing elevations.
+                light_east = 3.0 * normal_east
+                light_north = 3.0 * normal_north
+                light_up = normal_up
+                normal_magnitude = (
+                    light_east * light_east
+                    + light_north * light_north
+                    + light_up * light_up
+                ) ** 0.5
+                if normal_magnitude > 0.0:
+                    illumination = (
+                        light_east * 0.53
+                        + light_north * 0.31
+                        + light_up * 0.79
+                    ) / normal_magnitude
+                else:
+                    illumination = 0.79
+
+                # BLAKE_COMBINED_TERRAIN_TOWER_VISUAL_V2
+                # More distinct light-facing slopes and actual elevation bands.
+                # Visualization ONLY: no elevation, projection, or alert changes.
+                # Strong WARNING/CRITICAL hazard colors remain exact below.
+                brightness = (
+                    0.84
+                    + 0.49 * (illumination - 0.63)
+                    + 0.27 * (relative_height - 0.5)
+                )
+                brightness = max(0.61, min(1.24, brightness))
+
+            if v5_visuals and warning_level == "NONE" and not skip_face_normal:
+                # Geometric sun angle with lighting-only slope sensitivity.
+                # The underlying projection/elevations stay exactly as sampled.
+                lit_east = 12.0 * normal_east
+                lit_north = 12.0 * normal_north
+                lit_up = normal_up
+                lit_magnitude = (
+                    lit_east * lit_east + lit_north * lit_north
+                    + lit_up * lit_up
+                ) ** 0.5
+                if lit_magnitude > 0.0:
+                    sun_response = (
+                        0.62 * lit_east + 0.38 * lit_north
+                        + 0.72 * lit_up
+                    ) / lit_magnitude
+                else:
+                    sun_response = 0.72
+                brightness = max(0.56, min(1.36, (
+                    0.72 + 0.48 * sun_response
+                    + 0.20 * (relative_height - 0.5)
+                )))
+
+            if v14_optimize and warning_level == "NONE" and v14_vertex_light:
+                brightness = (
+                    v14_vertex_light[source_triangle.first_index]
+                    + v14_vertex_light[source_triangle.second_index]
+                    + v14_vertex_light[source_triangle.third_index]
+                ) / 3.0
+            elif (v7_mountain or v13_cincinnati) and warning_level == "NONE":
+                brightness = self._v7_mountain_light(
+                    v7_vertex_normals,
+                    (source_triangle.first_index, source_triangle.second_index,
+                     source_triangle.third_index),
+                    relative_height,
+                )
+
+            base_color = brush.color()
+            if v5_visuals and warning_level == "NONE":
+                # Natural earth/vegetation tones only for truly safe triangles.
+                base_color = QColor(85, 119, 75)
+                if self._v6_mountain_scene():
+                    # Real elevation informs high-alpine rocky hue, never height.
+                    alpine = max(0.0, min(1.0, (mean_elevation - 9700.0) / 3900.0))
+                    base_color = QColor(
+                        round(76.0 + 73.0 * alpine),
+                        round(117.0 + 39.0 * alpine),
+                        round(72.0 + 73.0 * alpine),
+                    )
+            shaded_color = QColor(
+                min(255, max(0, round(base_color.red() * brightness))),
+                min(255, max(0, round(base_color.green() * brightness))),
+                min(255, max(0, round(base_color.blue() * brightness))),
+            )
+            # BLAKE_ROUTE_VISION_DISTANCE_ATMOSPHERE_V3
+            # A faint atmospheric fade provides perspective depth using
+            # TRUE triangle distance; no height/position is altered.
+            # Never fade WARNING/CRITICAL hazard colors.
+            if warning_level == "NONE":
+                mean_north = (a.north_ft + b.north_ft + c.north_ft) / 3.0
+                mean_east = (a.east_ft + b.east_ft + c.east_ft) / 3.0
+                distance_nm = (
+                    (mean_north ** 2 + mean_east ** 2) ** 0.5 / 6076.12
+                )
+                atmosphere = min(0.36, max(0.0, (distance_nm - 1.0) / 10.0))
+                if v7_mountain:
+                    # Mountain-only blue-gray depth cue using REAL range.
+                    atmosphere = min(0.43, max(0.0, (distance_nm - 1.5) / 11.0))
+                shaded_color = QColor(
+                    round(shaded_color.red() * (1 - atmosphere) + 126 * atmosphere),
+                    round(shaded_color.green() * (1 - atmosphere) + 149 * atmosphere),
+                    round(shaded_color.blue() * (1 - atmosphere) + 151 * atmosphere),
+                )
+            # Preserve exact colors for immediate warnings, as validated
+            # by existing pixel-level critical terrain tests.
+            if warning_level in ("WARNING", "CRITICAL"):
+                shaded_color = base_color
+            painter.setPen(QPen(shaded_color, 0.8))
+            # V11 uses smoothly varying shared-vertex colors on SAFE faces
+            # in the opt-in ridge test ONLY. Exact hazard painting below is
+            # intentionally unchanged and never has diminished opacity.
+            if (
+                v11_ridge
+                and warning_level == "NONE"
+                and v11_colors is not None
+                and len(triangle.points) == 3
+            ):
+                vertex_indices = (
+                    source_triangle.first_index,
+                    source_triangle.second_index,
+                    source_triangle.third_index,
+                )
+                self._v11_draw_smooth_triangle(
+                    painter,
+                    triangle.points,
+                    tuple(v11_colors[vertex_index] for vertex_index in vertex_indices),
+                )
+            else:
+                # V10 fallback for previous test modes / other scenes.
+                if (
+                    (v10_ridge or v13_cincinnati)
+                    and warning_level == "NONE"
+                    and v7_vertex_normals is not None
+                    and len(triangle.points) == 3
+                ):
+                    vertex_indices = (
+                        source_triangle.first_index,
+                        source_triangle.second_index,
+                        source_triangle.third_index,
+                    )
+                    vertex_light = (
+                        tuple(v14_vertex_light[i] for i in vertex_indices)
+                        if v14_optimize and v14_vertex_light else
+                        tuple(
+                            self._v7_mountain_light(
+                                v7_vertex_normals,
+                                (vertex_index, vertex_index, vertex_index),
+                                (rebased_surface.vertices[vertex_index].elevation_ft
+                                 - minimum_terrain_elevation) / terrain_elevation_span,
+                            )
+                            for vertex_index in vertex_indices
+                        )
+                    )
+                    if (
+                        v14_optimize
+                        and not self._v14_gradient_worth_drawing(
+                            triangle.points, vertex_light,
+                        )
+                    ):
+                        painter.setBrush(QBrush(shaded_color))
+                    else:
+                        painter.setBrush(self._v10_safe_triangle_brush(
+                            triangle.points, shaded_color, vertex_light,
+                        ))
+                else:
+                    painter.setBrush(QBrush(shaded_color))
+
+                painter.drawConvexPolygon(polygon)
+
+            # BLAKE_SCENIC_TOPO_CONTOURS_V4
+            # True topographic contours: intersections are computed in
+            # three-dimensional world coordinates, then projected using
+            # the SAME camera as the terrain. Nothing is exaggerated.
+            # No contour is drawn over WARNING / CRITICAL hazard regions.
+            if (
+                v4_visuals
+                and warning_level in ("NONE", "CAUTION")
+                and (
+                    not v5_visuals
+                    or os.environ.get("BLAKE_PFD_V5_CONTOURS") == "1"
+                )
+            ):
+                contour_color = (
+                    QColor(180, 210, 156, 126)
+                    if warning_level == "NONE"
+                    else QColor(244, 234, 133, 92)
+                )
+                painter.setBrush(Qt.BrushStyle.NoBrush)
+                painter.setPen(QPen(contour_color, 1.0))
+                for _level, start, end in self._v4_contour_segments(a, b, c):
+                    points = []
+                    for north_ft, east_ft, up_ft in (start, end):
+                        camera_point = topo_camera.world_to_camera_prepared(
+                            north_ft=north_ft, east_ft=east_ft, up_ft=up_ft,
+                            orientation=topo_orientation,
+                        )
+                        if camera_point is None:
+                            break
+                        screen = topo_camera.project_prepared(
+                            camera_point, projection=topo_projection,
+                        )
+                        if screen is None or not screen.visible:
+                            break
+                        points.append(QPointF(screen.x_px, screen.y_px))
+                    if len(points) == 2:
+                        painter.drawLine(points[0], points[1])
+
+        # V8 ridge-only diagnostic. Uses exactly the same rebased SRTM
+        # vertices and camera projection as the terrain polygons above.
+        # This label does NOT claim a safe ridge clearance or visibility.
+        if self._v8_ridge_scene():
+            report = self._v8_projected_relief_diagnostic(
+                rebased_surface,
+                self.synthetic_terrain_projection.camera,
+                heading_deg=pfd.heading_deg,
+                pitch_deg=pfd.pitch_deg,
+                roll_deg=pfd.roll_deg,
+                width_px=width, height_px=height,
+                near_plane_ft=self.synthetic_terrain_projection.near_plane_ft,
+            )
+            if report is not None:
+                peak_ft, visible_vertices, above_horizon_px = report
+                painter.setPen(QPen(QColor(230, 247, 251, 225), 1))
+                if v10_ridge:
+                    # Two short clipped lines in the unobstructed central
+                    # sky; never underneath the altitude or engine tapes.
+                    painter.setFont(QFont("DejaVu Sans", 7, QFont.Weight.Bold))
+                    first, second = self._v10_ridge_diagnostic_rects(
+                        width, height,
+                    )
+                    painter.drawText(
+                        first,
+                        Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+                        f"SRTM PEAK {peak_ft:,} FT | {visible_vertices} VERT",
+                    )
+                    painter.drawText(
+                        second,
+                        Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+                        f"MESH ABOVE HORIZON +{above_horizon_px} PX (NOT CLR)",
+                    )
+                else:
+                    painter.setFont(QFont("DejaVu Sans", 8, QFont.Weight.Bold))
+                    painter.drawText(
+                        QPointF(width * 0.29, height * 0.21),
+                        f"REAL SRTM MESH: MAX {peak_ft:,} FT | "
+                        f"{visible_vertices} VISIBLE VERTICES | "
+                        f"+{above_horizon_px} PX ABOVE HORIZON",
+                    )
+
+        # Clearly mark the stationary mountainous test to prevent its
+        # unrelated flight plan readout being interpreted as true navigation.
+        if (
+            v5_visuals
+            and os.environ.get("BLAKE_PFD_MOUNTAIN_DEMO") == "1"
+        ):
+            painter.setPen(QPen(QColor(255, 255, 255, 220), 1))
+            painter.setFont(QFont("DejaVu Sans", 10, QFont.Weight.Bold))
+            painter.drawText(
+                QPointF(width * 0.38, height * 0.145),
+                (
+                    (
+                        (
+                            ("V12 HIGH RIDGE - STATIC / NOT FOR FLIGHT"
+                             if self._v9_high_ridge_scene()
+                             else "V12 LOW RIDGE - STATIC / NOT FOR FLIGHT")
+                            if v12_ridge else
+                            ("V11 HIGH RIDGE - STATIC / NOT FOR FLIGHT"
+                             if self._v9_high_ridge_scene()
+                             else "V11 LOW RIDGE - STATIC / NOT FOR FLIGHT")
+                        )
+                        if v11_ridge else
+                        ("V9 HIGH RIDGE - STATIC / NOT FOR FLIGHT"
+                         if self._v9_high_ridge_scene()
+                         else "V8 RIDGE VIEW - STATIC / NOT FOR FLIGHT")
+                    )
+                    if self._v8_ridge_scene()
+                    else "MOUNTAIN TEST - STATIC / NOT ROUTE"
+                ),
             )
 
         painter.restore()
+        if v13_draw_started is not None:
+            self._v13_terrain_draw_ms = max(
+                0.0, (monotonic() - v13_draw_started) * 1000.0
+            )
+            if self._v14_cincinnati_profile_enabled():
+                self._v15_record_metric("terrain", self._v13_terrain_draw_ms)
+
+    @staticmethod
+    def _obstacle_mast_length_px(obstacle, symbol_radius: float) -> float:
+        """Visual mast length; based on projected AGL, then capped for UI."""
+        # BLAKE_V3_OBSTACLE_OPTIONAL_GEOMETRY_FIX_V1
+        # Production projections carry numeric distance/AGL; small test
+        # doubles may not. Missing *display-only* dimensions use the
+        # previous schematic mast size, never inferred flight-safety data.
+        base_y = getattr(obstacle, "base_y_px", None)
+        if base_y is not None and isfinite(base_y):
+            apparent_height = max(0.0, base_y - obstacle.y_px)
+        else:
+            distance_nm = getattr(obstacle, "distance_nm", None)
+            height_agl_ft = getattr(obstacle, "height_agl_ft", None)
+            if distance_nm is None or height_agl_ft is None:
+                return 15.0
+            if not (
+                isfinite(distance_nm)
+                and isfinite(height_agl_ft)
+                and distance_nm >= 0.0
+                and height_agl_ft >= 0.0
+            ):
+                return 15.0
+            # Fallback if base projects outside the visible camera area.
+            # Approximate angular height in screen pixels, not safety data.
+            range_ft = max(0.1, distance_nm) * 6076.12
+            apparent_height = 720.0 * height_agl_ft / range_ft
+        return max(6.0, min(32.0, apparent_height - symbol_radius))
 
     def draw_synthetic_obstacles(
         self,
@@ -4928,6 +6336,12 @@ class BlakePfdDemo(QWidget):
         if not projected:
             return
 
+        # Projection was calculated exactly once with validated inputs.
+        # Keep only RED threats for a safety-priority foreground pass.
+        self._visible_obstacle_threats = [
+            item for item in projected if item.threat
+        ]
+
         painter.save()
 
         painter.setBrush(
@@ -4955,7 +6369,9 @@ class BlakePfdDemo(QWidget):
             ),
         )
 
-        min_spacing_px = 24.0
+        # Increase spacing ONLY for non-threat yellow obstacle glyphs.
+        # Every RED threat is kept, projected, and drawn without filtering.
+        min_spacing_px = 43.0
         min_spacing_sq = (
             min_spacing_px
             * min_spacing_px
@@ -5003,6 +6419,25 @@ class BlakePfdDemo(QWidget):
         for obstacle in obstacles_to_draw:
             x = obstacle.x_px
             y = obstacle.y_px
+            # BLAKE_SCENIC_TOPO_CONTOURS_V4
+            # Non-threat symbols remain in the database and projection,
+            # but the scenic view avoids painting them over avionics panels.
+            # RED threats remain unfiltered in both drawing passes.
+            if (
+                self._v4_visuals_enabled()
+                and not getattr(self, "use_hardware", False)
+                and not obstacle.threat
+                and not self._v4_non_threat_inside_scenic_view(
+                    x, y, width, height
+                )
+            ):
+                continue
+            # Farther ordinary obstructions stay visible as smaller icons;
+            # threats retain their full red diamonds at all distances.
+            symbol_radius = (
+                6.0 if obstacle.threat
+                else max(3.5, 6.0 - 0.36 * getattr(obstacle, "distance_nm", 0.0))
+            )
 
             color = (
                 QColor(
@@ -5050,18 +6485,74 @@ class BlakePfdDemo(QWidget):
                 diamond
             )
 
-            painter.drawLine(
-                QPointF(
-                    x,
-                    y + symbol_radius,
-                ),
-                QPointF(
-                    x,
-                    y + symbol_radius + 8.0,
-                ),
+            # Mast height reflects PROJECTED FAA height AGL when visible.
+            # Min/max pixel bounds maintain legibility; NOT to scale.
+            # Obstacle coordinates and threat flags remain unchanged.
+            mast_top = y + symbol_radius
+            mast_base = mast_top + self._obstacle_mast_length_px(
+                obstacle, symbol_radius
             )
+            painter.drawLine(QPointF(x, mast_top), QPointF(x - 5.0, mast_base))
+            painter.drawLine(QPointF(x, mast_top), QPointF(x + 5.0, mast_base))
+            mid_y = (mast_top + mast_base) / 2.0
+            painter.drawLine(QPointF(x - 2.5, mid_y),
+                             QPointF(x + 2.5, mid_y))
+            painter.drawLine(QPointF(x - 5.0, mast_base),
+                             QPointF(x + 5.0, mast_base))
 
         painter.restore()
+
+    def draw_priority_obstacle_threats(
+        self, painter: QPainter, width: int, height: int
+    ) -> None:
+        """Repaint validated red obstacle symbols above other PFD panels.
+
+        Does NOT query the database, project another time, or change
+        the safety/gating logic that decided whether threats are valid.
+        """
+        threats = getattr(self, "_visible_obstacle_threats", ())
+        if not threats:
+            return
+
+        painter.save()
+        try:
+            painter.setClipRect(0, 0, width, height)
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.setPen(QPen(QColor(255, 0, 0), 3))
+            for obstacle in threats:
+                x = float(obstacle.x_px)
+                y = float(obstacle.y_px)
+                if not (isfinite(x) and isfinite(y)):
+                    continue
+                if not (0 <= x < width and 0 <= y < height):
+                    continue
+
+                r = 6.0
+                painter.drawPolygon(
+                    QPolygonF([
+                        QPointF(x, y - r),
+                        QPointF(x + r, y),
+                        QPointF(x, y + r),
+                        QPointF(x - r, y),
+                    ])
+                )
+                # Repaint RED mast symbols above other display panels,
+                # retaining the original high-priority red diamond.
+                mast_top = y + r
+                mast_base = mast_top + self._obstacle_mast_length_px(
+                    obstacle, r
+                )
+                painter.drawLine(QPointF(x, mast_top),
+                                 QPointF(x - 5.0, mast_base))
+                painter.drawLine(QPointF(x, mast_top),
+                                 QPointF(x + 5.0, mast_base))
+                mid_y = (mast_top + mast_base) / 2.0
+                painter.drawLine(QPointF(x - 2.5, mid_y),
+                                 QPointF(x + 2.5, mid_y))
+                painter.drawLine(QPointF(x - 5.0, mast_base),
+                                 QPointF(x + 5.0, mast_base))
+        finally:
+            painter.restore()
 
     def draw_synthetic_vision(
         self,
@@ -5095,7 +6586,22 @@ class BlakePfdDemo(QWidget):
             height,
         )
 
-        for obj in scene.objects or []:
+        # BLAKE_SCENIC_TOPO_CONTOURS_V4: fewer, quieter DEMO-only gates.
+        v4_visuals = self._v4_visuals_enabled() and not getattr(
+            self, "use_hardware", False
+        )
+        visual_objects = scene.objects or []
+        if self._v8_ridge_scene():
+            # The stationary geometry test has no valid navigation route.
+            visual_objects = []
+        if v4_visuals:
+            visual_objects = sorted(
+                visual_objects,
+                key=lambda candidate: getattr(
+                    candidate, "distance_nm", float("inf")
+                ),
+            )[:2]
+        for obj in visual_objects:
             x, y = project_object_to_screen(
                 obj.rel_bearing_deg,
                 obj.elevation_angle_deg,
@@ -5107,18 +6613,14 @@ class BlakePfdDemo(QWidget):
             if not (0 <= x <= width and 0 <= y <= height):
                 continue
 
-            box_w = int(
-                70 * obj.size
-            )
-            box_h = int(
-                38 * obj.size
-            )
+            # BLAKE_ROUTE_VISION_GUIDANCE_STYLE_V3:
+            # These are optional synthetic scene gates, NOT validated
+            # navigation commands. Leave actual guidance state unchanged.
+            box_w = int((36 if v4_visuals else 54) * obj.size)
+            box_h = int((20 if v4_visuals else 29) * obj.size)
 
             painter.setPen(
-                QPen(
-                    QColor(0, 255, 0),
-                    3,
-                )
+                QPen(QColor(65, 225, 110, 80 if v4_visuals else 125), 1.5)
             )
 
             painter.setBrush(
@@ -5134,17 +6636,11 @@ class BlakePfdDemo(QWidget):
                 box_h,
             )
 
-            painter.setFont(
-                QFont(
-                    "Arial",
-                    12,
-                    QFont.Weight.Bold,
-                )
-            )
-
+            painter.setPen(QPen(QColor(95, 230, 130, 105 if v4_visuals else 165), 1))
+            painter.setFont(QFont("Arial", 9, QFont.Weight.Bold))
             painter.drawText(
-                x - 20,
-                y - box_h // 2 - 8,
+                x - 18,
+                y - box_h // 2 - 5,
                 obj.label,
             )
 
@@ -5167,10 +6663,22 @@ class BlakePfdDemo(QWidget):
 
         painter.translate(center_x, center_y)
         painter.rotate(-roll_deg)
-        painter.translate(0, pitch_deg * 7.0)
+        # GARMIN REFERENCE: compact pitch presentation.
+        painter.translate(0, pitch_deg * 5.2)
 
         painter.fillRect(-horizon_width, -horizon_height * 2, horizon_width * 2, horizon_height * 2, QColor(25, 95, 180))
-        painter.fillRect(-horizon_width, 0, horizon_width * 2, horizon_height * 2, QColor(125, 70, 25))
+        if self._v10_ridge_visuals():
+            # V10: the old flat brown reference-ground plane was visible
+            # wherever the TRUE SRTM mesh did not cover the attitude view.
+            # Replace only its *background paint* in the test scene;
+            # preserve the actual attitude horizon line and pitch ladder.
+            painter.fillRect(
+                -horizon_width, 0,
+                horizon_width * 2, horizon_height * 2,
+                self._v10_ridge_ground_brush(horizon_height),
+            )
+        else:
+            painter.fillRect(-horizon_width, 0, horizon_width * 2, horizon_height * 2, QColor(125, 70, 25))
 
         painter.setPen(QPen(QColor(255, 255, 255), 3))
         painter.drawLine(-horizon_width, 0, horizon_width, 0)
@@ -5185,25 +6693,122 @@ class BlakePfdDemo(QWidget):
 
         self.draw_roll_scale(painter, center_x, center_y, horizon_height)
 
+        # GARMIN REFERENCE:
+        # Turn-rate cue belongs in the AHRS area, not below the HSI.
+        self.draw_ahrs_turn_rate(
+            painter,
+            pfd,
+            center_x,
+            center_y,
+            horizon_height,
+        )
+
+    def draw_ahrs_turn_rate(
+        self,
+        painter: QPainter,
+        pfd: FlightData,
+        center_x: int,
+        center_y: int,
+        horizon_height: int,
+    ) -> None:
+        """Draw Garmin-style white turn-rate cue in the AHRS field."""
+
+        if not self.config.features.show_turn_rate:
+            return
+
+        # Position just below the roll arc and above the central AHRS symbol.
+        y = center_y - int(horizon_height * 0.22)
+
+        scale_half = 46
+
+        painter.setPen(QPen(QColor(245, 245, 245), 2))
+
+        # Compact turn-rate reference scale.
+        painter.drawLine(
+            center_x - scale_half,
+            y,
+            center_x + scale_half,
+            y,
+        )
+
+        painter.drawLine(
+            center_x - 30,
+            y - 4,
+            center_x - 30,
+            y + 4,
+        )
+
+        painter.drawLine(
+            center_x + 30,
+            y - 4,
+            center_x + 30,
+            y + 4,
+        )
+
+        ratio = max(
+            -1.5,
+            min(
+                1.5,
+                pfd.turn_rate_deg_sec / 3.0,
+            ),
+        )
+
+        pointer_x = center_x + int(ratio * 30)
+
+        # White Garmin-style triangular pointer.
+        painter.setBrush(QBrush(QColor(255, 255, 255)))
+        painter.setPen(QPen(QColor(255, 255, 255), 1))
+
+        painter.drawPolygon(
+            QPolygonF([
+                QPointF(pointer_x, y + 2),
+                QPointF(pointer_x - 6, y - 10),
+                QPointF(pointer_x + 6, y - 10),
+            ])
+        )
+
     def draw_pitch_ladder(self, painter: QPainter) -> None:
-        painter.setPen(QPen(QColor(255, 255, 255), 2))
-        painter.setFont(QFont("Arial", 12, QFont.Weight.Bold))
+        # GARMIN REFERENCE:
+        # Smaller, tighter pitch ladder with unobtrusive labels.
+        painter.setPen(QPen(QColor(245, 245, 245), 1.5))
+        painter.setFont(QFont("Arial", 9, QFont.Weight.Bold))
 
         for pitch in range(-30, 35, 5):
             if pitch == 0:
                 continue
 
-            y = -pitch * 7.0
-            line_half = 55 if pitch % 10 == 0 else 35
-            painter.drawLine(int(-line_half), int(y), int(line_half), int(y))
+            y = -pitch * 5.2
+
+            if pitch % 10 == 0:
+                line_half = 38
+            else:
+                line_half = 24
+
+            painter.drawLine(
+                int(-line_half),
+                int(y),
+                int(line_half),
+                int(y),
+            )
 
             if pitch % 10 == 0:
                 label = str(abs(pitch))
-                painter.drawText(int(-line_half - 38), int(y + 5), label)
-                painter.drawText(int(line_half + 12), int(y + 5), label)
+
+                painter.drawText(
+                    int(-line_half - 23),
+                    int(y + 4),
+                    label,
+                )
+
+                painter.drawText(
+                    int(line_half + 7),
+                    int(y + 4),
+                    label,
+                )
 
     def draw_roll_scale(self, painter: QPainter, center_x: int, center_y: int, horizon_height: int) -> None:
-        radius = int(horizon_height * 0.40)
+        # GARMIN REFERENCE: compact roll arc.
+        radius = int(horizon_height * 0.32)
         painter.setPen(QPen(QColor(255, 255, 255), 2))
 
         for deg in [-60, -45, -30, -20, -10, 0, 10, 20, 30, 45, 60]:
@@ -5216,47 +6821,88 @@ class BlakePfdDemo(QWidget):
             painter.drawLine(inner_x, inner_y, outer_x, outer_y)
 
     def draw_airspeed_tape(self, painter: QPainter, pfd: FlightData, width: int, height: int) -> None:
-        tape_x, tape_y, tape_w = 30, 95, 105
-        tape_h = height - 190
+        # GARMIN REFERENCE: slim airspeed tape.
+        tape_x, tape_y, tape_w = 22, 58, 86
+        tape_h = height - 116
         center_y = tape_y + tape_h // 2
         ias = pfd.ias_kt
 
+        # V9: do not inherit the previous glyph/attitude WHITE brush.
+        # A bordered tape is an outline, never an opaque painted rectangle.
+        painter.setBrush(Qt.BrushStyle.NoBrush)
         painter.fillRect(tape_x, tape_y, tape_w, tape_h, QColor(15, 15, 20, 140))
         painter.setPen(QPen(QColor(210, 210, 210), 2))
         painter.drawRect(tape_x, tape_y, tape_w, tape_h)
 
-        painter.setFont(QFont("Arial", 12, QFont.Weight.Bold))
+        painter.setFont(QFont("Arial", 10, QFont.Weight.Bold))
         painter.setPen(QColor(255, 255, 255))
 
         for speed in range(int(ias - 50), int(ias + 55), 10):
+            # V7 static mountain camera: omit physically impossible
+            # negative airspeed graduations around the zero-IAS marker.
+            if (
+                speed < 0
+                and os.environ.get("BLAKE_PFD_V7_VISUALS") == "1"
+                and self._v6_mountain_scene()
+            ):
+                continue
             y = center_y - int((speed - ias) * 4.0)
             if tape_y < y < tape_y + tape_h:
-                painter.drawLine(tape_x + tape_w - 35, y, tape_x + tape_w - 5, y)
-                painter.drawText(tape_x + 10, y + 5, str(speed))
+                painter.drawLine(
+                    tape_x + tape_w - 25,
+                    y,
+                    tape_x + tape_w - 4,
+                    y,
+                )
+                painter.drawText(
+                    tape_x + 8,
+                    y + 4,
+                    str(speed),
+                )
 
-        painter.fillRect(tape_x + 5, center_y - 25, tape_w - 10, 50, QColor(0, 0, 0, 210))
+        painter.fillRect(
+            tape_x + 4,
+            center_y - 20,
+            tape_w - 8,
+            40,
+            QColor(0, 0, 0, 220),
+        )
         painter.setPen(QPen(QColor(255, 255, 255), 2))
-        painter.drawRect(tape_x + 5, center_y - 25, tape_w - 10, 50)
-        painter.setFont(QFont("Arial", 22, QFont.Weight.Bold))
+        painter.drawRect(
+            tape_x + 4,
+            center_y - 20,
+            tape_w - 8,
+            40,
+        )
+        painter.setFont(QFont("Arial", 18, QFont.Weight.Bold))
         painter.drawText(
-            QRectF(tape_x + 5, center_y - 25, tape_w - 10, 50),
+            QRectF(
+                tape_x + 4,
+                center_y - 20,
+                tape_w - 8,
+                40,
+            ),
             Qt.AlignmentFlag.AlignCenter,
             f"{ias:.0f}",
         )
 
     def draw_altitude_tape(self, painter: QPainter, pfd: FlightData, width: int, height: int) -> None:
-        tape_w = 120
-        tape_x = width - tape_w - 30
-        tape_y = 95
-        tape_h = height - 190
+        # GARMIN REFERENCE: slim altitude tape.
+        tape_w = 96
+        tape_x = width - tape_w - 22
+        tape_y = 58
+        tape_h = height - 116
         center_y = tape_y + tape_h // 2
         alt = pfd.indicated_alt_ft
 
+        # V9: do not inherit the previous glyph/attitude WHITE brush.
+        # A bordered tape is an outline, never an opaque painted rectangle.
+        painter.setBrush(Qt.BrushStyle.NoBrush)
         painter.fillRect(tape_x, tape_y, tape_w, tape_h, QColor(15, 15, 20, 140))
         painter.setPen(QPen(QColor(210, 210, 210), 2))
         painter.drawRect(tape_x, tape_y, tape_w, tape_h)
 
-        painter.setFont(QFont("Arial", 11, QFont.Weight.Bold))
+        painter.setFont(QFont("Arial", 9, QFont.Weight.Bold))
         painter.setPen(QColor(255, 255, 255))
 
         start_alt = int((alt - 1000) // 100) * 100
@@ -5265,15 +6911,40 @@ class BlakePfdDemo(QWidget):
         for altitude in range(start_alt, end_alt, 100):
             y = center_y - int(((altitude - alt) / 100.0) * 22.0)
             if tape_y < y < tape_y + tape_h:
-                painter.drawLine(tape_x + 5, y, tape_x + 35, y)
-                painter.drawText(tape_x + 42, y + 5, str(altitude))
+                painter.drawLine(
+                    tape_x + 4,
+                    y,
+                    tape_x + 26,
+                    y,
+                )
+                painter.drawText(
+                    tape_x + 31,
+                    y + 4,
+                    str(altitude),
+                )
 
-        painter.fillRect(tape_x + 5, center_y - 25, tape_w - 10, 50, QColor(0, 0, 0, 210))
+        painter.fillRect(
+            tape_x + 4,
+            center_y - 20,
+            tape_w - 8,
+            40,
+            QColor(0, 0, 0, 220),
+        )
         painter.setPen(QPen(QColor(255, 255, 255), 2))
-        painter.drawRect(tape_x + 5, center_y - 25, tape_w - 10, 50)
-        painter.setFont(QFont("Arial", 20, QFont.Weight.Bold))
+        painter.drawRect(
+            tape_x + 4,
+            center_y - 20,
+            tape_w - 8,
+            40,
+        )
+        painter.setFont(QFont("Arial", 17, QFont.Weight.Bold))
         painter.drawText(
-            QRectF(tape_x + 5, center_y - 25, tape_w - 10, 50),
+            QRectF(
+                tape_x + 4,
+                center_y - 20,
+                tape_w - 8,
+                40,
+            ),
             Qt.AlignmentFlag.AlignCenter,
             f"{alt:.0f}",
         )
@@ -5286,10 +6957,10 @@ class BlakePfdDemo(QWidget):
             .setting_inhg
         )
 
-        baro_box_x = tape_x + 5
-        baro_box_y = tape_y + tape_h - 32
-        baro_box_w = tape_w - 10
-        baro_box_h = 28
+        baro_box_x = tape_x + 4
+        baro_box_y = tape_y + tape_h - 27
+        baro_box_w = tape_w - 8
+        baro_box_h = 23
 
         painter.fillRect(
             baro_box_x,
@@ -5348,9 +7019,10 @@ class BlakePfdDemo(QWidget):
         width: int,
         height: int,
     ) -> None:
-        x = width - 180
-        y = 120
-        h = height - 240
+        # GARMIN REFERENCE: narrow VSI adjacent to altitude tape.
+        x = width - 126
+        y = 90
+        h = height - 180
         center_y = y + h // 2
 
         painter.setPen(
@@ -5549,26 +7221,28 @@ class BlakePfdDemo(QWidget):
             painter.drawText(dtk_x - 16, strip_y + 38, "DTK")
 
     def draw_hsi_compass_rose(self, painter: QPainter, pfd: FlightData, width: int, height: int) -> None:
+        """Draw a Garmin-inspired rotating HSI while preserving Blake PFD nav logic."""
         center_x = width // 2
-        center_y = height - 100
-        radius = 72
+
+        # GARMIN REFERENCE: larger HSI mounted lower in flight view.
+        radius = min(108, max(88, int(width * 0.165)))
+        center_y = height - radius - 28
 
         heading = pfd.heading_deg
         desired_track = pfd.desired_track_deg
         bearing = pfd.bearing_deg
 
-        painter.setBrush(
-            QBrush(
-                Qt.BrushStyle.NoBrush
-            )
-        )
+        if self.direct_to_lateral_guidance_state.active:
+            displayed_cdi = self.direct_to_lateral_guidance_state.lateral_error
+        else:
+            displayed_cdi = pfd.cdi
 
-        painter.setPen(
-            QPen(
-                QColor(255, 255, 255),
-                2,
-            )
-        )
+        displayed_cdi = max(-1.0, min(1.0, displayed_cdi))
+
+        # GARMIN REFERENCE:
+        # Dark glass HSI face while retaining synthetic-vision context.
+        painter.setPen(QPen(QColor(220, 220, 220), 2))
+        painter.setBrush(QBrush(QColor(0, 0, 0, 155)))
 
         painter.drawEllipse(
             center_x - radius,
@@ -5577,129 +7251,442 @@ class BlakePfdDemo(QWidget):
             radius * 2,
         )
 
-        painter.setFont(
-            QFont(
-                "Arial",
-                8,
-                QFont.Weight.Bold,
-            )
+        # Outer compass ring.
+        painter.setBrush(QBrush(Qt.BrushStyle.NoBrush))
+        painter.setPen(QPen(QColor(235, 235, 235), 2))
+        painter.drawEllipse(
+            center_x - radius,
+            center_y - radius,
+            radius * 2,
+            radius * 2,
         )
 
-        for deg in range(0, 360, 30):
-            relative = (deg - heading + 360) % 360
-            angle = radians(relative - 90)
+        # ------------------------------------------------------------------
+        # Rotating compass card: minor marks every 10 degrees,
+        # major marks and labels every 30 degrees.
+        # ------------------------------------------------------------------
+        painter.setFont(QFont("Arial", 9, QFont.Weight.Bold))
+
+        cardinal = {
+            0: "N",
+            90: "E",
+            180: "S",
+            270: "W",
+        }
+
+        for deg in range(0, 360, 10):
+            relative = (deg - heading + 360.0) % 360.0
+            angle = radians(relative - 90.0)
+
+            major = deg % 30 == 0
+            tick_len = 12 if major else 6
 
             outer_x = center_x + int(cos(angle) * radius)
             outer_y = center_y + int(sin(angle) * radius)
-            inner_x = center_x + int(cos(angle) * (radius - 10))
-            inner_y = center_y + int(sin(angle) * (radius - 10))
+            inner_x = center_x + int(cos(angle) * (radius - tick_len))
+            inner_y = center_y + int(sin(angle) * (radius - tick_len))
 
+            painter.setPen(
+                QPen(
+                    QColor(245, 245, 245),
+                    2 if major else 1,
+                )
+            )
             painter.drawLine(inner_x, inner_y, outer_x, outer_y)
 
-            label_x = center_x + int(cos(angle) * (radius - 25))
-            label_y = center_y + int(sin(angle) * (radius - 25))
+            if major:
+                label_radius = radius - 27
+                label_x = center_x + int(cos(angle) * label_radius)
+                label_y = center_y + int(sin(angle) * label_radius)
 
-            painter.drawText(label_x - 10, label_y + 5, f"{deg // 10:02d}")
+                label = cardinal.get(deg, f"{deg // 10:02d}")
 
-        dtk_relative = (desired_track - heading + 360) % 360
-        dtk_angle = radians(dtk_relative - 90)
+                painter.drawText(
+                    label_x - 12,
+                    label_y + 5,
+                    label,
+                )
 
-        if (
-            self.direct_to_lateral_guidance_state.active
-        ):
-            displayed_cdi = (
-                self.direct_to_lateral_guidance_state
-                .lateral_error
+        # Fixed lubber line / current-heading pointer at twelve o'clock.
+        painter.setPen(QPen(QColor(255, 255, 255), 2))
+        painter.setBrush(QBrush(QColor(255, 255, 255)))
+        painter.drawPolygon(
+            QPolygonF([
+                QPointF(center_x, center_y - radius + 3),
+                QPointF(center_x - 7, center_y - radius + 15),
+                QPointF(center_x + 7, center_y - radius + 15),
+            ])
+        )
+
+        # Current heading value box.
+        hdg_text = f"{heading % 360:03.0f}°"
+        painter.setPen(QPen(QColor(210, 210, 210), 1))
+        painter.setBrush(QBrush(QColor(0, 0, 0)))
+        painter.drawRect(
+            center_x - 30,
+            center_y - radius - 1,
+            60,
+            24,
+        )
+        painter.setPen(QColor(255, 255, 255))
+        painter.setFont(QFont("Arial", 11, QFont.Weight.Bold))
+        painter.drawText(
+            center_x - 23,
+            center_y - radius + 17,
+            hdg_text,
+        )
+
+        # V9 RIDGE DEMO: There is no active route in this stationary camera.
+        # Draw only the heading compass and a fixed aircraft marker; do not
+        # render a magenta course needle/CDI or misleading NAV indications.
+        # The real navigation code below remains unchanged in every other mode.
+        if getattr(self, "_v8_ridge_scene", lambda: False)():
+            painter.setPen(QPen(QColor(255, 255, 255), 3))
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawLine(center_x, center_y - 13, center_x, center_y + 13)
+            painter.drawLine(center_x - 15, center_y,
+                             center_x + 15, center_y)
+            painter.setFont(QFont("Arial", 9, QFont.Weight.Bold))
+            painter.setPen(QColor(210, 225, 235))
+            painter.drawText(center_x - 31, center_y + radius - 14,
+                             "NO ROUTE")
+            return
+
+        # ------------------------------------------------------------------
+        # Desired-track/course needle.
+        # Existing lateral guidance source is preserved.
+        # ------------------------------------------------------------------
+        course_relative = (desired_track - heading + 360.0) % 360.0
+        course_angle = radians(course_relative - 90.0)
+        cross_angle = course_angle + radians(90.0)
+
+        course_r = radius - 31
+
+        course_dx = cos(course_angle)
+        course_dy = sin(course_angle)
+        cross_dx = cos(cross_angle)
+        cross_dy = sin(cross_angle)
+
+        magenta = QColor(255, 0, 255)
+
+        # Course shaft.
+        painter.setPen(QPen(magenta, 4))
+        painter.drawLine(
+            center_x - int(course_dx * course_r),
+            center_y - int(course_dy * course_r),
+            center_x + int(course_dx * course_r),
+            center_y + int(course_dy * course_r),
+        )
+
+        # Course arrow head.
+        tip_x = center_x + int(course_dx * course_r)
+        tip_y = center_y + int(course_dy * course_r)
+
+        base_x = center_x + int(course_dx * (course_r - 22))
+        base_y = center_y + int(course_dy * (course_r - 22))
+
+        painter.setBrush(QBrush(magenta))
+        painter.setPen(QPen(magenta, 2))
+        painter.drawPolygon(
+            QPolygonF([
+                QPointF(tip_x, tip_y),
+                QPointF(
+                    base_x + int(cross_dx * 10),
+                    base_y + int(cross_dy * 10),
+                ),
+                QPointF(
+                    base_x - int(cross_dx * 10),
+                    base_y - int(cross_dy * 10),
+                ),
+            ])
+        )
+
+        # CDI deviation reference dots.
+        painter.setPen(QPen(QColor(235, 235, 235), 2))
+        painter.setBrush(QBrush(Qt.BrushStyle.NoBrush))
+
+        dot_spacing = 20
+
+        for dot in (-2, -1, 1, 2):
+            dot_x = center_x + int(cross_dx * dot * dot_spacing)
+            dot_y = center_y + int(cross_dy * dot * dot_spacing)
+
+            painter.drawEllipse(
+                dot_x - 3,
+                dot_y - 3,
+                6,
+                6,
             )
-        else:
-            displayed_cdi = (
-                pfd.cdi
+
+        # Moving CDI deviation bar. Full-scale deflection = 40 pixels.
+        deviation = displayed_cdi * 40.0
+
+        dev_center_x = center_x + int(cross_dx * deviation)
+        dev_center_y = center_y + int(cross_dy * deviation)
+
+        deviation_half_length = 28
+
+        painter.setPen(QPen(magenta, 6))
+        painter.drawLine(
+            dev_center_x - int(course_dx * deviation_half_length),
+            dev_center_y - int(course_dy * deviation_half_length),
+            dev_center_x + int(course_dx * deviation_half_length),
+            dev_center_y + int(course_dy * deviation_half_length),
+        )
+
+        # ------------------------------------------------------------------
+        # Bearing pointer.
+        # ------------------------------------------------------------------
+        bearing_relative = (bearing - heading + 360.0) % 360.0
+        bearing_angle = radians(bearing_relative - 90.0)
+
+        bearing_r = radius - 42
+        bearing_dx = cos(bearing_angle)
+        bearing_dy = sin(bearing_angle)
+
+        painter.setPen(QPen(QColor(0, 220, 255), 2))
+        painter.drawLine(
+            center_x,
+            center_y,
+            center_x + int(bearing_dx * bearing_r),
+            center_y + int(bearing_dy * bearing_r),
+        )
+
+        bearing_tip_x = center_x + int(bearing_dx * bearing_r)
+        bearing_tip_y = center_y + int(bearing_dy * bearing_r)
+
+        painter.setBrush(QBrush(QColor(0, 220, 255)))
+        painter.drawEllipse(
+            bearing_tip_x - 4,
+            bearing_tip_y - 4,
+            8,
+            8,
+        )
+
+        # Fixed Garmin-style aircraft symbol at HSI center.
+        painter.setPen(QPen(QColor(255, 255, 255), 3))
+        painter.setBrush(QBrush(Qt.BrushStyle.NoBrush))
+
+        painter.drawLine(
+            center_x,
+            center_y - 14,
+            center_x,
+            center_y + 15,
+        )
+        painter.drawLine(
+            center_x - 17,
+            center_y,
+            center_x + 17,
+            center_y,
+        )
+        painter.drawLine(
+            center_x - 8,
+            center_y + 11,
+            center_x + 8,
+            center_y + 11,
+        )
+
+        # Course / navigation information inside lower HSI.
+        painter.setFont(QFont("Arial", 9, QFont.Weight.Bold))
+
+        painter.setPen(magenta)
+        painter.drawText(
+            center_x - radius + 14,
+            center_y + radius - 14,
+            f"CRS {desired_track % 360:03.0f}°",
+        )
+
+        source_label = (
+            "DTO"
+            if self.direct_to_lateral_guidance_state.active
+            else "NAV"
+        )
+
+        painter.drawText(
+            center_x + 35,
+            center_y + radius - 14,
+            source_label,
+        )
+
+        if self.config.obs.enabled:
+            painter.setPen(QColor(255, 255, 0))
+            painter.drawText(
+                center_x - 35,
+                center_y + radius + 3,
+                f"OBS {self.config.obs.selected_course_deg:.0f}°",
             )
 
-        cdi_offset = (
+    def draw_turn_and_slip(
+        self,
+        painter: QPainter,
+        pfd: FlightData,
+        width: int,
+        height: int,
+    ) -> None:
+        """Draw Garmin-style slip/skid beneath the HSI."""
+
+        if not self.config.features.show_slip_skid:
+            return
+
+        center_x = width // 2
+
+        radius = min(
+            108,
+            max(
+                88,
+                int(width * 0.165),
+            ),
+        )
+
+        hsi_center_y = height - radius - 28
+
+        # GARMIN REFERENCE:
+        # Rounded black slip/skid enclosure immediately beneath HSI.
+        panel_x = center_x - 145
+        panel_y = hsi_center_y + radius - 1
+        panel_w = 290
+        panel_h = 52
+
+        painter.setBrush(
+            QBrush(
+                QColor(
+                    0,
+                    0,
+                    0,
+                    220,
+                )
+            )
+        )
+
+        painter.setPen(
+            QPen(
+                QColor(
+                    80,
+                    80,
+                    85,
+                ),
+                2,
+            )
+        )
+
+        painter.drawRoundedRect(
+            panel_x,
+            panel_y,
+            panel_w,
+            panel_h,
+            10,
+            10,
+        )
+
+        ball_y = panel_y + 28
+
+        max_offset = 66
+
+        ball_x = center_x + int(
             max(
                 -1.0,
                 min(
                     1.0,
-                    displayed_cdi,
+                    pfd.slip_skid,
                 ),
             )
-            * 27
+            * max_offset
         )
-        offset_angle = dtk_angle + radians(90)
-        offset_x = int(cos(offset_angle) * cdi_offset)
-        offset_y = int(sin(offset_angle) * cdi_offset)
 
-        painter.setPen(QPen(QColor(0, 255, 0), 3))
+        # Dark recessed track.
+        painter.setPen(
+            QPen(
+                QColor(
+                    65,
+                    65,
+                    70,
+                ),
+                8,
+            )
+        )
+
         painter.drawLine(
-            center_x + offset_x,
-            center_y + offset_y,
-            center_x + offset_x + int(cos(dtk_angle) * radius),
-            center_y + offset_y + int(sin(dtk_angle) * radius),
+            center_x - 96,
+            ball_y,
+            center_x + 96,
+            ball_y,
         )
+
+        # White reference marks.
+        painter.setPen(
+            QPen(
+                QColor(
+                    240,
+                    240,
+                    240,
+                ),
+                2,
+            )
+        )
+
         painter.drawLine(
-            center_x + offset_x,
-            center_y + offset_y,
-            center_x + offset_x - int(cos(dtk_angle) * radius),
-            center_y + offset_y - int(sin(dtk_angle) * radius),
+            center_x - 42,
+            ball_y - 8,
+            center_x - 42,
+            ball_y + 8,
         )
 
-        painter.setPen(QPen(QColor(255, 255, 255), 2))
-        painter.setBrush(QBrush(QColor(255, 255, 255)))
-        for dot in [-2, -1, 1, 2]:
-            dot_x = center_x + int(cos(offset_angle) * dot * 14)
-            dot_y = center_y + int(sin(offset_angle) * dot * 14)
-            painter.drawEllipse(dot_x - 3, dot_y - 3, 6, 6)
-
-        brg_relative = (bearing - heading + 360) % 360
-        brg_angle = radians(brg_relative - 90)
-
-        painter.setPen(QPen(QColor(255, 0, 255), 3))
         painter.drawLine(
-            center_x,
-            center_y,
-            center_x + int(cos(brg_angle) * (radius - 15)),
-            center_y + int(sin(brg_angle) * (radius - 15)),
+            center_x + 42,
+            ball_y - 8,
+            center_x + 42,
+            ball_y + 8,
         )
 
-        painter.setBrush(QBrush(QColor(255, 220, 0)))
-        painter.setPen(QPen(QColor(255, 220, 0), 2))
-        painter.drawPolygon(
-            QPolygonF([
-                QPointF(center_x, center_y - 12),
-                QPointF(center_x - 8, center_y + 10),
-                QPointF(center_x + 8, center_y + 10),
-            ])
+        # L / R labels.
+        painter.setFont(
+            QFont(
+                "Arial",
+                9,
+                QFont.Weight.Bold,
+            )
         )
 
-        if self.config.obs.enabled:
-            painter.setFont(QFont("Arial", 10, QFont.Weight.Bold))
-            painter.setPen(QColor(255, 255, 0))
-            painter.drawText(center_x - 38, center_y + radius + 22, f"OBS {self.config.obs.selected_course_deg:.0f}°")
+        painter.drawText(
+            panel_x + 20,
+            panel_y + 34,
+            "L",
+        )
 
-    def draw_turn_and_slip(self, painter: QPainter, pfd: FlightData, width: int, height: int) -> None:
-        center_x = width // 2
-        y = 78
+        painter.drawText(
+            panel_x + panel_w - 28,
+            panel_y + 34,
+            "R",
+        )
 
-        painter.setPen(QPen(QColor(200, 200, 200), 2))
-        painter.drawLine(center_x - 120, y, center_x + 120, y)
-        painter.drawLine(center_x - 80, y - 8, center_x - 80, y + 8)
-        painter.drawLine(center_x + 80, y - 8, center_x + 80, y + 8)
+        # Slip/skid ball.
+        painter.setBrush(
+            QBrush(
+                QColor(
+                    255,
+                    255,
+                    255,
+                )
+            )
+        )
 
-        ratio = max(-1.5, min(1.5, pfd.turn_rate_deg_sec / 3.0))
-        pointer_x = center_x + int(ratio * 80)
+        painter.setPen(
+            QPen(
+                QColor(
+                    220,
+                    220,
+                    220,
+                ),
+                1,
+            )
+        )
 
-        painter.setBrush(QBrush(QColor(255, 220, 0)))
-        painter.setPen(QPen(QColor(255, 220, 0), 2))
-        painter.drawEllipse(pointer_x - 7, y - 7, 14, 14)
-
-        ball_y = y + 45
-        ball_x = center_x + int(pfd.slip_skid * 70)
-
-        painter.setPen(QPen(QColor(220, 220, 220), 2))
-        painter.drawLine(center_x - 80, ball_y, center_x + 80, ball_y)
-        painter.setBrush(QBrush(QColor(255, 255, 255)))
-        painter.drawEllipse(ball_x - 10, ball_y - 10, 20, 20)
+        painter.drawEllipse(
+            ball_x - 8,
+            ball_y - 8,
+            16,
+            16,
+        )
 
     def draw_nav_cdi_vdi(self, painter: QPainter, pfd: FlightData, width: int, height: int) -> None:
         features = self.config.features
@@ -5717,7 +7704,7 @@ class BlakePfdDemo(QWidget):
         center_x = width // 2
         center_y = height // 2
 
-        if features.show_cdi and position_usable:
+        if features.show_cdi and not features.show_hsi and position_usable:
             cdi_y = center_y + 185
             painter.setPen(QPen(QColor(255, 255, 255), 2))
             painter.drawLine(center_x - 125, cdi_y, center_x + 125, cdi_y)
@@ -5768,63 +7755,180 @@ class BlakePfdDemo(QWidget):
             )
 
     def draw_top_data_bar(self, painter: QPainter, pfd: FlightData, width: int) -> None:
-        # GLASS_PANEL_NO_BRUSH
-        painter.setBrush(
-            QBrush(
-                Qt.BrushStyle.NoBrush
-            )
-        )
-
-        painter.setPen(QColor(255, 255, 255))
-        painter.setFont(QFont("Arial", 14, QFont.Weight.Bold))
-
+        """Draw Garmin-style route/navigation status bar."""
         watchdog = self.sensor_watchdog_state
 
-        air_data_usable = bool(
-            watchdog.air_data_valid
-            and watchdog.air_data_fresh
-        )
         position_usable = bool(
             pfd.position_valid
             and watchdog.position_valid
             and watchdog.position_fresh
         )
-        attitude_usable = bool(
-            watchdog.attitude_valid
-            and watchdog.attitude_fresh
+
+        # Garmin-style dark header.
+        bar_h = 36
+        painter.save()
+        painter.setPen(QPen(QColor(80, 80, 80), 1))
+        painter.setBrush(QBrush(QColor(8, 8, 10, 235)))
+        painter.drawRect(0, 0, width, bar_h)
+
+        active_leg = self.route_manager.get_active_leg()
+
+        # ------------------------------------------------------------
+        # Route / Direct-To source
+        # ------------------------------------------------------------
+        if self.direct_to_lateral_guidance_state.active:
+            waypoint_id = getattr(
+                self.config.navigation,
+                "selected_waypoint_id",
+                "---",
+            )
+            route_text = f"DTO → {waypoint_id}"
+
+            dto_distance = getattr(
+                self.direct_to_guidance_state,
+                "distance_nm",
+                None,
+            )
+            distance_nm = (
+                dto_distance
+                if dto_distance is not None
+                else pfd.distance_to_waypoint_nm
+            )
+        else:
+            distance_nm = pfd.distance_to_waypoint_nm
+
+            if active_leg is not None:
+                route_text = (
+                    f"{active_leg.from_ident} → "
+                    f"{active_leg.to_ident}"
+                )
+            else:
+                waypoint_id = getattr(
+                    self.config.navigation,
+                    "selected_waypoint_id",
+                    "---",
+                )
+                route_text = f"→ {waypoint_id}"
+
+        desired_track = pfd.desired_track_deg
+
+        ground_track = getattr(
+            pfd,
+            "ground_track_deg",
+            getattr(
+                pfd,
+                "track_deg",
+                pfd.heading_deg,
+            ),
         )
 
-        parts = []
+        ground_speed = pfd.ground_speed_kt
 
-        if self.config.features.show_tas:
-            parts.append(
-                f"TAS {pfd.tas_kt:.0f} KT"
-                if air_data_usable
-                else "TAS ---"
+        # ------------------------------------------------------------
+        # ETE
+        # ------------------------------------------------------------
+        if (
+            position_usable
+            and ground_speed > 1.0
+            and distance_nm is not None
+        ):
+            ete_minutes = max(
+                0,
+                int(round((distance_nm / ground_speed) * 60.0)),
+            )
+            ete_text = f"{ete_minutes // 60:d}:{ete_minutes % 60:02d}"
+        else:
+            ete_text = "--:--"
+
+        if position_usable:
+            dtk_text = f"{desired_track % 360:03.0f}°"
+            dis_text = f"{distance_nm:.1f} NM"
+            gs_text = f"{ground_speed:.0f} KT"
+            trk_text = f"{ground_track % 360:03.0f}°"
+        else:
+            dtk_text = "---"
+            dis_text = "--- NM"
+            gs_text = "--- KT"
+            trk_text = "---"
+
+        # BLAKE_V6_NO_FALSE_ROUTE: the camera scene has no active test route.
+        # Never show unrelated Cincinnati distance, DTK or ETE values.
+        if self._v6_mountain_scene():
+            route_text = "MOUNTAIN TEST"
+            dtk_text = "---"
+            dis_text = "--- NM"
+            ete_text = "--:--"
+            trk_text = "---"
+
+        # ------------------------------------------------------------
+        # Route section - left
+        # ------------------------------------------------------------
+        painter.setFont(QFont("Arial", 12, QFont.Weight.Bold))
+        painter.setPen(QColor(255, 0, 255))
+        painter.drawText(
+            QRectF(10, 0, 185, bar_h),
+            Qt.AlignmentFlag.AlignVCenter
+            | Qt.AlignmentFlag.AlignLeft,
+            route_text,
+        )
+
+        # ------------------------------------------------------------
+        # Navigation data cells
+        # ------------------------------------------------------------
+        cells = [
+            ("DTK", dtk_text),
+            ("DIS", dis_text),
+            ("ETE", ete_text),
+            ("GS", gs_text),
+            ("TRK", trk_text),
+        ]
+
+        x = 195
+        cell_w = 88
+
+        for label, value in cells:
+            painter.setPen(QPen(QColor(65, 65, 70), 1))
+            painter.drawLine(x, 2, x, bar_h - 2)
+
+            painter.setFont(QFont("Arial", 7, QFont.Weight.Bold))
+            painter.setPen(QColor(170, 170, 175))
+            painter.drawText(
+                QRectF(x + 5, 3, cell_w - 10, 11),
+                Qt.AlignmentFlag.AlignLeft,
+                label,
             )
 
-        if self.config.features.show_ground_speed:
-            parts.append(
-                f"GS {pfd.ground_speed_kt:.0f} KT"
-                if position_usable
-                else "GS ---"
+            painter.setFont(QFont("Arial", 10, QFont.Weight.Bold))
+            painter.setPen(QColor(255, 255, 255))
+            painter.drawText(
+                QRectF(x + 5, 13, cell_w - 10, 19),
+                Qt.AlignmentFlag.AlignLeft,
+                value,
             )
 
-        if self.config.features.show_wind:
-            parts.append(
-                (
-                    f"WIND {pfd.wind_direction_deg:.0f}°/"
-                    f"{pfd.wind_speed_kt:.0f} KT"
-                )
-                if (
-                    air_data_usable
-                    and position_usable
-                    and attitude_usable
-                )
-                else "WIND ---"
-            )
+            x += cell_w
 
-        painter.drawText(QRectF(0, 0, width, 55), Qt.AlignmentFlag.AlignCenter, "    ".join(parts))
+        # ------------------------------------------------------------
+        # Radio area - reserve Garmin-style right side now.
+        # Actual COM/NAV radio values can be connected once we identify
+        # the radio-data source in Blake PFD.
+        # ------------------------------------------------------------
+        radio_x = max(x, width - 175)
+
+        painter.setPen(QPen(QColor(65, 65, 70), 1))
+        painter.drawLine(radio_x, 2, radio_x, bar_h - 2)
+
+        painter.setFont(QFont("Arial", 7, QFont.Weight.Bold))
+        painter.setPen(QColor(170, 170, 175))
+        painter.drawText(radio_x + 8, 12, "COM1")
+        painter.drawText(radio_x + 88, 12, "NAV1")
+
+        painter.setFont(QFont("Arial", 10, QFont.Weight.Bold))
+        painter.setPen(QColor(0, 220, 255))
+        painter.drawText(radio_x + 8, 28, "---.---")
+        painter.drawText(radio_x + 88, 28, "---.--")
+
+        painter.restore()
 
     def draw_bottom_data_bar(
         self,
@@ -6360,10 +8464,133 @@ class BlakePfdDemo(QWidget):
             )
         )
 
-        box_x = 10
-        box_y = 430
-        box_w = 160
-        box_h = 130
+        # GARMIN REDESIGN: shared lower-left tabbed pane.
+        box_x = 5
+        box_y = 350
+        box_w = 170
+        box_h = 215
+
+        # ----------------------------------------------------
+        # Garmin-style pane frame and tabs.
+        # WEATHER is visually selected to match master reference.
+        # Underlying MAP / WEATHER / TRAFFIC drawing remains active.
+        # ----------------------------------------------------
+        painter.setBrush(
+            QBrush(
+                QColor(
+                    0,
+                    0,
+                    0,
+                    185,
+                )
+            )
+        )
+
+        painter.setPen(
+            QPen(
+                QColor(
+                    105,
+                    105,
+                    110,
+                ),
+                1,
+            )
+        )
+
+        painter.drawRect(
+            box_x,
+            box_y,
+            box_w,
+            box_h,
+        )
+
+        tab_h = 22
+        tab_w = box_w / 3.0
+
+        labels = (
+            "TRAFFIC",
+            "WEATHER",
+            "MAP",
+        )
+
+        painter.setFont(
+            QFont(
+                "Arial",
+                8,
+                QFont.Weight.Bold,
+            )
+        )
+
+        for index, label in enumerate(labels):
+            tab_x = box_x + int(index * tab_w)
+
+            selected = (
+                label == "WEATHER"
+            )
+
+            painter.setBrush(
+                QBrush(
+                    QColor(
+                        20,
+                        65,
+                        88,
+                        255,
+                    )
+                    if selected
+                    else QColor(
+                        12,
+                        24,
+                        36,
+                        250,
+                    )
+                )
+            )
+
+            painter.setPen(
+                QPen(
+                    QColor(
+                        115,
+                        115,
+                        120,
+                    ),
+                    1,
+                )
+            )
+
+            painter.drawRect(
+                tab_x,
+                box_y,
+                int(tab_w),
+                tab_h,
+            )
+
+            painter.setPen(
+                QColor(
+                    0,
+                    220,
+                    255,
+                )
+                if selected
+                else QColor(
+                    205,
+                    205,
+                    205,
+                )
+            )
+
+            painter.drawText(
+                QRectF(
+                    tab_x,
+                    box_y,
+                    tab_w,
+                    tab_h,
+                ),
+                Qt.AlignmentFlag.AlignCenter,
+                label,
+            )
+
+        # Keep plotted map content below the tab strip.
+        content_top = box_y + tab_h
 
         painter.setPen(
             QPen(
@@ -6388,14 +8615,15 @@ class BlakePfdDemo(QWidget):
         painter.setPen(
             QColor(0, 180, 255)
         )
+        # Range label sits inside the map content, below tabs.
         painter.drawText(
             box_x + 10,
-            box_y + 24,
-            f"MAP {map_state.range_nm:.0f} NM",
+            box_y + 38,
+            f"{map_state.range_nm:.0f} NM",
         )
 
         center_x = box_x + box_w // 2
-        center_y = box_y + box_h // 2
+        center_y = content_top + (box_h - tab_h) // 2
 
         radius = min(
             box_w,
@@ -6597,6 +8825,8 @@ class BlakePfdDemo(QWidget):
         ):
             self.map_airport_markers = []
 
+        # Label declutter affects text only: every airport marker is still drawn.
+        placed_airport_labels: list[tuple[int, int]] = []
         for airport in map_state.airports:
             if airport.distance_nm > map_state.range_nm:
                 continue
@@ -6782,11 +9012,25 @@ class BlakePfdDemo(QWidget):
                 6,
             )
 
-            painter.drawText(
-                airport_x + 6,
-                airport_y,
-                airport.ident,
+            # Labels near ownship or previous labels are omitted to keep
+            # the 170px inset legible; selected/touched labels always show.
+            label_priority = is_selected or is_touch_selected
+            away_from_ownship = (
+                abs(airport_x - center_x) > 20
+                or abs(airport_y - center_y) > 20
             )
+            not_colliding = all(
+                abs(airport_x - px) >= 29
+                or abs(airport_y - py) >= 13
+                for px, py in placed_airport_labels
+            )
+            if label_priority or (away_from_ownship and not_colliding):
+                painter.drawText(
+                    airport_x + 6,
+                    airport_y,
+                    airport.ident,
+                )
+                placed_airport_labels.append((airport_x, airport_y))
 
         painter.setBrush(
             QBrush(
@@ -6903,19 +9147,89 @@ class BlakePfdDemo(QWidget):
         route = self.route_manager.load_route()
         active_leg = self.route_manager.get_active_leg()
 
-        box_x, box_y, box_w, box_h = 842, 188, 172, 88
-        painter.setPen(QPen(QColor(255, 255, 255), 2))
+        # GARMIN REDESIGN: structured right-side Active Flight Plan.
+        box_x, box_y, box_w, box_h = width - 194, 48, 188, 126
+
+        painter.setBrush(QBrush(QColor(8, 12, 20, 255)))
+        painter.setPen(QPen(QColor(115, 115, 120), 1))
         painter.drawRect(box_x, box_y, box_w, box_h)
 
+        painter.setFont(QFont("Arial", 9, QFont.Weight.Bold))
+        painter.setPen(QColor(0, 220, 255))
+        painter.drawText(
+            box_x + 8, box_y + 18,
+            "STATIC TEST SCENE" if self._v6_mountain_scene() else "ACTIVE FLIGHT PLAN",
+        )
+
+        if self._v6_mountain_scene():
+            painter.setPen(QColor(255, 255, 255))
+            painter.setFont(QFont("Arial", 8, QFont.Weight.Bold))
+            painter.drawText(box_x + 8, box_y + 43, "NO ACTIVE TEST ROUTE")
+            painter.drawText(box_x + 8, box_y + 65, "40.3300 N, 105.5300 W")
+            painter.drawText(
+                box_x + 8, box_y + 87,
+                "LONGS PEAK / 220 DEG" if self._v8_ridge_scene()
+                else "LOOKING SW / 240 DEG",
+            )
+            painter.drawText(box_x + 8, box_y + 109, "NOT FOR FLIGHT")
+            return
+
         painter.setFont(QFont("Arial", 8, QFont.Weight.Bold))
-        painter.drawText(box_x + 10, box_y + 18, f"ROUTE: {route.get('route_id', 'NO ROUTE')}")
-        painter.drawText(box_x + 10, box_y + 36, " → ".join(route.get("waypoints", []))[:18])
+        painter.setPen(QColor(255, 255, 255))
+
+        route_id = route.get("route_id", "NO ROUTE")
+        waypoints = route.get("waypoints", [])
+
+        painter.drawText(box_x + 8, box_y + 39, str(route_id)[:22])
+
+        if waypoints:
+            painter.setPen(QColor(255, 0, 255))
+            painter.drawText(
+                box_x + 8,
+                box_y + 60,
+                " → ".join(waypoints)[:27],
+            )
 
         if active_leg:
-            painter.drawText(box_x + 10, box_y + 54, f"LEG: {active_leg.from_ident} → {active_leg.to_ident}")
-            painter.drawText(box_x + 10, box_y + 72, f"DTK: {active_leg.desired_track_deg:.0f}°")
+            painter.setPen(QColor(0, 255, 0))
+            painter.drawText(
+                box_x + 8,
+                box_y + 84,
+                f"{active_leg.from_ident} → {active_leg.to_ident}",
+            )
+
+            painter.setPen(QColor(255, 255, 255))
+            painter.drawText(
+                box_x + 8,
+                box_y + 105,
+                f"DTK {active_leg.desired_track_deg:.0f}°",
+            )
 
     def draw_selected_airport_info(self, painter: QPainter, width: int, height: int) -> None:
+        # BLAKE_V6_MOUNTAIN_SCENE_INFO: no Cincinnati airport in mountain mode.
+        if self._v6_mountain_scene():
+            box_x, box_y, box_w, box_h = width - 194, 180, 188, 142
+            painter.save()
+            painter.fillRect(box_x, box_y, box_w, box_h, QColor(8, 12, 20, 255))
+            painter.setPen(QPen(QColor(115, 115, 120), 1))
+            painter.setBrush(QBrush(Qt.BrushStyle.NoBrush))
+            painter.drawRect(box_x, box_y, box_w, box_h)
+            painter.setFont(QFont("Arial", 9, QFont.Weight.Bold))
+            painter.setPen(QColor(0, 220, 255))
+            painter.drawText(box_x + 8, box_y + 18, "SCENE INFO")
+            painter.setFont(QFont("Arial", 8, QFont.Weight.Bold))
+            painter.setPen(QColor(255, 255, 255))
+            painter.drawText(
+                box_x + 8, box_y + 41,
+                ("LONGS PEAK VIEW / 15K MSL" if self._v9_high_ridge_scene()
+                 else "LONGS PEAK VIEW / 12K MSL")
+                if self._v8_ridge_scene() else "ROCKY MOUNTAINS",
+            )
+            painter.drawText(box_x + 8, box_y + 63, "REAL SRTM ELEVATION")
+            painter.drawText(box_x + 8, box_y + 85, "STATIC GPS POSITION")
+            painter.drawText(box_x + 8, box_y + 108, "AIRPORT DATA: N/A")
+            painter.restore()
+            return
         # GLASS_PANEL_NO_BRUSH
         painter.setBrush(
             QBrush(
@@ -6932,26 +9246,53 @@ class BlakePfdDemo(QWidget):
         runway = self.database.best_runway(airport_id)
         freqs = self.database.get_frequencies(airport_id)
 
-        box_x = 842
-        box_y = 282
-        box_w = 172
-        box_h = 150
+        # GARMIN REDESIGN: Airport Info below Active Flight Plan.
+        box_x = width - 194
+        box_y = 180
+        box_w = 188
+        box_h = 142
 
-        painter.setPen(QPen(QColor(255, 255, 255), 2))
+        painter.setBrush(QBrush(QColor(8, 12, 20, 255)))
+        painter.setPen(QPen(QColor(115, 115, 120), 1))
         painter.drawRect(box_x, box_y, box_w, box_h)
 
+        painter.setFont(QFont("Arial", 9, QFont.Weight.Bold))
+        painter.setPen(QColor(0, 220, 255))
+        painter.drawText(box_x + 8, box_y + 18, "AIRPORT INFO")
+
         painter.setFont(QFont("Arial", 8, QFont.Weight.Bold))
-        painter.drawText(box_x + 10, box_y + 18, f"{airport.ident} - {airport.name[:12]}")
-        painter.drawText(box_x + 10, box_y + 38, f"Elev: {airport.elevation_ft:.0f} ft")
+        painter.setPen(QColor(255, 255, 255))
+        painter.drawText(
+            box_x + 8,
+            box_y + 39,
+            f"{airport.ident}  {airport.name[:16]}",
+        )
+        painter.drawText(
+            box_x + 8,
+            box_y + 58,
+            f"ELEV {airport.elevation_ft:.0f} FT",
+        )
 
         if runway:
-            painter.drawText(box_x + 10, box_y + 58, f"RWY {runway.le_ident}/{runway.he_ident}")
-            painter.drawText(box_x + 10, box_y + 74, f"{runway.length_ft:.0f} x {runway.width_ft:.0f} ft {runway.surface[:10]}")
+            painter.drawText(
+                box_x + 8,
+                box_y + 78,
+                f"RWY {runway.le_ident}/{runway.he_ident}",
+            )
+            painter.drawText(
+                box_x + 8,
+                box_y + 96,
+                f"{runway.length_ft:.0f} x {runway.width_ft:.0f} FT",
+            )
 
-        y = box_y + 92
+        y = box_y + 117
         for freq in freqs[:1]:
-            painter.drawText(box_x + 10, y, f"{freq.type}: {freq.frequency_mhz:.3f}")
-            y += 16
+            painter.setPen(QColor(0, 220, 255))
+            painter.drawText(
+                box_x + 8,
+                y,
+                f"{freq.type} {freq.frequency_mhz:.3f}",
+            )
 
     def draw_startup_status_box(self, painter: QPainter, width: int, height: int) -> None:
         # GLASS_PANEL_NO_BRUSH
@@ -7203,62 +9544,45 @@ class BlakePfdDemo(QWidget):
         painter.drawText(box_x + 10, box_y + 50, profile)
 
     def draw_terrain_status_box(self, painter: QPainter, terrain_state, width: int, height: int) -> None:
-        # GLASS_PANEL_NO_BRUSH
-        painter.setBrush(
-            QBrush(
-                Qt.BrushStyle.NoBrush
-            )
-        )
-
-        box_x = 10
-        box_y = 270
-        box_w = 160
-        box_h = 75
-
-        if terrain_state.warning_level in {
-            "yellow",
-            "red",
-        }:
-            painter.fillRect(
-                box_x,
-                box_y,
-                box_w,
-                box_h,
-                QColor(
-                    0,
-                    0,
-                    0,
-                    225,
-                ),
-            )
-
-        if terrain_state.warning_level == "red":
-            color = QColor(255, 0, 0)
-        elif terrain_state.warning_level == "yellow":
-            color = QColor(255, 220, 0)
+        # A dedicated status row between engine gauges and the local map.
+        # BLAKE_V6_SRTM_STATUS: never label legacy fallback's ~700 ft as SRTM.
+        box_x, box_y, box_w, box_h = 10, 275, 160, 29
+        v6_srtm = self._v6_demo_scene() and self.real_terrain_enabled
+        real_sample = self._v6_current_srtm_status() if v6_srtm else None
+        if v6_srtm:
+            # Neutral presentation: alert severity is computed independently
+            # by the real-terrain safety pipeline; this is GND-at-GPS only.
+            color = QColor(0, 205, 230) if real_sample is not None else QColor(255, 220, 0)
+            source_label = "SRTM AT GPS"
+            if real_sample is None:
+                detail_text = "GND NO DATA  AGL --"
+            else:
+                ground_ft, agl_ft = real_sample
+                detail_text = f"GND {ground_ft:.0f} FT AGL {agl_ft:.0f} FT"
         else:
-            color = QColor(0, 255, 0)
+            if terrain_state.warning_level == "red":
+                color = QColor(255, 40, 40)
+            elif terrain_state.warning_level == "yellow" or not self.real_terrain_enabled:
+                color = QColor(255, 220, 0)
+            else:
+                color = QColor(0, 220, 130)
+            source_label = "SRTM" if self.real_terrain_enabled else "FALLBACK"
+            detail_text = (
+                f"ELEV {terrain_state.terrain_elevation_ft:.0f} FT  "
+                f"CLR {terrain_state.clearance_ft:.0f} FT"
+            )
 
-        painter.setPen(QPen(color, 2))
+        painter.fillRect(box_x, box_y, box_w, box_h, QColor(4, 8, 14, 245))
+        painter.setPen(QPen(color, 1))
+        painter.setBrush(QBrush(Qt.BrushStyle.NoBrush))
         painter.drawRect(box_x, box_y, box_w, box_h)
-
-        painter.setFont(QFont("Arial", 9, QFont.Weight.Bold))
+        painter.setFont(QFont("Arial", 8, QFont.Weight.Bold))
         painter.setPen(color)
-        source_label = (
-            "SRTM"
-            if self.real_terrain_enabled
-            else "FALLBACK"
-        )
+        painter.drawText(box_x + 5, box_y + 12, f"TERRAIN [{source_label}]")
+        painter.setFont(QFont("Arial", 7, QFont.Weight.Bold))
+        painter.setPen(QColor(240, 240, 240))
+        painter.drawText(box_x + 5, box_y + 25, detail_text)
 
-        painter.drawText(
-            box_x + 10,
-            box_y + 25,
-            f"TERRAIN [{source_label}]",
-        )
-
-        painter.setPen(QColor(255, 255, 255))
-        painter.drawText(box_x + 10, box_y + 52, f"ELEV {terrain_state.terrain_elevation_ft:.0f} FT")
-        painter.drawText(box_x + 10, box_y + 76, f"CLR {terrain_state.clearance_ft:.0f} FT")
 
     def draw_terrain_alert(self, painter: QPainter, terrain_state, width: int, height: int) -> None:
         if terrain_state.warning_level == "none":
@@ -7277,169 +9601,37 @@ class BlakePfdDemo(QWidget):
         width: int,
         height: int,
     ) -> None:
-        # GLASS_PANEL_NO_BRUSH
-        if hasattr(
-            painter,
-            "setBrush",
-        ):
-            painter.setBrush(
-                QBrush(
-                    Qt.BrushStyle.NoBrush
-                )
-            )
-
-        box_x = 10
-        box_y = 350
-        box_w = 160
-        box_h = 75
-
+        # This row no longer covers the map or the terrain status.
+        box_x, box_y, box_w, box_h = 10, 309, 160, 30
         if not obstacle_state.ok:
-            painter.fillRect(
-                box_x,
-                box_y,
-                box_w,
-                box_h,
-                QColor(
-                    0,
-                    0,
-                    0,
-                    225,
-                ),
-            )
-
-            color = QColor(
-                255,
-                180,
-                0,
-            )
-
-
-            painter.setPen(
-                QPen(
-                    color,
-                    2,
-                )
-            )
-
-            painter.drawRect(
-                box_x,
-                box_y,
-                box_w,
-                box_h,
-            )
-
-            painter.setFont(
-                QFont(
-                    "Arial",
-                    12,
-                    QFont.Weight.Bold,
-                )
-            )
-
-            painter.setPen(color)
-
-            painter.drawText(
-                box_x + 10,
-                box_y + 30,
-                "OBST DATA",
-            )
-
-            painter.drawText(
-                box_x + 10,
-                box_y + 58,
-                "UNAVAILABLE",
-            )
-
+            color = QColor(255, 180, 0)
+            title = "OBST DATA"
+            detail = "UNAVAILABLE"
+        elif not obstacle_state.nearby:
             return
-
-        if not obstacle_state.nearby:
-            return
-
-        painter.fillRect(
-            box_x,
-            box_y,
-            box_w,
-            box_h,
-            QColor(
-                0,
-                0,
-                0,
-                225,
-            ),
-        )
-
-        color = (
-            QColor(
-                255,
-                0,
-                0,
+        else:
+            color = (
+                QColor(255, 0, 0) if obstacle_state.warning
+                else QColor(255, 220, 0)
             )
-            if obstacle_state.warning
-            else QColor(
-                255,
-                220,
-                0,
+            obstacle = obstacle_state.nearby[0]
+            title = "OBSTACLE"
+            detail = (
+                f"{obstacle.ident[:10]}  {obstacle.distance_nm:.1f}NM"
+                f"  {obstacle.bearing_deg:.0f}°"
             )
-        )
 
-
-        painter.setPen(
-            QPen(
-                color,
-                2,
-            )
-        )
-
-        painter.drawRect(
-            box_x,
-            box_y,
-            box_w,
-            box_h,
-        )
-
-        painter.setFont(
-            QFont(
-                "Arial",
-                12,
-                QFont.Weight.Bold,
-            )
-        )
-
+        painter.fillRect(box_x, box_y, box_w, box_h, QColor(4, 8, 14, 245))
+        painter.setPen(QPen(color, 1))
+        if hasattr(painter, "setBrush"):
+            painter.setBrush(QBrush(Qt.BrushStyle.NoBrush))
+        painter.drawRect(box_x, box_y, box_w, box_h)
+        painter.setFont(QFont("Arial", 8, QFont.Weight.Bold))
         painter.setPen(color)
+        painter.drawText(box_x + 5, box_y + 12, title)
+        painter.setFont(QFont("Arial", 7, QFont.Weight.Bold))
+        painter.drawText(box_x + 5, box_y + 26, detail)
 
-        painter.drawText(
-            box_x + 10,
-            box_y + 25,
-            "OBSTACLE",
-        )
-
-        obstacle = (
-            obstacle_state.nearby[0]
-        )
-
-        painter.setPen(
-            QColor(
-                255,
-                255,
-                255,
-            )
-        )
-
-        painter.drawText(
-            box_x + 10,
-            box_y + 52,
-            f"{obstacle.ident}",
-        )
-
-        painter.drawText(
-            box_x + 10,
-            box_y + 76,
-            (
-                f"{obstacle.distance_nm:.1f}NM "
-                f"BRG "
-                f"{obstacle.bearing_deg:.0f}°"
-            ),
-        )
 
     def draw_safe_taxi_map(
         self,
@@ -7810,14 +10002,16 @@ class BlakePfdDemo(QWidget):
         painter.save()
 
         try:
-            # Current local-map geometry.
-            #
-            # Keep this synchronized with
-            # draw_moving_map_overlay().
-            box_x = 10
-            box_y = 430
-            box_w = 160
-            box_h = 130
+            # GARMIN REDESIGN:
+            # Shared TRAFFIC / WEATHER / MAP pane geometry.
+            box_x = 5
+            box_y = 350
+            box_w = 170
+            box_h = 215
+
+            tab_h = 22
+            plot_y = box_y + tab_h
+            plot_h = box_h - tab_h
 
             center_x = (
                 box_x
@@ -7825,14 +10019,14 @@ class BlakePfdDemo(QWidget):
             )
 
             center_y = (
-                box_y
-                + box_h / 2.0
+                plot_y
+                + plot_h / 2.0
             )
 
             radius = (
                 min(
                     box_w,
-                    box_h,
+                    plot_h,
                 )
                 * 0.42
             )
@@ -8303,10 +10497,15 @@ class BlakePfdDemo(QWidget):
         try:
             # Must remain synchronized with the
             # local moving-map / traffic geometry.
-            box_x = 10
-            box_y = 430
-            box_w = 160
-            box_h = 130
+            # GARMIN REDESIGN: synchronized MAP / WEATHER pane.
+            box_x = 5
+            box_y = 350
+            box_w = 170
+            box_h = 215
+
+            tab_h = 22
+            plot_y = box_y + tab_h
+            plot_h = box_h - tab_h
 
             center_x = (
                 box_x
@@ -8314,14 +10513,14 @@ class BlakePfdDemo(QWidget):
             )
 
             center_y = (
-                box_y
-                + box_h / 2.0
+                plot_y
+                + plot_h / 2.0
             )
 
             radius = (
                 min(
                     box_w,
-                    box_h,
+                    plot_h,
                 )
                 * 0.42
             )
@@ -9074,7 +11273,7 @@ class BlakePfdDemo(QWidget):
             painter.setFont(
                 QFont(
                     "Arial",
-                    10,
+                    9,
                     QFont.Weight.Bold,
                 )
             )
@@ -9087,18 +11286,17 @@ class BlakePfdDemo(QWidget):
                 )
             )
 
-            painter.drawText(
-                x,
-                y + 14,
-                "ENGINE",
+            # When the urgent 72 px banner is visible, only this decorative
+            # heading is skipped in the V14 demo, not ANY numeric engine row.
+            # Moving it downward would collide with RPM, so don't do that.
+            v14_banner_over_engine_title = (
+                self._v14_cincinnati_profile_enabled()
+                and getattr(getattr(self, "terrain_warning_presentation", None),
+                            "visible", False)
             )
-
-            painter.drawLine(
-                x,
-                y + 20,
-                x + width,
-                y + 20,
-            )
+            if not v14_banner_over_engine_title:
+                painter.drawText(x, y + 14, "ENGINE")
+                painter.drawLine(x, y + 20, x + width, y + 20)
 
             if engine_state is None:
                 painter.setPen(
@@ -9333,13 +11531,15 @@ class BlakePfdDemo(QWidget):
                 ),
             ]
 
-            row_y = y + 28
-            row_h = 19
+            # GARMIN REFERENCE:
+            # Dense vertical engine strip with room beneath for fuel gauge.
+            row_y = y + 25
+            row_h = 16
 
             painter.setFont(
                 QFont(
                     "Arial",
-                    9,
+                    8,
                     QFont.Weight.Bold,
                 )
             )
@@ -9357,7 +11557,7 @@ class BlakePfdDemo(QWidget):
                     QRectF(
                         x,
                         row_y,
-                        width * 0.52,
+                        width * 0.50,
                         row_h,
                     ),
                     (
@@ -9375,9 +11575,9 @@ class BlakePfdDemo(QWidget):
 
                 painter.drawText(
                     QRectF(
-                        x + width * 0.45,
+                        x + width * 0.43,
                         row_y,
-                        width * 0.55,
+                        width * 0.57,
                         row_h,
                     ),
                     (
@@ -9485,7 +11685,7 @@ class BlakePfdDemo(QWidget):
                     QRectF(
                         x,
                         row_y,
-                        width * 0.52,
+                        width * 0.50,
                         row_h,
                     ),
                     (
@@ -9514,9 +11714,9 @@ class BlakePfdDemo(QWidget):
 
                 painter.drawText(
                     QRectF(
-                        x + width * 0.45,
+                        x + width * 0.43,
                         row_y,
-                        width * 0.55,
+                        width * 0.57,
                         row_h,
                     ),
                     (
@@ -9530,6 +11730,180 @@ class BlakePfdDemo(QWidget):
 
                 row_y += row_h
 
+            # ------------------------------------------------
+            # GARMIN REFERENCE: fuel quantity gauge.
+            # Existing fuel_remaining_gal remains the source of
+            # truth and existing EMS fuel_color() drives warning
+            # coloration.
+            # ------------------------------------------------
+            fuel_value = max(
+                0.0,
+                float(
+                    getattr(
+                        engine,
+                        "fuel_remaining_gal",
+                        0.0,
+                    )
+                ),
+            )
+
+            # Display scale only. This does not alter fuel
+            # calculations or alert logic.
+            fuel_scale_max = max(
+                20.0,
+                fuel_value,
+            )
+
+            fuel_ratio = max(
+                0.0,
+                min(
+                    1.0,
+                    fuel_value / fuel_scale_max,
+                ),
+            )
+
+            gauge_x = x
+            gauge_y = row_y + 5
+            gauge_w = width
+            gauge_h = 34
+
+            painter.setPen(
+                QPen(
+                    QColor(
+                        110,
+                        110,
+                        115,
+                    ),
+                    1,
+                )
+            )
+
+            painter.setBrush(
+                QBrush(
+                    QColor(
+                        0,
+                        0,
+                        0,
+                        175,
+                    )
+                )
+            )
+
+            painter.drawRect(
+                gauge_x,
+                gauge_y,
+                gauge_w,
+                gauge_h,
+            )
+
+            painter.setPen(
+                QColor(
+                    200,
+                    200,
+                    200,
+                )
+            )
+
+            painter.setFont(
+                QFont(
+                    "Arial",
+                    7,
+                    QFont.Weight.Bold,
+                )
+            )
+
+            painter.drawText(
+                gauge_x + 4,
+                gauge_y + 11,
+                "FUEL QTY",
+            )
+
+            bar_x = gauge_x + 4
+            bar_y = gauge_y + 17
+            bar_w = max(
+                10,
+                gauge_w - 8,
+            )
+            bar_h = 10
+
+            painter.setBrush(
+                QBrush(
+                    QColor(
+                        35,
+                        35,
+                        38,
+                    )
+                )
+            )
+
+            painter.setPen(
+                QPen(
+                    QColor(
+                        100,
+                        100,
+                        105,
+                    ),
+                    1,
+                )
+            )
+
+            painter.drawRect(
+                bar_x,
+                bar_y,
+                bar_w,
+                bar_h,
+            )
+
+            fill_w = int(
+                max(
+                    0,
+                    bar_w - 2,
+                )
+                * fuel_ratio
+            )
+
+            painter.setBrush(
+                QBrush(
+                    self.ems_page.fuel_color(
+                        engine
+                    )
+                )
+            )
+
+            painter.setPen(
+                Qt.PenStyle.NoPen
+            )
+
+            painter.drawRect(
+                bar_x + 1,
+                bar_y + 1,
+                fill_w,
+                max(
+                    1,
+                    bar_h - 2,
+                ),
+            )
+
+            painter.setPen(
+                self.ems_page.fuel_color(
+                    engine
+                )
+            )
+
+            painter.drawText(
+                QRectF(
+                    gauge_x,
+                    gauge_y,
+                    gauge_w - 4,
+                    14,
+                ),
+                (
+                    Qt.AlignmentFlag.AlignRight
+                    | Qt.AlignmentFlag.AlignVCenter
+                ),
+                f"{fuel_value:.1f} GAL",
+            )
+
         finally:
             painter.restore()
 
@@ -9540,6 +11914,12 @@ class BlakePfdDemo(QWidget):
         width: int,
         height: int,
     ) -> None:
+        # GARMIN REDESIGN:
+        # Legacy phase/checklist overlay occupied the same space as
+        # Active Flight Plan / Airport Info. Keep underlying state,
+        # suppress this old presentation.
+        return
+
         # GLASS_PANEL_NO_BRUSH
         painter.setBrush(
             QBrush(

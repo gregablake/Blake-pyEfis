@@ -261,7 +261,8 @@ def test_faa_csv_threat_reaches_pfd_obstacle_painter(
 
     assert red in pen_colors
     assert len(polygons) == 1
-    assert len(lines) == 1
+    assert len(lines) == 4
+    assert all(start != end for start, end in lines)
 
     widget.close()
 

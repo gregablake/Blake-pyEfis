@@ -119,10 +119,10 @@ def test_stratux_alert_traffic_reaches_full_pfd_render(
 
     # Same production local-map geometry used by
     # draw_traffic_overlay().
-    box_x = 10
-    box_y = 430
-    box_w = 160
-    box_h = 130
+    box_x = 5
+    box_y = 350
+    box_w = 170
+    box_h = 215
 
     center_x = (
         box_x
@@ -131,13 +131,14 @@ def test_stratux_alert_traffic_reaches_full_pfd_render(
 
     center_y = (
         box_y
-        + box_h / 2.0
+        + 22
+        + (box_h - 22) / 2.0
     )
 
     radius = (
         min(
             box_w,
-            box_h,
+            box_h - 22,
         )
         * 0.42
     )
